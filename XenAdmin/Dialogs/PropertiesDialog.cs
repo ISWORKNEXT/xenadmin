@@ -225,6 +225,9 @@ namespace XenAdmin.Dialogs
                         if (theVm.CanHaveCloudConfigDrive())
                             ShowTab(CloudConfigParametersPage = new Page_CloudConfigParameters());
                     }
+
+                    ShowTab(new VMXenSettingsEditPage());
+                    ShowTab(new VMXenstoreDataEditPage());
                 }
 
                 if (isVmss)

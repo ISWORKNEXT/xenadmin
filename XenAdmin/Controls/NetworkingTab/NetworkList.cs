@@ -47,6 +47,8 @@ namespace XenAdmin.Controls.NetworkingTab
     public partial class NetworkList : UserControl
     {
         private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        private readonly DataGridViewTextBoxColumn LockingColumn = new DataGridViewTextBoxColumn();
+        private readonly DataGridViewTextBoxColumn AllowedIpsColumn = new DataGridViewTextBoxColumn();
 
         public NetworkList()
         {
@@ -199,7 +201,16 @@ namespace XenAdmin.Controls.NetworkingTab
             this.LimitColumn,
             this.NetworkColumn,
             this.IpColumn,
+            this.LockingColumn,
+            this.AllowedIpsColumn,
             this.ActiveColumn});
+
+            this.LockingColumn.HeaderText = "Locking mode";
+            this.LockingColumn.Name = "LockingColumn";
+            this.LockingColumn.AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            this.AllowedIpsColumn.HeaderText = "Allowed IPs";
+            this.AllowedIpsColumn.Name = "AllowedIpsColumn";
+            this.AllowedIpsColumn.AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
 
             //the IP column should be autosized to Fill, but should not become smaller than a minimum
             //width, which here is chosen to be the column header width. To find what this width is set temporarily the
@@ -864,6 +875,8 @@ namespace XenAdmin.Controls.NetworkingTab
             private DataGridViewTextBoxCell LimitCell = new DataGridViewTextBoxCell();
             private DataGridViewTextBoxCell NetworkCell = new DataGridViewTextBoxCell();
             private DataGridViewTextBoxCell IpCell = new DataGridViewTextBoxCell();
+            private DataGridViewTextBoxCell LockingCell = new DataGridViewTextBoxCell();
+            private DataGridViewTextBoxCell AllowedCell = new DataGridViewTextBoxCell();
             private DataGridViewTextBoxCell AttachedCell = new DataGridViewTextBoxCell();
 
             private VIF_metrics Metrics;
@@ -878,6 +891,8 @@ namespace XenAdmin.Controls.NetworkingTab
                                LimitCell,
                                NetworkCell,
                                IpCell,
+                               LockingCell,
+                               AllowedCell,
                                AttachedCell);
 
                 Vif.PropertyChanged += Server_PropertyChanged;
@@ -901,6 +916,10 @@ namespace XenAdmin.Controls.NetworkingTab
                 LimitCell.Value = Vif.qos_algorithm_type != "" ? Vif.LimitString() : "";
                 NetworkCell.Value = Vif.NetworkName();
                 IpCell.Value = Vif.IPAddressesAsString();
+                LockingCell.Value = Vif.locking_mode.StringOf();
+                AllowedCell.Value = Vif.ipv4_allowed == null || Vif.ipv4_allowed.Length == 0
+                    ? ""
+                    : string.Join(", ", Vif.ipv4_allowed);
                 AttachedCell.Value = Vif.currently_attached ? Messages.YES : Messages.NO;
             }
 

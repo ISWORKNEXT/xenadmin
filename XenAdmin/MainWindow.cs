@@ -98,7 +98,9 @@ namespace XenAdmin
         internal readonly DockerProcessPage DockerProcessPage = new DockerProcessPage();
         internal readonly DockerDetailsPage DockerDetailsPage = new DockerDetailsPage();
         internal readonly UsbPage UsbPage = new UsbPage();
+        internal readonly VmLogsPage VmLogsPage = new VmLogsPage();
         private readonly SnapshotsPage snapshotPage = new SnapshotsPage();
+        private TabPage TabPageLogs;
 
         private readonly NotificationsBasePage[] _notificationPages;
 
@@ -176,6 +178,15 @@ namespace XenAdmin
             components.Add(DockerDetailsPage);
             components.Add(UsbPage);
             components.Add(snapshotPage);
+            components.Add(VmLogsPage);
+
+            TabPageLogs = new TabPage("Logs")
+            {
+                Name = "TabPageLogs",
+                UseVisualStyleBackColor = true
+            };
+            TheTabControl.TabPages.Add(TabPageLogs);
+            AddTabContents(VmLogsPage, TabPageLogs);
 
             AddTabContents(VMStoragePage, TabPageStorage);
             AddTabContents(SrStoragePage, TabPageSR);
@@ -1381,6 +1392,9 @@ namespace XenAdmin
             if (!multi && !SearchMode && isRealVMSelected)
                 newTabs.Add(TabPageSnapshots);
 
+            if (!multi && !SearchMode && isRealVMSelected)
+                newTabs.Add(TabPageLogs);
+
             foreach (var f in otherFeatures)
                 newTabs.Add(f.TabPage);
 
@@ -1707,6 +1721,10 @@ namespace XenAdmin
                 else if (t == TabPageStorage)
                 {
                     VMStoragePage.VM = SelectionManager.Selection.First as VM;
+                }
+                else if (t == TabPageLogs)
+                {
+                    VmLogsPage.VM = SelectionManager.Selection.First as VM;
                 }
                 else if (t == TabPagePeformance)
                 {

@@ -44305,5 +44305,77 @@ namespace XenAdmin {
                 return ResourceManager.GetString("YUM_REPO_SYNC_YES_VISIBLE_BUTTON", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to XenStore.
+        /// </summary>
+        public static string VM_XENSTORE_DATA {
+            get {
+                return ResourceManager.GetString("VM_XENSTORE_DATA", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No entries.
+        /// </summary>
+        public static string VM_XENSTORE_DATA_EMPTY {
+            get {
+                return ResourceManager.GetString("VM_XENSTORE_DATA_EMPTY", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} entries.
+        /// </summary>
+        public static string VM_XENSTORE_DATA_COUNT {
+            get {
+                return ResourceManager.GetString("VM_XENSTORE_DATA_COUNT", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to A reboot is required after any XenStore changes.
+        /// </summary>
+        public static string VM_XENSTORE_DATA_REBOOT {
+            get {
+                return ResourceManager.GetString("VM_XENSTORE_DATA_REBOOT", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to To delete an entry, simply delete its value.
+        /// </summary>
+        public static string VM_XENSTORE_DATA_DELETE {
+            get {
+                return ResourceManager.GetString("VM_XENSTORE_DATA_DELETE", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Add.
+        /// </summary>
+        public static string VM_XENSTORE_DATA_ADD {
+            get {
+                return ResourceManager.GetString("VM_XENSTORE_DATA_ADD", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Remove.
+        /// </summary>
+        public static string VM_XENSTORE_DATA_REMOVE {
+            get {
+                return ResourceManager.GetString("VM_XENSTORE_DATA_REMOVE", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Each key must be unique and use a vm-data/ path.
+        /// </summary>
+        public static string VM_XENSTORE_DATA_INVALID {
+            get {
+                return ResourceManager.GetString("VM_XENSTORE_DATA_INVALID", resourceCulture);
+            }
+        }
     }
 }

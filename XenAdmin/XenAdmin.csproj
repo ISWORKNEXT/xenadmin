@@ -6,11 +6,13 @@
 		<OutputType>WinExe</OutputType>
 		<AssemblyName>XCP-ng Center</AssemblyName>
 		<ApplicationIcon>AppIcon.ico</ApplicationIcon>
+		<GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
 		<Title>XCP-ng Center</Title>
 		<Description>XCP-ng Center</Description>
 	</PropertyGroup>
 	<ItemGroup>
 	  <PackageReference Include="Microsoft.ReportViewer.Runtime.WinForms" Version="12.0.2402.15" />
+	  <PackageReference Include="System.Resources.Extensions" Version="8.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -59,7 +61,12 @@
 	  </Compile>
 	</ItemGroup>
 
+	<PropertyGroup>
+		<AxImpTool Condition="'$(TargetFrameworkSDKToolsDirectory)' != ''">$(TargetFrameworkSDKToolsDirectory)aximp.exe</AxImpTool>
+		<AxImpTool Condition="'$(AxImpTool)' == '' and Exists('$(MSBuildProgramFiles32)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8.1 Tools\AxImp.exe')">$(MSBuildProgramFiles32)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8.1 Tools\AxImp.exe</AxImpTool>
+		<AxImpTool Condition="'$(AxImpTool)' == ''">aximp.exe</AxImpTool>
+	</PropertyGroup>
 	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-		<Exec Command="&quot;$(TargetFrameworkSDKToolsDirectory)aximp.exe&quot; $(WinDir)\System32\mstscax.dll" WorkingDirectory="$(ProjectDir)RDP" />
+		<Exec Command="&quot;$(AxImpTool)&quot; $(WinDir)\System32\mstscax.dll" WorkingDirectory="$(ProjectDir)RDP" />
 	</Target>
 </Project>

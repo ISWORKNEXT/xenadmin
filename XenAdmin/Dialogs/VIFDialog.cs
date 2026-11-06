@@ -44,6 +44,8 @@ namespace XenAdmin.Dialogs
         private readonly VIF ExistingVif;
         private readonly int Device;
         private readonly bool allowSriov;
+        private ComboBox comboBoxLocking;
+        private TextBox textBoxAllowed;
 
         public VIFDialog(IXenConnection connection, VIF existingVif, int device, bool allowSriov = false)
             : base(connection)
@@ -60,6 +62,120 @@ namespace XenAdmin.Dialogs
                 Text = Messages.VIRTUAL_INTERFACE_PROPERTIES;
                 buttonOk.Text = Messages.OK;
             }
+
+            AddLockingControls();
+        }
+
+        private void AddLockingControls()
+        {
+            var panel = new TableLayoutPanel
+            {
+                AutoSize = true,
+                ColumnCount = 2,
+                Dock = DockStyle.Fill,
+                Name = "tableLayoutLocking"
+            };
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.RowCount = 2;
+            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            comboBoxLocking = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                Margin = new Padding(3, 4, 3, 4)
+            };
+            foreach (var mode in new[]
+                     {
+                         vif_locking_mode.disabled,
+                         vif_locking_mode.locked,
+                         vif_locking_mode.unlocked,
+                         vif_locking_mode.network_default
+                     })
+                comboBoxLocking.Items.Add(mode);
+            comboBoxLocking.SelectedItem = vif_locking_mode.network_default;
+            comboBoxLocking.SelectedIndexChanged += (s, e) => ValidateInput();
+
+            textBoxAllowed = new TextBox
+            {
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                Margin = new Padding(3, 4, 3, 4)
+            };
+            textBoxAllowed.TextChanged += (s, e) => ValidateInput();
+
+            panel.Controls.Add(new Label { Text = "Locking mode", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
+            panel.Controls.Add(comboBoxLocking, 1, 0);
+            panel.Controls.Add(new Label { Text = "Allowed IPs", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
+            panel.Controls.Add(textBoxAllowed, 1, 1);
+
+            const int insertAt = 6;
+            tableLayoutPanelBody.RowCount += 1;
+            tableLayoutPanelBody.RowStyles.Insert(insertAt, new RowStyle(SizeType.AutoSize));
+            var toMove = new List<Control>();
+            foreach (Control control in tableLayoutPanelBody.Controls)
+            {
+                if (tableLayoutPanelBody.GetRow(control) >= insertAt)
+                    toMove.Add(control);
+            }
+            toMove.Sort((left, right) => tableLayoutPanelBody.GetRow(right).CompareTo(tableLayoutPanelBody.GetRow(left)));
+            foreach (var control in toMove)
+                tableLayoutPanelBody.SetRow(control, tableLayoutPanelBody.GetRow(control) + 1);
+            tableLayoutPanelBody.Controls.Add(panel, 0, insertAt);
+            ClientSize = new System.Drawing.Size(ClientSize.Width, ClientSize.Height + 64);
+        }
+
+        private vif_locking_mode SelectedLocking =>
+            comboBoxLocking.SelectedItem is vif_locking_mode mode ? mode : vif_locking_mode.network_default;
+
+        private string[] AllowedIps => SplitIps(textBoxAllowed.Text);
+
+        private static string[] SplitIps(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return new string[0];
+            return text.Split(new[] { ',', ';', ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        private static bool IsIpv4(string value)
+        {
+            var parts = value.Split('.');
+            if (parts.Length != 4)
+                return false;
+            foreach (var part in parts)
+            {
+                int octet;
+                if (part.Length == 0 || part.Length > 3 || !int.TryParse(part, out octet) || octet < 0 || octet > 255)
+                    return false;
+            }
+            return true;
+        }
+
+        private bool IsValidAllowedIps(out string error)
+        {
+            error = null;
+            foreach (var ip in AllowedIps)
+            {
+                if (IsIpv4(ip))
+                    continue;
+                error = "Enter allowed IPv4 addresses separated by commas.";
+                return false;
+            }
+            return true;
+        }
+
+        private static bool SameIps(string[] current, string[] edited)
+        {
+            var left = current ?? new string[0];
+            if (left.Length != edited.Length)
+                return false;
+            for (var i = 0; i < left.Length; i++)
+            {
+                if (!string.Equals(left[i], edited[i], StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+            return true;
         }
 
         protected override void OnLoad(EventArgs e)
@@ -116,13 +232,16 @@ namespace XenAdmin.Dialogs
                 radioButtonMac.Checked = true;
             else
                 radioButtonAutogenerate.Checked = true;
+
+            comboBoxLocking.SelectedItem = ExistingVif.locking_mode;
+            textBoxAllowed.Text = ExistingVif.ipv4_allowed == null ? "" : string.Join(", ", ExistingVif.ipv4_allowed);
         }
 
         private void ValidateInput()
         {
             string error;
 
-            if (!IsValidNetwork(out error) || !IsValidMAc(out error) || !IsValidQoSLimit(out error))
+            if (!IsValidNetwork(out error) || !IsValidMAc(out error) || !IsValidQoSLimit(out error) || !IsValidAllowedIps(out error))
             {
                 buttonOk.Enabled = false;
 
@@ -220,6 +339,8 @@ namespace XenAdmin.Dialogs
             if (!string.IsNullOrWhiteSpace(promptTextBoxQoS.Text))
                 vif.qos_algorithm_params = new Dictionary<string, string> {{VIF.KBPS_QOS_PARAMS_KEY, promptTextBoxQoS.Text}};
 
+            vif.locking_mode = SelectedLocking;
+            vif.ipv4_allowed = AllowedIps;
             return vif;
         }
 
@@ -251,6 +372,8 @@ namespace XenAdmin.Dialogs
             if (!string.IsNullOrEmpty(promptTextBoxQoS.Text))
                 newVif.qos_algorithm_params = new Dictionary<string, string> { { VIF.KBPS_QOS_PARAMS_KEY, promptTextBoxQoS.Text } };
 
+            newVif.locking_mode = SelectedLocking;
+            newVif.ipv4_allowed = AllowedIps;
             return newVif;
         }
 
@@ -289,6 +412,12 @@ namespace XenAdmin.Dialogs
                     if (checkboxQoS.Checked)
                         return true;
                 }
+
+                if (ExistingVif.locking_mode != SelectedLocking)
+                    return true;
+
+                if (!SameIps(ExistingVif.ipv4_allowed, AllowedIps))
+                    return true;
 
                 return false;
             }

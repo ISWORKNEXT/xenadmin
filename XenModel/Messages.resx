@@ -15254,4 +15254,28 @@ Do you want to synchronize immediately?</value>
   <data name="NEWSR_LOCALSTORAGE_DEVINFO" xml:space="preserve">
     <value>Enter your Local Storage Device information</value>
   </data>
+  <data name="VM_XENSTORE_DATA" xml:space="preserve">
+    <value>XenStore</value>
+  </data>
+  <data name="VM_XENSTORE_DATA_EMPTY" xml:space="preserve">
+    <value>No entries</value>
+  </data>
+  <data name="VM_XENSTORE_DATA_COUNT" xml:space="preserve">
+    <value>{0} entries</value>
+  </data>
+  <data name="VM_XENSTORE_DATA_REBOOT" xml:space="preserve">
+    <value>A reboot is required after any XenStore changes</value>
+  </data>
+  <data name="VM_XENSTORE_DATA_DELETE" xml:space="preserve">
+    <value>To delete an entry, simply delete its value</value>
+  </data>
+  <data name="VM_XENSTORE_DATA_ADD" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="VM_XENSTORE_DATA_REMOVE" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="VM_XENSTORE_DATA_INVALID" xml:space="preserve">
+    <value>Each key must be unique and use a vm-data/ path, for example vm-data/gateway.</value>
+  </data>
 </root>
