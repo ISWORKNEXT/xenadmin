@@ -51,7 +51,6 @@ namespace XenAdmin.TabPages
         private readonly DataGridViewColumn storageLinkColumn;
 
         private VM vm;
-        private readonly VmXenSettingsEditor suspendSettings = new VmXenSettingsEditor(VmXenSettingsArea.SuspendSr);
 
         public VMStoragePage()
         {
@@ -60,9 +59,6 @@ namespace XenAdmin.TabPages
 
             Text = Messages.VIRTUAL_DISKS;
             dataGridViewStorage.Sort(ColumnDevicePosition, ListSortDirection.Ascending);
-            suspendSettings.Dock = DockStyle.Top;
-            pageContainerPanel.Controls.Add(suspendSettings);
-            suspendSettings.Bind(null);
         }
 
         public override string HelpID => "TabPageStorage";
@@ -76,7 +72,6 @@ namespace XenAdmin.TabPages
                 UnregisterHandlers();
 
                 vm = value;
-                suspendSettings.Bind(vm);
                 multipleDvdIsoList1.VM = vm;
 
                 if (vm != null)

@@ -62,7 +62,9 @@ namespace XenAdmin.SettingsPanels
             {
                 AutoSize = true,
                 Margin = new Padding(3, 3, 3, 6),
-                Text = Messages.VM_XENSTORE_DATA_REBOOT + Environment.NewLine + Messages.VM_XENSTORE_DATA_DELETE
+                Text = Messages.VM_XENSTORE_DATA_REBOOT + Environment.NewLine
+                    + Messages.VM_XENSTORE_DATA_DELETE + Environment.NewLine
+                    + "Enter the name only, for example gateway. It is stored as vm-data/gateway."
             };
             notes.Controls.Add(icon, 0, 0);
             notes.Controls.Add(note, 1, 0);
@@ -232,7 +234,11 @@ namespace XenAdmin.SettingsPanels
             grid.Rows.Clear();
 
             foreach (var pair in original.OrderBy(pair => pair.Key, StringComparer.Ordinal))
-                grid.Rows.Add(pair.Key, pair.Value ?? string.Empty);
+            {
+                if (IsPlaceholderKey(pair.Key))
+                    continue;
+                grid.Rows.Add(DisplayKey(pair.Key), pair.Value ?? string.Empty);
+            }
 
             UpdateRemoveButton();
             loading = false;
@@ -240,7 +246,7 @@ namespace XenAdmin.SettingsPanels
 
         private void AddButton_Click(object sender, EventArgs e)
         {
-            var index = grid.Rows.Add(KeyPrefix, string.Empty);
+            var index = grid.Rows.Add(string.Empty, string.Empty);
             grid.CurrentCell = grid.Rows[index].Cells[keyColumn.Index];
             grid.BeginEdit(true);
             HideLocalValidationMessages();
@@ -269,6 +275,18 @@ namespace XenAdmin.SettingsPanels
 
             var cell = grid.Rows[e.RowIndex].Cells[keyColumn.Index];
             var normalized = NormalizeKey(cell.Value as string);
+            if (IsPlaceholderKey(normalized))
+            {
+                var rowIndex = e.RowIndex;
+                BeginInvoke(new Action(() =>
+                {
+                    if (rowIndex >= 0 && rowIndex < grid.Rows.Count)
+                        grid.Rows.RemoveAt(rowIndex);
+                    UpdateRemoveButton();
+                }));
+                return;
+            }
+
             if (normalized.Length > 0 && normalized != (cell.Value as string ?? string.Empty).Trim())
                 cell.Value = normalized;
         }
@@ -285,7 +303,7 @@ namespace XenAdmin.SettingsPanels
 
                 var key = KeyForSave(row.Cells[keyColumn.Index].Value as string);
                 var value = row.Cells[valueColumn.Index].Value as string ?? string.Empty;
-                if (key.Length == 0 && value.Length == 0)
+                if (IsPlaceholderKey(key) || (key.Length == 0 && value.Length == 0))
                     continue;
                 if (value.Length == 0)
                     continue;
@@ -312,25 +330,38 @@ namespace XenAdmin.SettingsPanels
 
         private string KeyForSave(string key)
         {
-            key = (key ?? string.Empty).Trim();
-            if (key.Length == 0 || key.StartsWith(KeyPrefix, StringComparison.Ordinal) || original.ContainsKey(key))
+            key = NormalizeKey(key);
+            if (key.Length == 0 || original.ContainsKey(key))
                 return key;
-            return KeyPrefix + key.TrimStart('/');
+            return KeyPrefix + key;
+        }
+
+        private static string DisplayKey(string key)
+        {
+            return NormalizeKey(key);
         }
 
         private static string NormalizeKey(string key)
         {
-            key = (key ?? string.Empty).Trim();
-            if (key.Length == 0)
+            key = (key ?? string.Empty).Trim().Trim('/');
+            while (key.StartsWith(KeyPrefix, StringComparison.Ordinal))
+                key = key.Substring(KeyPrefix.Length).TrimStart('/');
+            if (string.Equals(key, "vm-data", StringComparison.Ordinal))
                 return string.Empty;
-            if (key.StartsWith(KeyPrefix, StringComparison.Ordinal))
-                return key;
-            return KeyPrefix + key.TrimStart('/');
+            return key;
+        }
+
+        private static bool IsPlaceholderKey(string key)
+        {
+            key = (key ?? string.Empty).Trim().TrimEnd('/');
+            return key.Length == 0
+                || string.Equals(key, "vm-data", StringComparison.Ordinal)
+                || string.Equals(key, "vm-data/vm-data", StringComparison.Ordinal);
         }
 
         private static bool IsValidKey(string key)
         {
-            if (string.IsNullOrEmpty(key) || key == "vm-data" || key == KeyPrefix)
+            if (IsPlaceholderKey(key) || key == KeyPrefix)
                 return false;
             if (!key.StartsWith(KeyPrefix, StringComparison.Ordinal))
                 return false;
@@ -348,7 +379,11 @@ namespace XenAdmin.SettingsPanels
                 return copy;
 
             foreach (var pair in source)
+            {
+                if (IsPlaceholderKey(pair.Key))
+                    continue;
                 copy[pair.Key] = pair.Value ?? string.Empty;
+            }
             return copy;
         }
     }

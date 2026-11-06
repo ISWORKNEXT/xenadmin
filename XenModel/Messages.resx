@@ -15276,6 +15276,6 @@ Do you want to synchronize immediately?</value>
     <value>Remove</value>
   </data>
   <data name="VM_XENSTORE_DATA_INVALID" xml:space="preserve">
-    <value>Each key must be unique and use a vm-data/ path, for example vm-data/gateway.</value>
+    <value>Each key must be unique. Enter the name only, for example gateway.</value>
   </data>
 </root>

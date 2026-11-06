@@ -17,8 +17,7 @@ namespace XenAdmin.TabPages
     public enum VmXenSettingsArea
     {
         General,
-        Cpu,
-        SuspendSr
+        Cpu
     }
 
     /// <summary>
@@ -47,6 +46,7 @@ namespace XenAdmin.TabPages
         private CheckBox _nested;
         private CheckBox _viridian;
         private ComboBox _firmware;
+        private ComboBox _nicType;
         private CheckBox _vga;
         private TextBox _videoRam;
         private CheckBox _secureBoot;
@@ -54,7 +54,6 @@ namespace XenAdmin.TabPages
         private TextBox _weight;
         private TextBox _cap;
         private TextBox _mask;
-        private ComboBox _suspendSr;
 
         public VmXenSettingsEditor(VmXenSettingsArea area)
         {
@@ -62,13 +61,10 @@ namespace XenAdmin.TabPages
             switch (area)
             {
                 case VmXenSettingsArea.General:
-                    _openMinimum = new Size(320, 520);
+                    _openMinimum = new Size(320, 560);
                     break;
                 case VmXenSettingsArea.Cpu:
                     _openMinimum = new Size(320, 148);
-                    break;
-                case VmXenSettingsArea.SuspendSr:
-                    _openMinimum = new Size(320, 96);
                     break;
                 default:
                     throw new InvalidOperationException(area.ToString());
@@ -96,9 +92,6 @@ namespace XenAdmin.TabPages
                     break;
                 case VmXenSettingsArea.Cpu:
                     BuildCpu();
-                    break;
-                case VmXenSettingsArea.SuspendSr:
-                    BuildSuspend();
                     break;
                 default:
                     throw new InvalidOperationException(area.ToString());
@@ -182,9 +175,6 @@ namespace XenAdmin.TabPages
                     target.VCPUs_params = VM.SetDictionaryKey(target.VCPUs_params, "mask",
                         string.IsNullOrEmpty(snap.Mask) ? null : snap.Mask);
                     break;
-                case VmXenSettingsArea.SuspendSr:
-                    target.suspend_SR = new XenRef<SR>(snap.SuspendSr == null ? Helper.NullOpaqueRef : snap.SuspendSr.opaque_ref);
-                    break;
                 default:
                     throw new InvalidOperationException(snap.Area.ToString());
             }
@@ -251,6 +241,7 @@ namespace XenAdmin.TabPages
             _nested = AddCheck("Nested virtualization");
             _viridian = AddCheck("Viridian");
             _firmware = AddCombo("Boot firmware", "bios", "uefi");
+            _nicType = AddNicType();
             _vga = AddCheck("VGA");
             _videoRam = AddText("Video RAM (MiB)");
             _secureBoot = AddCheck("Secure boot");
@@ -264,12 +255,6 @@ namespace XenAdmin.TabPages
             _weight = AddText("CPU weight");
             _cap = AddText("CPU cap");
             _mask = AddText("CPU mask");
-        }
-
-        private void BuildSuspend()
-        {
-            AddTitle("Suspend storage", "Storage repository used when this VM is suspended.");
-            _suspendSr = AddCombo("Suspend SR");
         }
 
         private void AddTitle(string title, string hint)
@@ -323,6 +308,21 @@ namespace XenAdmin.TabPages
                 box.Items.Add(item);
             box.SelectedIndexChanged += Edited;
             AddPair(caption, box);
+            return box;
+        }
+
+        private ComboBox AddNicType()
+        {
+            var box = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right
+            };
+            box.Items.Add(new NicTypeChoice("rtl8139", "Realtek RTL8139"));
+            box.Items.Add(new NicTypeChoice("e1000", "Intel e1000"));
+            box.SelectedIndex = 0;
+            box.SelectedIndexChanged += Edited;
+            AddPair("NIC type", box);
             return box;
         }
 
@@ -382,9 +382,6 @@ namespace XenAdmin.TabPages
                     case VmXenSettingsArea.Cpu:
                         LoadCpu();
                         break;
-                    case VmXenSettingsArea.SuspendSr:
-                        LoadSuspend();
-                        break;
                     default:
                         throw new InvalidOperationException(_area.ToString());
                 }
@@ -413,6 +410,8 @@ namespace XenAdmin.TabPages
             var firmware = Value(_vm.HVM_boot_params, "firmware");
             _firmware.SelectedItem = firmware == "uefi" ? "uefi" : "bios";
             _firmware.Enabled = _vm.IsHVM();
+            SelectNicType(Value(_vm.platform, "nic_type"));
+            _nicType.Enabled = _vm.IsHVM();
             var vga = Value(_vm.platform, "vga");
             _vga.Checked = !string.IsNullOrEmpty(vga) && vga != "false";
             _videoRam.Text = Value(_vm.platform, "videoram") ?? "";
@@ -428,44 +427,6 @@ namespace XenAdmin.TabPages
             _weight.Text = _vm.GetVcpuWeight().ToString();
             _cap.Text = Value(_vm.VCPUs_params, "cap") ?? "0";
             _mask.Text = Value(_vm.VCPUs_params, "mask") ?? "";
-        }
-
-        private void LoadSuspend()
-        {
-            _suspendSr.Items.Clear();
-            _suspendSr.Items.Add(new SrChoice(null));
-            if (_vm.Connection != null)
-            {
-                var srs = new List<SR>(_vm.Connection.Cache.SRs);
-                srs.Sort();
-                foreach (var sr in srs)
-                {
-                    if (sr == null || sr.IsToolsSR())
-                        continue;
-                    if (string.Equals(sr.content_type, "iso", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    if (!sr.Show(true))
-                        continue;
-                    _suspendSr.Items.Add(new SrChoice(sr));
-                }
-            }
-
-            var selected = 0;
-            var current = _vm.suspend_SR == null || Helper.IsNullOrEmptyOpaqueRef(_vm.suspend_SR.opaque_ref)
-                ? null
-                : _vm.suspend_SR.opaque_ref;
-            if (current != null)
-            {
-                for (var i = 0; i < _suspendSr.Items.Count; i++)
-                {
-                    if (_suspendSr.Items[i] is SrChoice choice && choice.Sr != null && choice.Sr.opaque_ref == current)
-                    {
-                        selected = i;
-                        break;
-                    }
-                }
-            }
-            _suspendSr.SelectedIndex = _suspendSr.Items.Count == 0 ? -1 : selected;
         }
 
         private bool Blocked(vm_operations operation)
@@ -532,8 +493,6 @@ namespace XenAdmin.TabPages
                         return false;
                     }
                     return true;
-                case VmXenSettingsArea.SuspendSr:
-                    return true;
                 default:
                     throw new InvalidOperationException(_area.ToString());
             }
@@ -564,9 +523,6 @@ namespace XenAdmin.TabPages
                     break;
                 case VmXenSettingsArea.Cpu:
                     title = "Update CPU scheduling";
-                    break;
-                case VmXenSettingsArea.SuspendSr:
-                    title = "Update suspend storage";
                     break;
                 default:
                     throw new InvalidOperationException(_area.ToString());
@@ -606,8 +562,6 @@ namespace XenAdmin.TabPages
                     };
                 case VmXenSettingsArea.Cpu:
                     return new[] { "VM.set_VCPUs_params" };
-                case VmXenSettingsArea.SuspendSr:
-                    return new[] { "VM.set_suspend_SR" };
                 default:
                     throw new InvalidOperationException(_area.ToString());
             }
@@ -631,6 +585,7 @@ namespace XenAdmin.TabPages
                     snap.Nested = _nested.Checked;
                     snap.Viridian = _viridian.Checked;
                     snap.Firmware = _firmware.SelectedItem as string ?? "bios";
+                    snap.NicType = (_nicType.SelectedItem as NicTypeChoice)?.Value ?? "rtl8139";
                     snap.Vga = _vga.Checked;
                     snap.VideoRam = _videoRam.Text.Trim();
                     snap.SecureBoot = _secureBoot.Checked;
@@ -639,9 +594,6 @@ namespace XenAdmin.TabPages
                     snap.Weight = _weight.Text.Trim();
                     snap.Cap = _cap.Text.Trim();
                     snap.Mask = _mask.Text.Trim();
-                    break;
-                case VmXenSettingsArea.SuspendSr:
-                    snap.SuspendSr = (_suspendSr.SelectedItem as SrChoice)?.Sr;
                     break;
                 default:
                     throw new InvalidOperationException(_area.ToString());
@@ -666,9 +618,6 @@ namespace XenAdmin.TabPages
                     clone.VCPUs_params = VM.SetDictionaryKey(clone.VCPUs_params, "cap", snap.Cap);
                     clone.VCPUs_params = VM.SetDictionaryKey(clone.VCPUs_params, "mask",
                         string.IsNullOrEmpty(snap.Mask) ? null : snap.Mask);
-                    break;
-                case VmXenSettingsArea.SuspendSr:
-                    clone.suspend_SR = new XenRef<SR>(snap.SuspendSr == null ? Helper.NullOpaqueRef : snap.SuspendSr.opaque_ref);
                     break;
                 default:
                     throw new InvalidOperationException(snap.Area.ToString());
@@ -717,7 +666,10 @@ namespace XenAdmin.TabPages
                 Pair("secureboot", snap.SecureBoot ? "true" : "false"));
 
             if (current.IsHVM())
+            {
+                clone.platform = VM.SetDictionaryKey(clone.platform, "nic_type", snap.NicType);
                 clone.HVM_boot_params = VM.SetDictionaryKey(current.HVM_boot_params, "firmware", snap.Firmware);
+            }
 
             clone.VCPUs_params = VM.SetDictionaryKey(current.VCPUs_params, "weight", snap.Weight);
             clone.VCPUs_params = VM.SetDictionaryKey(clone.VCPUs_params, "cap", snap.Cap);
@@ -750,27 +702,48 @@ namespace XenAdmin.TabPages
             public bool Nested;
             public bool Viridian;
             public string Firmware;
+            public string NicType;
             public bool Vga;
             public string VideoRam;
             public bool SecureBoot;
             public string Weight;
             public string Cap;
             public string Mask;
-            public SR SuspendSr;
         }
 
-        private sealed class SrChoice
+        private void SelectNicType(string value)
         {
-            public SrChoice(SR sr)
+            if (string.IsNullOrEmpty(value))
+                value = "rtl8139";
+
+            foreach (NicTypeChoice choice in _nicType.Items)
             {
-                Sr = sr;
+                if (string.Equals(choice.Value, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    _nicType.SelectedItem = choice;
+                    return;
+                }
             }
 
-            public SR Sr { get; }
+            var extra = new NicTypeChoice(value, value);
+            _nicType.Items.Add(extra);
+            _nicType.SelectedItem = extra;
+        }
+
+        private sealed class NicTypeChoice
+        {
+            public NicTypeChoice(string value, string label)
+            {
+                Value = value;
+                Label = label;
+            }
+
+            public string Value { get; }
+            private string Label { get; }
 
             public override string ToString()
             {
-                return Sr == null ? "None" : Sr.Name();
+                return Label;
             }
         }
     }

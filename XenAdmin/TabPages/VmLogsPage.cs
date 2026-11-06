@@ -19,7 +19,9 @@ namespace XenAdmin.TabPages
         private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
         private readonly DataGridView _grid;
+        private readonly Button _refresh;
         private readonly CollectionChangeEventHandler _messagesChanged;
+        private readonly List<XenAPI.Message> _shown = new List<XenAPI.Message>();
         private VM _vm;
         private int _loadGeneration;
 
@@ -61,7 +63,23 @@ namespace XenAdmin.TabPages
                 Name = "Content",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
+            var bar = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                WrapContents = false,
+                Padding = new Padding(0, 0, 0, 6)
+            };
+            _refresh = new Button
+            {
+                Text = "Refresh",
+                AutoSize = true,
+                UseVisualStyleBackColor = true
+            };
+            _refresh.Click += (sender, args) => Reload();
+            bar.Controls.Add(_refresh);
             pageContainerPanel.Controls.Add(_grid);
+            pageContainerPanel.Controls.Add(bar);
         }
 
         public override string HelpID => "TabPageLogs";
@@ -74,6 +92,7 @@ namespace XenAdmin.TabPages
                     _vm.Connection.Cache.DeregisterCollectionChanged<XenAPI.Message>(_messagesChanged);
 
                 _vm = value;
+                _shown.Clear();
                 _grid.Rows.Clear();
                 if (_vm == null)
                     return;
@@ -87,7 +106,7 @@ namespace XenAdmin.TabPages
         {
             if (!Visible || _vm == null)
                 return;
-            Show(CacheMessages());
+            Merge(CacheMessages(), false);
         }
 
         private void Reload()
@@ -95,7 +114,8 @@ namespace XenAdmin.TabPages
             if (_vm == null)
                 return;
 
-            Show(CacheMessages());
+            Merge(CacheMessages(), false);
+            _refresh.Enabled = false;
 
             var vm = _vm;
             var generation = ++_loadGeneration;
@@ -123,12 +143,51 @@ namespace XenAdmin.TabPages
                     {
                         if (generation != _loadGeneration || _vm == null || _vm.uuid != vm.uuid)
                             return;
-                        Show(rows);
+                        if (rows.Count > 0)
+                            Merge(rows, true);
+                        _refresh.Enabled = true;
                     });
                 },
                 true,
                 "message.get");
+            action.Completed += sender =>
+            {
+                if (!IsHandleCreated)
+                    return;
+                Program.Invoke(this, () => _refresh.Enabled = true);
+            };
             action.RunAsync();
+        }
+
+        private void Merge(IEnumerable<XenAPI.Message> incoming, bool replace)
+        {
+            var map = new Dictionary<string, XenAPI.Message>();
+            if (!replace)
+            {
+                foreach (var message in _shown)
+                    map[MessageKey(message)] = message;
+            }
+
+            if (incoming != null)
+            {
+                foreach (var message in incoming)
+                {
+                    if (message == null)
+                        continue;
+                    map[MessageKey(message)] = message;
+                }
+            }
+
+            _shown.Clear();
+            _shown.AddRange(map.Values.OrderByDescending(message => message.timestamp));
+            Render();
+        }
+
+        private static string MessageKey(XenAPI.Message message)
+        {
+            if (!string.IsNullOrEmpty(message.opaque_ref) && message.opaque_ref != "OpaqueRef:NULL")
+                return message.opaque_ref;
+            return message.timestamp.Ticks + "|" + message.name + "|" + message.body;
         }
 
         private List<XenAPI.Message> CacheMessages()
@@ -142,10 +201,10 @@ namespace XenAdmin.TabPages
                 .ToList();
         }
 
-        private void Show(List<XenAPI.Message> messages)
+        private void Render()
         {
             var rows = new List<object[]>();
-            foreach (var message in messages)
+            foreach (var message in _shown)
             {
                 if (message == null)
                     continue;

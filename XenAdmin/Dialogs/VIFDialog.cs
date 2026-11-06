@@ -45,7 +45,9 @@ namespace XenAdmin.Dialogs
         private readonly int Device;
         private readonly bool allowSriov;
         private ComboBox comboBoxLocking;
-        private TextBox textBoxAllowed;
+        private FlowLayoutPanel allowedIpRows;
+        private readonly List<TextBox> allowedIpBoxes = new List<TextBox>();
+        private int allowedIpBaseHeight;
 
         public VIFDialog(IXenConnection connection, VIF existingVif, int device, bool allowSriov = false)
             : base(connection)
@@ -98,17 +100,36 @@ namespace XenAdmin.Dialogs
             comboBoxLocking.SelectedItem = vif_locking_mode.network_default;
             comboBoxLocking.SelectedIndexChanged += (s, e) => ValidateInput();
 
-            textBoxAllowed = new TextBox
+            allowedIpRows = new FlowLayoutPanel
             {
-                Anchor = AnchorStyles.Left | AnchorStyles.Right,
-                Margin = new Padding(3, 4, 3, 4)
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
             };
-            textBoxAllowed.TextChanged += (s, e) => ValidateInput();
+            var addIpButton = new Button
+            {
+                Text = "+",
+                AutoSize = true,
+                Margin = new Padding(3, 2, 0, 2)
+            };
+            addIpButton.Click += (s, e) => AddAllowedIpRow(string.Empty);
+            allowedIpRows.Controls.Add(addIpButton);
+            AddAllowedIpRow(string.Empty);
 
+            var allowedLabel = new Label
+            {
+                Text = "Allowed IPs",
+                AutoSize = true,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                Margin = new Padding(0, 8, 0, 0)
+            };
             panel.Controls.Add(new Label { Text = "Locking mode", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
             panel.Controls.Add(comboBoxLocking, 1, 0);
-            panel.Controls.Add(new Label { Text = "Allowed IPs", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
-            panel.Controls.Add(textBoxAllowed, 1, 1);
+            panel.Controls.Add(allowedLabel, 0, 1);
+            panel.Controls.Add(allowedIpRows, 1, 1);
 
             const int insertAt = 6;
             tableLayoutPanelBody.RowCount += 1;
@@ -123,20 +144,83 @@ namespace XenAdmin.Dialogs
             foreach (var control in toMove)
                 tableLayoutPanelBody.SetRow(control, tableLayoutPanelBody.GetRow(control) + 1);
             tableLayoutPanelBody.Controls.Add(panel, 0, insertAt);
-            ClientSize = new System.Drawing.Size(ClientSize.Width, ClientSize.Height + 64);
+            ClientSize = new System.Drawing.Size(ClientSize.Width, ClientSize.Height + 88);
+            allowedIpBaseHeight = ClientSize.Height;
+        }
+
+        private void AddAllowedIpRow(string ip)
+        {
+            var row = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                WrapContents = false,
+                Margin = new Padding(0),
+                Padding = new Padding(0)
+            };
+            var box = new TextBox
+            {
+                Width = 210,
+                Text = ip ?? string.Empty,
+                Margin = new Padding(3, 2, 3, 2)
+            };
+            box.TextChanged += (s, e) => ValidateInput();
+            var remove = new Button
+            {
+                Text = "-",
+                AutoSize = true,
+                Margin = new Padding(0, 2, 0, 2)
+            };
+            remove.Click += (s, e) =>
+            {
+                allowedIpBoxes.Remove(box);
+                allowedIpRows.Controls.Remove(row);
+                row.Dispose();
+                if (allowedIpBoxes.Count == 0)
+                    AddAllowedIpRow(string.Empty);
+                else
+                    FitAllowedIpHeight();
+                ValidateInput();
+            };
+            row.Controls.Add(box);
+            row.Controls.Add(remove);
+            allowedIpRows.Controls.Add(row);
+            allowedIpRows.Controls.SetChildIndex(row, allowedIpRows.Controls.Count - 2);
+            allowedIpBoxes.Add(box);
+            FitAllowedIpHeight();
+        }
+
+        private void SetAllowedIps(IEnumerable<string> ips)
+        {
+            var values = ips == null ? new List<string>() : ips.Where(ip => !string.IsNullOrWhiteSpace(ip)).ToList();
+            while (allowedIpBoxes.Count > 0)
+            {
+                var box = allowedIpBoxes[0];
+                allowedIpBoxes.RemoveAt(0);
+                var row = box.Parent;
+                allowedIpRows.Controls.Remove(row);
+                row.Dispose();
+            }
+
+            if (values.Count == 0)
+                values.Add(string.Empty);
+            foreach (var ip in values)
+                AddAllowedIpRow(ip);
+            FitAllowedIpHeight();
+        }
+
+        private void FitAllowedIpHeight()
+        {
+            if (allowedIpBaseHeight <= 0)
+                return;
+            var extra = Math.Max(0, allowedIpBoxes.Count - 1) * 28;
+            ClientSize = new System.Drawing.Size(ClientSize.Width, allowedIpBaseHeight + extra);
         }
 
         private vif_locking_mode SelectedLocking =>
             comboBoxLocking.SelectedItem is vif_locking_mode mode ? mode : vif_locking_mode.network_default;
 
-        private string[] AllowedIps => SplitIps(textBoxAllowed.Text);
-
-        private static string[] SplitIps(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-                return new string[0];
-            return text.Split(new[] { ',', ';', ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-        }
+        private string[] AllowedIps =>
+            allowedIpBoxes.Select(box => box.Text.Trim()).Where(ip => ip.Length > 0).ToArray();
 
         private static bool IsIpv4(string value)
         {
@@ -159,7 +243,7 @@ namespace XenAdmin.Dialogs
             {
                 if (IsIpv4(ip))
                     continue;
-                error = "Enter allowed IPv4 addresses separated by commas.";
+                error = "Each allowed IP must be an IPv4 address.";
                 return false;
             }
             return true;
@@ -234,7 +318,7 @@ namespace XenAdmin.Dialogs
                 radioButtonAutogenerate.Checked = true;
 
             comboBoxLocking.SelectedItem = ExistingVif.locking_mode;
-            textBoxAllowed.Text = ExistingVif.ipv4_allowed == null ? "" : string.Join(", ", ExistingVif.ipv4_allowed);
+            SetAllowedIps(ExistingVif.ipv4_allowed);
         }
 
         private void ValidateInput()
