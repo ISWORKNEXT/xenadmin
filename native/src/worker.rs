@@ -48,6 +48,11 @@ pub enum Command {
         host_uuid: String,
         range_seconds: u64,
     },
+    HostAction {
+        connection_id: String,
+        host_uuid: String,
+        action: xen_core::operations::HostAction,
+    },
     VmDetails {
         seq: u64,
         connection_id: String,
@@ -167,6 +172,11 @@ pub enum Event {
     HostPerformance {
         seq: u64,
         result: Result<Box<HostPerformance>, String>,
+    },
+    HostActionFinished {
+        host_uuid: String,
+        action: xen_core::operations::HostAction,
+        result: Result<(), String>,
     },
     VmDetails {
         seq: u64,
@@ -401,6 +411,20 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::HostDetails { seq, result });
+            }
+            Command::HostAction {
+                connection_id,
+                host_uuid,
+                action,
+            } => {
+                let result = workspace
+                    .host_action(&connection_id, &host_uuid, action)
+                    .await;
+                let _ = events.send(Event::HostActionFinished {
+                    host_uuid,
+                    action,
+                    result,
+                });
             }
             Command::HostPerformance {
                 seq,

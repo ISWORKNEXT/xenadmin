@@ -263,7 +263,65 @@ pub struct RemoteTask {
     pub can_cancel: bool,
 }
 
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostAction {
+    Enable,
+    Disable,
+    Evacuate,
+    Reboot,
+    Shutdown,
+    RestartToolstack,
+}
+
+impl HostAction {
+    fn method(self) -> &'static str {
+        match self {
+            Self::Enable => "Async.host.enable",
+            Self::Disable => "Async.host.disable",
+            Self::Evacuate => "Async.host.evacuate",
+            Self::Reboot => "Async.host.reboot",
+            Self::Shutdown => "Async.host.shutdown",
+            Self::RestartToolstack => "Async.host.restart_agent",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Enable => "Enable host",
+            Self::Disable => "Disable host",
+            Self::Evacuate => "Evacuate host",
+            Self::Reboot => "Reboot host",
+            Self::Shutdown => "Shut down host",
+            Self::RestartToolstack => "Restart toolstack",
+        }
+    }
+
+    pub fn destructive(self) -> bool {
+        matches!(self, Self::Reboot | Self::Shutdown)
+    }
+}
+
 impl Connection {
+    pub async fn host_action(&self, host_uuid: &str, action: HostAction) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let host_ref: String = self
+            .request("host.get_by_uuid", json!([self.session, host_uuid]))
+            .await?;
+        let host: Value = self
+            .request("host.get_record", json!([self.session, host_ref]))
+            .await?;
+        if host["uuid"].as_str() != Some(host_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        self.async_task(action.method(), json!([self.session, host_ref]))
+            .await
+    }
+
     /// Clone a template or VM. Templates are provisioned after cloning so the
     /// new VM receives the disks declared in `other_config.disks`.
     pub async fn clone_vm(&self, uuid: &str, name: &str) -> Result<String, ApiError> {
@@ -1473,6 +1531,20 @@ mod tests {
             vec!["vdi-owned".to_string(), "vdi-suspend".to_string()]
         );
         assert!(owner_vdis(&vbds, &json!({"suspend_VDI": "OpaqueRef:NULL"}), "vm").len() == 1);
+    }
+    #[test]
+    fn host_actions_use_async_host_methods() {
+        assert_eq!(HostAction::Enable.method(), "Async.host.enable");
+        assert_eq!(HostAction::Disable.method(), "Async.host.disable");
+        assert_eq!(HostAction::Evacuate.method(), "Async.host.evacuate");
+        assert_eq!(HostAction::Reboot.method(), "Async.host.reboot");
+        assert_eq!(HostAction::Shutdown.method(), "Async.host.shutdown");
+        assert_eq!(
+            HostAction::RestartToolstack.method(),
+            "Async.host.restart_agent"
+        );
+        assert!(HostAction::Reboot.destructive());
+        assert!(!HostAction::Enable.destructive());
     }
     #[test]
     fn task_references_are_unwrapped() {

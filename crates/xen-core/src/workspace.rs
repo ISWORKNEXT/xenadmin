@@ -372,6 +372,32 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn host_action(
+        &self,
+        connection_id: &str,
+        host_uuid: &str,
+        action: crate::operations::HostAction,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        let present = active
+            .snapshot
+            .read()
+            .await
+            .hosts
+            .iter()
+            .any(|host| host.uuid == host_uuid);
+        if !present {
+            return Err("This host is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .host_action(host_uuid, action)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn add_cd_drive(&self, connection_id: &str, vm_uuid: &str) -> Result<(), String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;

@@ -33,6 +33,9 @@ pub fn show(
     if state.disk_dialog.is_some() {
         disk_dialog(ctx, state, actions);
     }
+    if state.host_action_confirm.is_some() {
+        host_action_confirm(ctx, state, actions);
+    }
     if state.vif_dialog.is_some() {
         vif_dialog(ctx, state, actions);
     }
@@ -551,6 +554,116 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
     }
     if close {
         actions.push(UiAction::CloseVmEdit);
+    }
+}
+
+fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut confirm = false;
+    let Some(dialog) = state.host_action_confirm.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("host-action-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(500.0);
+            modal_title(
+                ui,
+                dialog.action.title(),
+                "Review the host target before submitting to XenAPI.",
+            );
+            ui.horizontal(|ui| {
+                widgets::dot(ui, accent(), 6.0);
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label(RichText::new(&dialog.host_name).size(11.5).strong());
+                    ui.label(
+                        RichText::new(&dialog.host_uuid)
+                            .monospace()
+                            .size(9.0)
+                            .color(dim_fg()),
+                    );
+                });
+            });
+            if dialog.action.destructive() {
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(match dialog.action {
+                        xen_core::operations::HostAction::Reboot => {
+                            "All VMs on this host will be rebooted or shut down."
+                        }
+                        xen_core::operations::HostAction::Shutdown => {
+                            "The host and all VMs on it will be shut down."
+                        }
+                        _ => "This action changes host availability.",
+                    })
+                    .size(9.5)
+                    .color(red()),
+                );
+                ui.add_space(4.0);
+                ui.add_enabled(
+                    !dialog.submitting,
+                    egui::Checkbox::new(
+                        &mut dialog.acknowledged,
+                        RichText::new("I understand the impact on running VMs").size(10.0),
+                    ),
+                );
+            }
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let destructive = dialog.action.destructive();
+                    let button = if destructive {
+                        egui::Button::new(
+                            RichText::new(if dialog.submitting {
+                                "Running…"
+                            } else {
+                                dialog.action.title()
+                            })
+                            .size(11.0)
+                            .color(red()),
+                        )
+                        .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120)))
+                    } else {
+                        widgets::primary_button(if dialog.submitting {
+                            "Running…"
+                        } else {
+                            dialog.action.title()
+                        })
+                    };
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && (!destructive || dialog.acknowledged),
+                            button,
+                        )
+                        .clicked()
+                    {
+                        confirm = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if confirm {
+        actions.push(UiAction::ConfirmHostAction);
+    }
+    if close {
+        actions.push(UiAction::CancelHostAction);
     }
 }
 

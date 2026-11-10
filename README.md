@@ -29,6 +29,8 @@ default and a persisted dark-theme toggle.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.
 - Add, resize and remove virtual disks while the VM is halted, and create empty
   CD/DVD drives.
+- Host actions menu for enable/disable, evacuate, restart toolstack, reboot and
+  shutdown, with explicit confirmation for disruptive actions.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.

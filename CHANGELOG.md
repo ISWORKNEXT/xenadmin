@@ -25,6 +25,7 @@
 - Restore the running power state after reverting a snapshot taken while the VM was running.
 - Preflight VM starts against missing VDIs and storage repositories without attached PBDs.
 - Route printable console input through Unicode keysyms so non-US keyboard layouts work better.
+- Add host administration actions: enable/disable, evacuate, restart toolstack, reboot and shutdown behind confirmation.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

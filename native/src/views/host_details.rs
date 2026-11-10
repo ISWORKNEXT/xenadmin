@@ -4,6 +4,7 @@ use egui::{
 use egui_extras::{Column, TableBuilder};
 use xen_core::{
     host::{DataSection, DetailRecord},
+    operations::HostAction,
     performance::{HostPerformance, MetricSeries},
     workspace::WorkspaceView,
 };
@@ -58,6 +59,41 @@ pub fn show(
                 .clicked()
             {
                 actions.push(UiAction::ReloadHostDetails);
+            }
+            if let Some(details) = state.host_state.ready()
+                && !read_only
+            {
+                ui.menu_button(RichText::new("Host actions…").size(10.5), |ui| {
+                    let host_uuid = route.host_uuid.clone();
+                    let host_name = details.name.clone();
+                    let mut prompt = |ui: &mut Ui, action: HostAction| {
+                        let color = if action.destructive() { red() } else { fg() };
+                        if ui
+                            .button(RichText::new(action.title()).size(11.0).color(color))
+                            .clicked()
+                        {
+                            actions.push(UiAction::PromptHostAction {
+                                host_uuid: host_uuid.clone(),
+                                host_name: host_name.clone(),
+                                action,
+                            });
+                            ui.close();
+                        }
+                    };
+                    prompt(
+                        ui,
+                        if details.enabled {
+                            HostAction::Disable
+                        } else {
+                            HostAction::Enable
+                        },
+                    );
+                    prompt(ui, HostAction::Evacuate);
+                    prompt(ui, HostAction::RestartToolstack);
+                    ui.separator();
+                    prompt(ui, HostAction::Reboot);
+                    prompt(ui, HostAction::Shutdown);
+                });
             }
             widgets::badge(
                 ui,

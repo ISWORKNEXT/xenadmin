@@ -57,6 +57,8 @@ pub struct HostDetails {
     pub host_uuid: String,
     pub name: String,
     pub address: String,
+    pub enabled: bool,
+    pub power_on: bool,
     pub collected_at: u64,
     pub general: Vec<InfoGroup>,
     pub memory: Vec<InfoGroup>,
@@ -373,6 +375,8 @@ impl Connection {
             host_uuid: host_uuid.into(),
             name: display(&host["name_label"]),
             address: display(&host["address"]),
+            enabled: bool_value(&host["enabled"]).unwrap_or(false),
+            power_on: bool_value(&host["power_on"]).unwrap_or(false),
             collected_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()

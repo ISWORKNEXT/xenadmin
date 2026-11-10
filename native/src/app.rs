@@ -622,6 +622,46 @@ impl App {
                         };
                     }
                 }
+                Event::HostActionFinished {
+                    host_uuid,
+                    action,
+                    result,
+                } => match result {
+                    Ok(()) => {
+                        if self
+                            .state
+                            .host_action_confirm
+                            .as_ref()
+                            .is_some_and(|confirm| confirm.host_uuid == host_uuid)
+                        {
+                            self.state.host_action_confirm = None;
+                        }
+                        self.state.toasts.push(Toast::new(
+                            format!("{} completed.", action.title()),
+                            ToastKind::Success,
+                        ));
+                        if self
+                            .state
+                            .host_route
+                            .as_ref()
+                            .is_some_and(|route| route.host_uuid == host_uuid)
+                        {
+                            self.apply(vec![UiAction::ReloadHostDetails]);
+                        }
+                    }
+                    Err(message) => {
+                        if let Some(confirm) = self.state.host_action_confirm.as_mut()
+                            && confirm.host_uuid == host_uuid
+                        {
+                            confirm.submitting = false;
+                            confirm.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::VmDetails { seq, result } => {
                     if seq == self.state.vm_seq {
                         self.state.vm_state = match result {
@@ -1416,6 +1456,50 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::PromptHostAction {
+                    host_uuid,
+                    host_name,
+                    action,
+                } => {
+                    let Some(route) = self.state.host_route.clone() else {
+                        continue;
+                    };
+                    self.state.host_action_confirm = Some(crate::state::HostActionConfirm {
+                        connection_id: route.connection_id,
+                        host_uuid,
+                        host_name,
+                        action,
+                        acknowledged: !action.destructive(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CancelHostAction => {
+                    if !self
+                        .state
+                        .host_action_confirm
+                        .as_ref()
+                        .is_some_and(|confirm| confirm.submitting)
+                    {
+                        self.state.host_action_confirm = None;
+                    }
+                }
+                UiAction::ConfirmHostAction => {
+                    let Some(confirm) = self.state.host_action_confirm.as_mut() else {
+                        continue;
+                    };
+                    if confirm.action.destructive() && !confirm.acknowledged {
+                        confirm.error = Some("Confirm that you understand this action.".into());
+                        continue;
+                    }
+                    confirm.submitting = true;
+                    confirm.error = None;
+                    self.worker.send(Command::HostAction {
+                        connection_id: confirm.connection_id.clone(),
+                        host_uuid: confirm.host_uuid.clone(),
+                        action: confirm.action,
                     });
                 }
                 UiAction::OpenAddDisk => {

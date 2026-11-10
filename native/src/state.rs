@@ -686,6 +686,16 @@ impl ConsoleState {
     }
 }
 
+pub struct HostActionConfirm {
+    pub connection_id: String,
+    pub host_uuid: String,
+    pub host_name: String,
+    pub action: xen_core::operations::HostAction,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct DiskAddDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -795,6 +805,7 @@ pub struct UiState {
     pub vif_dialog: Option<VifDialog>,
     pub vif_confirm: Option<VifConfirm>,
     pub disk_dialog: Option<DiskDialog>,
+    pub host_action_confirm: Option<HostActionConfirm>,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -852,6 +863,7 @@ impl Default for UiState {
             vif_dialog: None,
             vif_confirm: None,
             disk_dialog: None,
+            host_action_confirm: None,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -936,6 +948,13 @@ pub enum UiAction {
     },
     CloseIsoDialog,
     SaveIso,
+    PromptHostAction {
+        host_uuid: String,
+        host_name: String,
+        action: xen_core::operations::HostAction,
+    },
+    CancelHostAction,
+    ConfirmHostAction,
     OpenAddDisk,
     AddCdDrive,
     OpenDiskResize {
