@@ -17,6 +17,7 @@
 - Replace periodic inventory polling with the XenAPI event stream and a local raw-record cache, so changes from other clients appear automatically.
 - Add start-on-host and resume-on-host actions with an `assert_can_boot_here` precheck and host picker.
 - Extend VM editing with dynamic memory limits (live when permitted) and HVM boot order.
+- Add CD/DVD media management: list ISO images from ISO SRs, insert a selected image or eject the current media.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

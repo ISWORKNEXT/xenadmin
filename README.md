@@ -23,6 +23,8 @@ default and a persisted dark-theme toggle.
   inventory and track progress in Activity & tasks.
 - Edit a VM's name, description and HVM boot order at any time; change vCPUs and
   static memory while halted, and dynamic memory while running when allowed.
+- Change or eject CD/DVD media from the VM Storage tab, with a searchable list
+  of ISO images from ISO storage repositories.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.

@@ -107,7 +107,7 @@ pub fn show(
         VmTab::Performance => performance(ui, state, actions),
         VmTab::Storage => {
             if let Some(details) = details_state(ui, state, actions) {
-                storage(ui, &details.disks);
+                storage(ui, read_only, is_template, is_snapshot, &details, actions);
             }
         }
         VmTab::Network => {
@@ -1290,7 +1290,15 @@ fn console_keysym(key: egui::Key) -> Option<u32> {
     })
 }
 
-fn storage(ui: &mut Ui, disks: &[VmDisk]) {
+fn storage(
+    ui: &mut Ui,
+    read_only: bool,
+    is_template: bool,
+    is_snapshot: bool,
+    details: &VmDetails,
+    actions: &mut Vec<UiAction>,
+) {
+    let disks = &details.disks;
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
@@ -1377,6 +1385,94 @@ fn storage(ui: &mut Ui, disks: &[VmDisk]) {
                     });
                 });
             });
+    });
+
+    ui.add_space(8.0);
+    let cds: Vec<&VmDisk> = details.disks.iter().filter(|disk| disk.is_cd).collect();
+    theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("CD/DVD drives").size(15.0).strong());
+            widgets::badge(ui, cds.len().to_string(), muted_fg());
+            ui.label(
+                RichText::new(format!("{} ISO images available", details.isos.len()))
+                    .size(9.5)
+                    .color(dim_fg()),
+            );
+        });
+        ui.add_space(4.0);
+        if cds.is_empty() {
+            ui.label(
+                RichText::new("No CD/DVD drive is attached to this VM.")
+                    .size(11.0)
+                    .color(dim_fg()),
+            );
+            return;
+        }
+        let editable = !read_only && !is_template && !is_snapshot;
+        for disk in cds {
+            ui.horizontal(|ui| {
+                widgets::dot(ui, purple(), 6.0);
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label(
+                        RichText::new(format!(
+                            "CD drive {}",
+                            if disk.device.is_empty() {
+                                "—"
+                            } else {
+                                &disk.device
+                            }
+                        ))
+                        .size(11.0)
+                        .strong(),
+                    );
+                    ui.label(
+                        RichText::new(if disk.vdi_name.is_empty() {
+                            "Empty".to_owned()
+                        } else {
+                            format!(
+                                "{} · {}",
+                                disk.vdi_name,
+                                if disk.sr_name.is_empty() {
+                                    "Unknown SR"
+                                } else {
+                                    &disk.sr_name
+                                }
+                            )
+                        })
+                        .size(10.0)
+                        .color(if disk.vdi_name.is_empty() {
+                            dim_fg()
+                        } else {
+                            muted_fg()
+                        }),
+                    );
+                });
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            editable,
+                            egui::Button::new(RichText::new("Change media…").size(10.5)),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::OpenIsoDialog {
+                            vbd_uuid: disk.vbd_uuid.clone(),
+                            drive: format!("CD drive {}", disk.device),
+                        });
+                    }
+                });
+            });
+            ui.add_space(4.0);
+        }
+        if !editable {
+            ui.label(
+                RichText::new("Read-only connection or non-VM object: media cannot be changed.")
+                    .size(9.0)
+                    .color(dim_fg()),
+            );
+        }
     });
 }
 

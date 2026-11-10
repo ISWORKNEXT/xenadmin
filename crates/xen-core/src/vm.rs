@@ -39,6 +39,7 @@ pub struct VmDetails {
     pub pv_drivers_version: String,
     pub pv_drivers_up_to_date: bool,
     pub disks: Vec<VmDisk>,
+    pub isos: Vec<VmIso>,
     pub interfaces: Vec<VmInterface>,
     pub snapshots: Vec<VmSnapshot>,
     pub warnings: Vec<String>,
@@ -46,8 +47,10 @@ pub struct VmDetails {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct VmDisk {
+    pub vbd_uuid: String,
     pub device: String,
     pub disk_type: String,
+    pub is_cd: bool,
     pub mode: String,
     pub bootable: bool,
     pub empty: bool,
@@ -58,6 +61,14 @@ pub struct VmDisk {
     pub virtual_size: u64,
     pub physical_utilisation: u64,
     pub read_only: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct VmIso {
+    pub uuid: String,
+    pub name: String,
+    pub sr_name: String,
+    pub size: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -158,9 +169,12 @@ impl Connection {
                 let vdi = related(vdis.as_ref(), &vdi_ref);
                 let sr_ref = text(vdi, "SR");
                 let sr = related(srs.as_ref(), &sr_ref);
+                let disk_type = text(vbd, "type");
                 disks.push(VmDisk {
+                    vbd_uuid: text(vbd, "uuid"),
                     device: text(vbd, "device"),
-                    disk_type: text(vbd, "type"),
+                    is_cd: disk_type == "CD",
+                    disk_type,
                     mode: text(vbd, "mode"),
                     bootable: vbd["bootable"].as_bool().unwrap_or(false),
                     empty: vbd["empty"].as_bool().unwrap_or(false),
@@ -211,6 +225,29 @@ impl Connection {
             snapshots.sort_by(|left, right| right.time.cmp(&left.time));
         }
 
+        let mut isos = Vec::new();
+        if let Some(vdis) = vdis.as_ref() {
+            for vdi in vdis.values() {
+                if vdi["is_a_snapshot"].as_bool() == Some(true)
+                    || vdi["is_a_template"].as_bool() == Some(true)
+                {
+                    continue;
+                }
+                let sr = related(srs.as_ref(), &text(vdi, "SR"));
+                let is_iso = text(vdi, "type") == "iso" || text(sr, "content_type") == "iso";
+                if !is_iso {
+                    continue;
+                }
+                isos.push(VmIso {
+                    uuid: text(vdi, "uuid"),
+                    name: text(vdi, "name_label"),
+                    sr_name: text(sr, "name_label"),
+                    size: number(vdi, "virtual_size"),
+                });
+            }
+            isos.sort_by(|left, right| left.name.cmp(&right.name));
+        }
+
         let guest = related(guests.as_ref(), &text(&vm, "guest_metrics"));
         let platform = fields(&vm["platform"], PLATFORM_FIELDS);
         let other_config = fields(&vm["other_config"], OTHER_CONFIG_FIELDS);
@@ -243,6 +280,7 @@ impl Connection {
             pv_drivers_version: text(guest, "PV_drivers_version"),
             pv_drivers_up_to_date: guest["PV_drivers_up_to_date"].as_bool().unwrap_or(false),
             disks,
+            isos,
             interfaces,
             snapshots,
             warnings,

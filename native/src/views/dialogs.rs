@@ -27,6 +27,9 @@ pub fn show(
     if state.vm_edit.is_some() {
         vm_edit(ctx, state, actions);
     }
+    if state.iso_dialog.is_some() {
+        iso_dialog(ctx, state, actions);
+    }
     if state.confirm_remove.is_some() {
         confirm_remove(ctx, state, workspace, actions);
     }
@@ -539,6 +542,138 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
     }
     if close {
         actions.push(UiAction::CloseVmEdit);
+    }
+}
+
+fn iso_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.iso_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("iso-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(560.0);
+            modal_title(
+                ui,
+                &format!("CD/DVD media · {}", dialog.drive),
+                "Choose an ISO image from the pool, or eject the current media.",
+            );
+            widgets::field_label(ui, "Search ISO images");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.search)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("Filter by name or storage repository")
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(6.0);
+            let query = dialog.search.trim().to_lowercase();
+            let mut visible = 0usize;
+            egui::ScrollArea::vertical()
+                .max_height(280.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    let empty_selected = dialog.selected.is_none();
+                    if ui
+                        .selectable_label(
+                            empty_selected,
+                            RichText::new("Empty / eject media").size(11.0),
+                        )
+                        .clicked()
+                    {
+                        dialog.selected = None;
+                    }
+                    for iso in &dialog.isos {
+                        if !query.is_empty()
+                            && !iso.name.to_lowercase().contains(&query)
+                            && !iso.sr_name.to_lowercase().contains(&query)
+                        {
+                            continue;
+                        }
+                        visible += 1;
+                        let selected = dialog.selected.as_deref() == Some(iso.uuid.as_str());
+                        ui.horizontal(|ui| {
+                            if ui
+                                .selectable_label(
+                                    selected,
+                                    RichText::new(if iso.name.is_empty() {
+                                        "(unnamed ISO)"
+                                    } else {
+                                        &iso.name
+                                    })
+                                    .size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.selected = Some(iso.uuid.clone());
+                            }
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} · {}",
+                                    iso.sr_name,
+                                    crate::format::bytes(iso.size)
+                                ))
+                                .size(9.0)
+                                .color(dim_fg()),
+                            );
+                        });
+                    }
+                    if visible == 0 {
+                        ui.label(
+                            RichText::new(if dialog.isos.is_empty() {
+                                "No ISO images were found in this pool."
+                            } else {
+                                "No ISO images match the search."
+                            })
+                            .size(10.5)
+                            .color(dim_fg()),
+                        );
+                    }
+                });
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting,
+                            widgets::primary_button(if dialog.submitting {
+                                "Applying…"
+                            } else if dialog.selected.is_some() {
+                                "Insert media"
+                            } else {
+                                "Eject media"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveIso);
+    }
+    if close {
+        actions.push(UiAction::CloseIsoDialog);
     }
 }
 

@@ -6,7 +6,7 @@ use xen_core::{
     host::{DataSection, HostDetails, InfoGroup},
     operations::{TaskStatus, VmAction},
     performance::HostPerformance,
-    vm::VmDetails,
+    vm::{VmDetails, VmIso},
     workspace::{ConnectionView, Operation, WorkspaceView},
     xapi::{ConnectionSettings, Host, Inventory, VirtualMachine},
 };
@@ -686,6 +686,18 @@ impl ConsoleState {
     }
 }
 
+pub struct IsoDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub vbd_uuid: String,
+    pub drive: String,
+    pub isos: Vec<VmIso>,
+    pub selected: Option<String>,
+    pub search: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct VmEditState {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -721,6 +733,7 @@ pub struct UiState {
     pub console_seq: u64,
     pub console_focus: bool,
     pub vm_edit: Option<VmEditState>,
+    pub iso_dialog: Option<IsoDialog>,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -774,6 +787,7 @@ impl Default for UiState {
             console_seq: 0,
             console_focus: false,
             vm_edit: None,
+            iso_dialog: None,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -852,6 +866,12 @@ pub enum UiAction {
     OpenVmEdit,
     CloseVmEdit,
     SaveVmEdit,
+    OpenIsoDialog {
+        vbd_uuid: String,
+        drive: String,
+    },
+    CloseIsoDialog,
+    SaveIso,
     OpenConsole(String, String),
     CloseConsole,
     ConsoleKey {

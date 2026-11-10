@@ -342,6 +342,26 @@ impl Workspace {
         }
     }
 
+    pub async fn change_cd(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        iso_uuid: Option<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .change_cd(vm_uuid, vbd_uuid, iso_uuid.as_deref())
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn console_tunnel(
         &self,
         connection_id: &str,

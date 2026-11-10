@@ -71,6 +71,12 @@ pub enum Command {
         memory_dynamic_max_mib: u64,
         boot_order: Option<String>,
     },
+    ChangeCd {
+        connection_id: String,
+        vm_uuid: String,
+        vbd_uuid: String,
+        iso_uuid: Option<String>,
+    },
     OpenConsole {
         console_id: String,
         connection_id: String,
@@ -124,6 +130,10 @@ pub enum Event {
         result: Result<Box<HostPerformance>, String>,
     },
     VmEdited {
+        vm_uuid: String,
+        result: Result<(), String>,
+    },
+    CdChanged {
         vm_uuid: String,
         result: Result<(), String>,
     },
@@ -397,6 +407,17 @@ fn dispatch(
                     )
                     .await;
                 let _ = events.send(Event::VmEdited { vm_uuid, result });
+            }
+            Command::ChangeCd {
+                connection_id,
+                vm_uuid,
+                vbd_uuid,
+                iso_uuid,
+            } => {
+                let result = workspace
+                    .change_cd(&connection_id, &vm_uuid, &vbd_uuid, iso_uuid)
+                    .await;
+                let _ = events.send(Event::CdChanged { vm_uuid, result });
             }
             Command::OpenConsole {
                 console_id,

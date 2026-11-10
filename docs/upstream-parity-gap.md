@@ -31,7 +31,7 @@
 | เลือก pool coordinator | connection manager | ต้องเลือก coordinator เอง; ถ้าต่อ member จะได้ error `HOST_IS_SLAVE` |
 | Inventory พื้นฐาน | pool/host/VM/template/snapshot/SR/network | เทียบเท่าข้อมูลหลัก |
 | VM power actions | start/shutdown/reboot/force/pause/unpause/suspend/resume | เทียบเท่าคำสั่งหลัก |
-| VM edit | name/description/CPU/memory/boot options/ISO | name/description/boot order ได้ตลอด; vCPU/static memory เมื่อ halted; dynamic memory live เมื่อ host อนุญาต | ยังไม่มี ISO/CD, disk/VIF, boot options อื่น |
+| VM edit | name/description/CPU/memory/boot options/ISO | name/description/boot order ได้ตลอด; vCPU/static memory เมื่อ halted; dynamic memory live; เปลี่ยน/ถอด ISO บน CD drive ที่มีอยู่ | ยังไม่มี create CD drive, disk/VIF editing, boot options อื่น |
 | Clone | `VM.clone` + set description | clone VM/template ได้, ตั้งชื่อได้, ยังไม่ตั้ง description |
 | Template provisioning | New VM from template + provision disks | clone + provision (`VM.provision`) + ล้าง `other_config.disks` |
 | Snapshot | create/revert/delete | create/revert/delete + cleanup VBD/VDI ที่เป็นเจ้าของ |
@@ -71,7 +71,7 @@
 ### 1. VM provisioning และการแก้ไข VM
 
 - New VM wizard, fast create, create from snapshot (create from template มีแล้ว)
-- dynamic memory target (min/max มีแล้ว), boot options อื่น, ISO/CD drive
+- สร้าง CD drive ใหม่, eject/insert ตอน VM ไม่มี CD drive, boot options อื่น
 - VBD/disk attach, resize, move, detach
 - VIF create/edit/plug/unplug, VIF locking
 - HA restart priority, startup options, other_config
@@ -166,7 +166,7 @@
 ### P0 — ทำให้ใช้งานประจำวันได้
 
 1. **Broken CD/ISO/SR + HA precheck** ก่อน start (host picker และ `assert_can_boot_here` มีแล้ว)
-2. **แก้ VM พื้นฐาน**: ISO/CD, disk/VIF editing, boot options อื่น
+2. **แก้ VM พื้นฐาน**: disk/VIF editing, create CD drive, boot options อื่น
 3. **Revert ที่คืน power state** และ bulk snapshot selection
 4. **Console RDP + clipboard/SSH console**
 5. **External tasks**: แสดง task จาก client อื่นผ่าน event stream

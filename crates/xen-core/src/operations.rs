@@ -538,6 +538,87 @@ impl Connection {
         Ok(())
     }
 
+    /// Insert or eject media in a virtual CD drive. The VBD is resolved from
+    /// its UUID and must belong to the selected VM.
+    pub async fn change_cd(
+        &self,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        iso_uuid: Option<&str>,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["uuid"].as_str() != Some(vm_uuid) || vm["is_control_domain"].as_bool() == Some(true) {
+            return Err(ApiError::Protocol);
+        }
+        if vm["is_a_template"].as_bool() == Some(true)
+            || vm["is_a_snapshot"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen(
+                "CD media can only be changed for a virtual machine.".into(),
+            ));
+        }
+        let vbd_ref: String = self
+            .request("VBD.get_by_uuid", json!([self.session, vbd_uuid]))
+            .await?;
+        let vbd: Value = self
+            .request("VBD.get_record", json!([self.session, vbd_ref]))
+            .await?;
+        if vbd["uuid"].as_str() != Some(vbd_uuid)
+            || vbd["VM"].as_str() != Some(vm_ref.as_str())
+            || vbd["type"].as_str() != Some("CD")
+        {
+            return Err(ApiError::Xen(
+                "The selected CD drive does not belong to this virtual machine.".into(),
+            ));
+        }
+        let empty = vbd["empty"].as_bool().unwrap_or(true);
+        match iso_uuid {
+            Some(iso_uuid) => {
+                let vdi_ref: String = self
+                    .request("VDI.get_by_uuid", json!([self.session, iso_uuid]))
+                    .await?;
+                let vdi: Value = self
+                    .request("VDI.get_record", json!([self.session, vdi_ref]))
+                    .await?;
+                if vdi["uuid"].as_str() != Some(iso_uuid) {
+                    return Err(ApiError::Protocol);
+                }
+                let sr_ref = vdi["SR"].as_str().unwrap_or_default();
+                let sr: Value = self
+                    .request("SR.get_record", json!([self.session, sr_ref]))
+                    .await?;
+                if vdi["type"].as_str() != Some("iso") && sr["content_type"].as_str() != Some("iso")
+                {
+                    return Err(ApiError::Xen(
+                        "The selected VDI is not an ISO image.".into(),
+                    ));
+                }
+                if !empty {
+                    self.request::<Value>("VBD.eject", json!([self.session, vbd_ref]))
+                        .await?;
+                }
+                self.request::<Value>("VBD.insert", json!([self.session, vbd_ref, vdi_ref]))
+                    .await?;
+            }
+            None if !empty => {
+                self.request::<Value>("VBD.eject", json!([self.session, vbd_ref]))
+                    .await?;
+            }
+            None => {}
+        }
+        Ok(())
+    }
+
     /// Delete a VM and, optionally, the disks it owns. Owner VBDs are identified
     /// the same way as upstream XenAdmin: a VBD with an `owner` key in
     /// `other_config`. The suspended-image VDI is removed as well.

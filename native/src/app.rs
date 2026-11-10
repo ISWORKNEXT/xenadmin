@@ -674,6 +674,31 @@ impl App {
                         }
                     }
                 }
+                Event::CdChanged { vm_uuid, result } => {
+                    if !self
+                        .state
+                        .iso_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.vm_uuid == vm_uuid)
+                    {
+                        continue;
+                    }
+                    match result {
+                        Ok(()) => {
+                            self.state.iso_dialog = None;
+                            self.state
+                                .toasts
+                                .push(Toast::new("CD/DVD media updated.", ToastKind::Success));
+                            self.apply(vec![UiAction::ReloadVmDetails]);
+                        }
+                        Err(message) => {
+                            if let Some(dialog) = self.state.iso_dialog.as_mut() {
+                                dialog.submitting = false;
+                                dialog.error = Some(message);
+                            }
+                        }
+                    }
+                }
                 Event::ConsoleOpened {
                     console_id,
                     vm_uuid,
@@ -1217,6 +1242,73 @@ impl App {
                         memory_dynamic_min_mib,
                         memory_dynamic_max_mib,
                         boot_order: edit.is_hvm.then(|| edit.boot_order.clone()),
+                    });
+                }
+                UiAction::OpenIsoDialog { vbd_uuid, drive } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let LoadState::Ready(details) = &self.state.vm_state else {
+                        self.state.toasts.push(Toast::new(
+                            "Wait for the virtual machine details to load.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    let Some(disk) = details
+                        .disks
+                        .iter()
+                        .find(|disk| disk.is_cd && disk.vbd_uuid == vbd_uuid)
+                    else {
+                        self.state.toasts.push(Toast::new(
+                            "This CD drive is no longer present.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    };
+                    let selected =
+                        (!disk.empty && !disk.vdi_uuid.is_empty()).then(|| disk.vdi_uuid.clone());
+                    self.state.iso_dialog = Some(crate::state::IsoDialog {
+                        connection_id,
+                        vm_uuid,
+                        vbd_uuid,
+                        drive,
+                        isos: details.isos.clone(),
+                        selected,
+                        search: String::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseIsoDialog => {
+                    if !self
+                        .state
+                        .iso_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.iso_dialog = None;
+                    }
+                }
+                UiAction::SaveIso => {
+                    let Some(dialog) = self.state.iso_dialog.as_mut() else {
+                        continue;
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::ChangeCd {
+                        connection_id: dialog.connection_id.clone(),
+                        vm_uuid: dialog.vm_uuid.clone(),
+                        vbd_uuid: dialog.vbd_uuid.clone(),
+                        iso_uuid: dialog.selected.clone(),
                     });
                 }
                 UiAction::OpenConsole(connection_id, vm_uuid) => {
