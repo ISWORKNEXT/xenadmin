@@ -935,6 +935,7 @@ pub enum UiAction {
     CloseIsoDialog,
     SaveIso,
     OpenAddDisk,
+    AddCdDrive,
     OpenDiskResize {
         vdi_uuid: String,
         name: String,
@@ -972,6 +973,10 @@ pub enum UiAction {
         x: u16,
         y: u16,
         buttons: u8,
+    },
+    ConsoleClipboard {
+        console_id: String,
+        text: String,
     },
     DismissToast(usize),
     ConfirmRemove(String),

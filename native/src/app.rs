@@ -755,6 +755,7 @@ impl App {
                 } => {
                     let message = match action.as_str() {
                         "add" => "Virtual disk added.",
+                        "add_cd" => "CD/DVD drive added.",
                         "resize" => "Virtual disk resized.",
                         "remove" => "Virtual disk removed.",
                         _ => "Virtual disk updated.",
@@ -1399,6 +1400,23 @@ impl App {
                         iso_uuid: dialog.selected.clone(),
                     });
                 }
+                UiAction::AddCdDrive => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.worker.send(Command::AddCdDrive {
+                        connection_id,
+                        vm_uuid,
+                    });
+                }
                 UiAction::OpenAddDisk => {
                     let Some(key) = self
                         .state
@@ -1743,6 +1761,19 @@ impl App {
                         self.worker.send(Command::ConsoleInput {
                             console_id,
                             input: ConsoleInput::Key { keycode, down },
+                        });
+                    }
+                }
+                UiAction::ConsoleClipboard { console_id, text } => {
+                    if self
+                        .state
+                        .console
+                        .as_ref()
+                        .is_some_and(|console| console.console_id == console_id)
+                    {
+                        self.worker.send(Command::ConsoleInput {
+                            console_id,
+                            input: ConsoleInput::Clipboard(text),
                         });
                     }
                 }

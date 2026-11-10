@@ -4090,6 +4090,7 @@ dependencies = [
 name = "xen-native"
 version = "0.1.0"
 dependencies = [
+ "arboard",
  "chrono",
  "eframe",
  "egui",

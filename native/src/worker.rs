@@ -77,6 +77,10 @@ pub enum Command {
         vbd_uuid: String,
         iso_uuid: Option<String>,
     },
+    AddCdDrive {
+        connection_id: String,
+        vm_uuid: String,
+    },
     AddDisk {
         connection_id: String,
         vm_uuid: String,
@@ -464,6 +468,17 @@ fn dispatch(
                     .change_cd(&connection_id, &vm_uuid, &vbd_uuid, iso_uuid)
                     .await;
                 let _ = events.send(Event::CdChanged { vm_uuid, result });
+            }
+            Command::AddCdDrive {
+                connection_id,
+                vm_uuid,
+            } => {
+                let result = workspace.add_cd_drive(&connection_id, &vm_uuid).await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: "add_cd".into(),
+                    result,
+                });
             }
             Command::AddDisk {
                 connection_id,

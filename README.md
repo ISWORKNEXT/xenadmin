@@ -26,7 +26,8 @@ default and a persisted dark-theme toggle.
 - Change or eject CD/DVD media from the VM Storage tab, with a searchable list
   of ISO images from ISO storage repositories.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.
-- Add, resize and remove virtual disks while the VM is halted.
+- Add, resize and remove virtual disks while the VM is halted, and create empty
+  CD/DVD drives.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.
@@ -38,7 +39,8 @@ default and a persisted dark-theme toggle.
   operations started by other clients.
 - VM detail tabs: General, Performance (VM RRD), Storage, Network, HA, Snapshots and Console.
 - Embedded VNC console over the host's HTTPS CONNECT tunnel, with live
-  framebuffer updates, mouse, scroll wheel and keyboard input.
+  framebuffer updates, mouse, scroll wheel, keyboard input, Ctrl+Alt+Del and
+  clipboard exchange with the local desktop.
 - Host detail page: General, CPU/memory, Performance, Networking, Storage,
   Hardware, Updates, Certificates, Health.
 - Host performance graphs with all CPU cores in one chart, plus memory and

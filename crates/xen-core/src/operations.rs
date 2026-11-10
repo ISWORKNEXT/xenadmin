@@ -840,6 +840,64 @@ impl Connection {
         Ok(())
     }
 
+    /// Attach an empty virtual CD drive.
+    pub async fn add_cd_drive(&self, vm_uuid: &str) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["uuid"].as_str() != Some(vm_uuid)
+            || vm["is_control_domain"].as_bool() == Some(true)
+            || vm["is_a_template"].as_bool() == Some(true)
+            || vm["is_a_snapshot"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen(
+                "CD drives can only be added to a virtual machine.".into(),
+            ));
+        }
+        if vm["power_state"].as_str() != Some("Halted") {
+            return Err(ApiError::Xen(
+                "Shut down the VM before adding a CD drive.".into(),
+            ));
+        }
+        let devices: Vec<String> = self
+            .request("VM.get_allowed_VBD_devices", json!([self.session, vm_ref]))
+            .await?;
+        let Some(userdevice) = devices
+            .iter()
+            .find(|device| device.as_str() == "3")
+            .or_else(|| devices.first())
+            .cloned()
+        else {
+            return Err(ApiError::Xen(
+                "This VM has no free virtual device slots.".into(),
+            ));
+        };
+        let vbd = json!({
+            "VM": vm_ref,
+            "VDI": "OpaqueRef:NULL",
+            "userdevice": userdevice,
+            "bootable": false,
+            "mode": "RO",
+            "type": "CD",
+            "empty": true,
+            "unpluggable": true,
+            "device": "",
+            "other_config": {},
+            "qos_algorithm_type": "",
+            "qos_algorithm_params": {}
+        });
+        self.async_task("Async.VBD.create", json!([self.session, vbd]))
+            .await
+    }
+
     /// Create a VIF on the next free device slot.
     pub async fn add_vif(
         &self,

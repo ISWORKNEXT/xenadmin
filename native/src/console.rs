@@ -12,6 +12,7 @@ use crate::worker::Event;
 pub enum ConsoleInput {
     Key { keycode: u32, down: bool },
     Pointer { x: u16, y: u16, buttons: u8 },
+    Clipboard(String),
     Close,
 }
 
@@ -168,6 +169,9 @@ pub async fn open(
                         }
                         Some(ConsoleInput::Pointer { x, y, buttons }) => {
                             let _ = client.input(vnc::X11Event::PointerEvent((x, y, buttons).into())).await;
+                        }
+                        Some(ConsoleInput::Clipboard(text)) => {
+                            let _ = client.input(vnc::X11Event::CopyText(text)).await;
                         }
                         Some(ConsoleInput::Close) | None => break,
                     }

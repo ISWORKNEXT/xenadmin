@@ -31,7 +31,7 @@
 | เลือก pool coordinator | connection manager | ต้องเลือก coordinator เอง; ถ้าต่อ member จะได้ error `HOST_IS_SLAVE` |
 | Inventory พื้นฐาน | pool/host/VM/template/snapshot/SR/network | เทียบเท่าข้อมูลหลัก |
 | VM power actions | start/shutdown/reboot/force/pause/unpause/suspend/resume | เทียบเท่าคำสั่งหลัก |
-| VM edit | name/description/CPU/memory/boot options/ISO/disk/VIF | name/description/boot order ได้ตลอด; CPU/static memory เมื่อ halted; dynamic memory live; ISO/CD; add/resize/remove disk; VIF create/remove/plug | ยังไม่มี create CD drive, disk move, VIF network/locking edit, boot options อื่น |
+| VM edit | name/description/CPU/memory/boot options/ISO/disk/VIF | name/description/boot order ได้ตลอด; CPU/static memory เมื่อ halted; dynamic memory live; ISO/CD; create CD drive; add/resize/remove disk; VIF create/remove/plug | ยังไม่มี disk move, VIF network/locking edit, boot options อื่น |
 | Clone | `VM.clone` + set description | clone VM/template ได้, ตั้งชื่อได้, ยังไม่ตั้ง description |
 | Template provisioning | New VM from template + provision disks | clone + provision (`VM.provision`) + ล้าง `other_config.disks` |
 | Snapshot | create/revert/delete | create/revert/delete + cleanup VBD/VDI ที่เป็นเจ้าของ |
@@ -71,7 +71,7 @@
 ### 1. VM provisioning และการแก้ไข VM
 
 - New VM wizard, fast create, create from snapshot (create from template มีแล้ว)
-- สร้าง CD drive ใหม่, eject/insert ตอน VM ไม่มี CD drive, boot options อื่น
+- boot options อื่น, disk move ระหว่าง SR
 - disk attach จาก VDI ที่มีอยู่, disk move ระหว่าง SR (add/resize/remove มีแล้ว)
 - VIF edit network/locking mode (create/delete/plug/unplug มีแล้ว)
 - HA restart priority, startup options, other_config
@@ -90,9 +90,9 @@
 
 ### 3. Console
 
-- VNC ผ่าน HTTPS CONNECT + framebuffer/keyboard/mouse (มีแล้ว)
+- VNC ผ่าน HTTPS CONNECT + framebuffer/keyboard/mouse/clipboard (มีแล้ว)
 - RDP (เดิมใช้ Windows ActiveX)
-- clipboard สองทาง, แป้นพิมพ์ layout ที่ไม่ใช่ US, SSH/text console
+- แป้นพิมพ์ layout ที่ไม่ใช่ US, SSH/text console; clipboard จำกัด Latin-1 ตาม RFB
 
 ### 4. Storage
 
@@ -166,7 +166,7 @@
 ### P0 — ทำให้ใช้งานประจำวันได้
 
 1. **Broken CD/ISO/SR + HA precheck** ก่อน start (host picker และ `assert_can_boot_here` มีแล้ว)
-2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, create CD drive, boot options อื่น
+2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, boot options อื่น
 3. **Revert ที่คืน power state** และ bulk snapshot selection
 4. **Console RDP + clipboard/SSH console**
 5. **Alerts + diagnostics + health check**, host maintenance

@@ -371,6 +371,20 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn add_cd_drive(&self, connection_id: &str, vm_uuid: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .add_cd_drive(vm_uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn add_disk(
         &self,
         connection_id: &str,

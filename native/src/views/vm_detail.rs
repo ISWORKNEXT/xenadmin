@@ -875,6 +875,45 @@ fn console(
                             console.modifiers = (false, false, false, false);
                         }
                     }
+                    let clipboard = state
+                        .console
+                        .as_ref()
+                        .map(|console| console.clipboard.clone())
+                        .unwrap_or_default();
+                    if ui
+                        .add_enabled(
+                            !clipboard.is_empty(),
+                            egui::Button::new(RichText::new("Copy from guest").size(11.0)),
+                        )
+                        .on_hover_text("Copy the guest clipboard to this desktop")
+                        .clicked()
+                    {
+                        ui.ctx().copy_text(clipboard);
+                    }
+                    if ui
+                        .add(egui::Button::new(
+                            RichText::new("Paste to guest").size(11.0),
+                        ))
+                        .on_hover_text("Send this desktop's clipboard to the guest")
+                        .clicked()
+                    {
+                        let console_id = state
+                            .console
+                            .as_ref()
+                            .map(|console| console.console_id.clone())
+                            .unwrap_or_default();
+                        if let Ok(mut clipboard) = arboard::Clipboard::new()
+                            && let Ok(text) = clipboard.get_text()
+                        {
+                            let text: String = text.chars().take(65535).collect();
+                            if !text.is_empty() {
+                                actions.push(UiAction::ConsoleClipboard {
+                                    console_id,
+                                    text,
+                                });
+                            }
+                        }
+                    }
                 } else if ui
                     .add_enabled(
                         vm.power_state == "Running",
@@ -1486,15 +1525,31 @@ fn storage(
             );
         });
         ui.add_space(4.0);
+        let editable = !read_only && !is_template && !is_snapshot;
         if cds.is_empty() {
-            ui.label(
-                RichText::new("No CD/DVD drive is attached to this VM.")
-                    .size(11.0)
-                    .color(dim_fg()),
-            );
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new("No CD/DVD drive is attached to this VM.")
+                        .size(11.0)
+                        .color(dim_fg()),
+                );
+                if ui
+                    .add_enabled(
+                        editable && halted,
+                        egui::Button::new(RichText::new("Add CD drive").size(10.5)),
+                    )
+                    .on_hover_text(if halted {
+                        "Attach an empty CD/DVD drive"
+                    } else {
+                        "Shut down the VM to add a CD drive"
+                    })
+                    .clicked()
+                {
+                    actions.push(UiAction::AddCdDrive);
+                }
+            });
             return;
         }
-        let editable = !read_only && !is_template && !is_snapshot;
         for disk in cds {
             ui.horizontal(|ui| {
                 widgets::dot(ui, purple(), 6.0);

@@ -6,6 +6,7 @@ license = "BSD-2-Clause"
 description = "Native egui desktop client for XCP-ng and XenServer"
 
 [dependencies]
+arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
 vnc-rs = "0.6"
 eframe = { version = "0.37", default-features = false, features = [
     "default_fonts",
