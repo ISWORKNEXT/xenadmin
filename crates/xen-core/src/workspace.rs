@@ -323,6 +323,10 @@ impl Workspace {
         memory_dynamic_min_mib: u64,
         memory_dynamic_max_mib: u64,
         boot_order: Option<String>,
+        firmware: Option<String>,
+        secure_boot: Option<bool>,
+        boot_policy: Option<String>,
+        after_crash: Option<String>,
     ) -> Result<(), String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;
@@ -341,6 +345,10 @@ impl Workspace {
                 memory_dynamic_min_mib,
                 memory_dynamic_max_mib,
                 boot_order,
+                firmware,
+                secure_boot,
+                boot_policy,
+                after_crash,
             )
             .await
             .map_err(|error| error.to_string())?;

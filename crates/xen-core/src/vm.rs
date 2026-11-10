@@ -31,6 +31,9 @@ pub struct VmDetails {
     pub memory_target: u64,
     pub hvm_boot_policy: String,
     pub hvm_boot_params: BTreeMap<String, String>,
+    pub firmware: String,
+    pub secure_boot: String,
+    pub after_crash: String,
     pub ha_restart_priority: String,
     pub ha_always_run: bool,
     pub platform: Vec<InfoField>,
@@ -109,7 +112,7 @@ const PLATFORM_FIELDS: &[(&str, &str)] = &[
     ("PCI_bus", "PCI bus"),
     ("usb", "USB"),
     ("usb_tablet", "USB tablet"),
-    ("secure_boot", "Secure boot"),
+    ("secureboot", "Secure boot"),
 ];
 
 const OTHER_CONFIG_FIELDS: &[(&str, &str)] = &[
@@ -272,6 +275,15 @@ impl Connection {
         guest_ips.dedup();
         let platform = fields(&vm["platform"], PLATFORM_FIELDS);
         let other_config = fields(&vm["other_config"], OTHER_CONFIG_FIELDS);
+        let firmware = vm["HVM_boot_params"]["firmware"]
+            .as_str()
+            .filter(|value| !value.is_empty())
+            .unwrap_or("bios")
+            .to_owned();
+        let secure_boot = vm["platform"]["secureboot"]
+            .as_str()
+            .unwrap_or("false")
+            .to_owned();
 
         Ok(VmDetails {
             uuid: vm_uuid.into(),
@@ -293,6 +305,9 @@ impl Connection {
             memory_target: number(&vm, "memory_target"),
             hvm_boot_policy: text(&vm, "HVM_boot_policy"),
             hvm_boot_params: string_map(&vm["HVM_boot_params"]),
+            firmware,
+            secure_boot,
+            after_crash: text(&vm, "actions_after_crash"),
             ha_restart_priority: text(&vm, "ha_restart_priority"),
             ha_always_run: vm["ha_always_run"].as_bool().unwrap_or(false),
             platform,

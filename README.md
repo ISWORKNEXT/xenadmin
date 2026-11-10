@@ -23,8 +23,9 @@ default and a persisted dark-theme toggle.
   and optional snapshot cleanup.
 - Create a VM from a template: clone, provision declared disks, refresh the
   inventory and track progress in Activity & tasks.
-- Edit a VM's name, description and HVM boot order at any time; change vCPUs and
-  static memory while halted, and dynamic memory while running when allowed.
+- Edit a VM's name, description, firmware (BIOS/UEFI), secure boot, boot order,
+  boot policy and after-crash behaviour; change vCPUs and static memory while
+  halted, and dynamic memory while running when allowed.
 - Change or eject CD/DVD media from the VM Storage tab, with a searchable list
   of ISO images from ISO storage repositories.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.

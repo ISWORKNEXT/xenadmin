@@ -537,9 +537,104 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                             }
                         });
                 });
+                ui.add_space(8.0);
+                widgets::field_label(ui, "Firmware");
+                let firmware_label = if edit.firmware.eq_ignore_ascii_case("uefi") {
+                    "UEFI"
+                } else {
+                    "BIOS"
+                };
+                ui.add_enabled_ui(!edit.submitting, |ui| {
+                    egui::ComboBox::from_id_salt("vm-edit-firmware")
+                        .selected_text(RichText::new(firmware_label).size(11.0))
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for (value, label) in [("bios", "BIOS"), ("uefi", "UEFI")] {
+                                if ui
+                                    .selectable_label(
+                                        edit.firmware.eq_ignore_ascii_case(value),
+                                        RichText::new(label).size(11.0),
+                                    )
+                                    .clicked()
+                                {
+                                    edit.firmware = value.into();
+                                    if value == "bios" {
+                                        edit.secure_boot = false;
+                                    }
+                                }
+                            }
+                        });
+                });
+                ui.add_enabled(
+                    !edit.submitting
+                        && edit.firmware.eq_ignore_ascii_case("uefi"),
+                    egui::Checkbox::new(
+                        &mut edit.secure_boot,
+                        RichText::new("Secure boot (requires UEFI)").size(10.5),
+                    ),
+                );
+                ui.add_space(8.0);
+                widgets::field_label(ui, "Boot policy");
+                let policy_label = if edit.boot_policy.is_empty() {
+                    "Default (empty)".to_owned()
+                } else {
+                    edit.boot_policy.clone()
+                };
+                ui.add_enabled_ui(!edit.submitting, |ui| {
+                    egui::ComboBox::from_id_salt("vm-edit-boot-policy")
+                        .selected_text(RichText::new(policy_label).size(11.0))
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for (value, label) in [
+                                ("BIOS order", "BIOS order"),
+                                ("", "Default (empty)"),
+                            ] {
+                                if ui
+                                    .selectable_label(
+                                        edit.boot_policy == value,
+                                        RichText::new(label).size(11.0),
+                                    )
+                                    .clicked()
+                                {
+                                    edit.boot_policy = value.into();
+                                }
+                            }
+                        });
+                });
+                ui.add_space(8.0);
+                widgets::field_label(ui, "After guest crash");
+                let crash_label = match edit.after_crash.as_str() {
+                    "destroy" => "Destroy",
+                    "preserve" => "Preserve",
+                    "rename_restart" => "Rename and restart",
+                    _ => "Restart",
+                };
+                ui.add_enabled_ui(!edit.submitting, |ui| {
+                    egui::ComboBox::from_id_salt("vm-edit-after-crash")
+                        .selected_text(RichText::new(crash_label).size(11.0))
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for (value, label) in [
+                                ("restart", "Restart"),
+                                ("destroy", "Destroy"),
+                                ("preserve", "Preserve"),
+                                ("rename_restart", "Rename and restart"),
+                            ] {
+                                if ui
+                                    .selectable_label(
+                                        edit.after_crash == value,
+                                        RichText::new(label).size(11.0),
+                                    )
+                                    .clicked()
+                                {
+                                    edit.after_crash = value.into();
+                                }
+                            }
+                        });
+                });
             }
             ui.label(
-                RichText::new("vCPU and static memory changes require the VM to be shut down. Dynamic memory can change while running when the host allows it.")
+                RichText::new("vCPU and static memory changes require the VM to be shut down. Dynamic memory can change while running when the host allows it. Firmware, secure boot and boot options take effect on the next start.")
                     .size(9.0)
                     .color(if edit.running { amber() } else { dim_fg() }),
             );

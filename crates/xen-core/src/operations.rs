@@ -536,6 +536,10 @@ impl Connection {
         memory_dynamic_min_mib: u64,
         memory_dynamic_max_mib: u64,
         boot_order: Option<String>,
+        firmware: Option<String>,
+        secure_boot: Option<bool>,
+        boot_policy: Option<String>,
+        after_crash: Option<String>,
     ) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(
@@ -570,21 +574,36 @@ impl Connection {
             ));
         }
         let boot_order = boot_order.map(|order| order.trim().to_ascii_lowercase());
-        if let Some(order) = &boot_order {
-            let valid = !order.is_empty()
-                && order.len() <= 3
-                && order.chars().all(|c| matches!(c, 'c' | 'd' | 'n'))
-                && order
-                    .chars()
-                    .collect::<std::collections::HashSet<_>>()
-                    .len()
-                    == order.len();
-            if !valid {
-                return Err(ApiError::Xen(
-                    "Boot order must contain unique device letters: c (CD), d (disk), n (network)."
-                        .into(),
-                ));
+        let firmware = firmware.map(|value| value.trim().to_ascii_lowercase());
+        if let Some(firmware) = &firmware
+            && !valid_firmware(firmware)
+        {
+            return Err(ApiError::Xen("Firmware must be BIOS or UEFI.".into()));
+        }
+        let boot_policy = boot_policy.map(|value| {
+            if value.trim().is_empty() {
+                String::new()
+            } else if value.trim().eq_ignore_ascii_case("BIOS order") {
+                "BIOS order".into()
+            } else {
+                value.trim().to_owned()
             }
+        });
+        let after_crash = after_crash.map(|value| value.trim().to_ascii_lowercase());
+        if let Some(after_crash) = &after_crash
+            && !valid_after_crash(after_crash)
+        {
+            return Err(ApiError::Xen(
+                "After-crash policy must be restart, destroy, preserve or rename_restart.".into(),
+            ));
+        }
+        if let Some(order) = &boot_order
+            && !valid_boot_order(order)
+        {
+            return Err(ApiError::Xen(
+                "Boot order must contain unique device letters: c (CD), d (disk), n (network)."
+                    .into(),
+            ));
         }
 
         let reference: String = self
@@ -626,9 +645,47 @@ impl Connection {
             .as_str()
             .unwrap_or("cd")
             .to_ascii_lowercase();
+        let current_firmware = record["HVM_boot_params"]["firmware"]
+            .as_str()
+            .filter(|value| !value.is_empty())
+            .unwrap_or("bios")
+            .to_ascii_lowercase();
+        let current_secure = record["platform"]["secureboot"].as_str().unwrap_or("false");
+        let current_policy = record["HVM_boot_policy"].as_str().unwrap_or("");
+        let current_after_crash = record["actions_after_crash"].as_str().unwrap_or("restart");
+        let is_hvm = !current_policy.is_empty();
+        if !is_hvm
+            && (boot_order.is_some()
+                || firmware.is_some()
+                || secure_boot.is_some()
+                || boot_policy.is_some())
+        {
+            return Err(ApiError::Xen(
+                "Firmware and boot order options are only available for HVM guests.".into(),
+            ));
+        }
+        let effective_firmware = firmware.as_deref().unwrap_or(&current_firmware);
+        if secure_boot_requires_uefi(effective_firmware, secure_boot) {
+            return Err(ApiError::Xen("Secure boot requires UEFI firmware.".into()));
+        }
+        let secure_desired = secure_boot.map(|secure| secure.to_string()).or_else(|| {
+            (effective_firmware == "bios" && current_secure != "false").then(|| "false".to_owned())
+        });
         let boot_changed = boot_order
             .as_ref()
-            .is_some_and(|order| order != &current_boot_order);
+            .is_some_and(|order| order != &current_boot_order)
+            || firmware
+                .as_ref()
+                .is_some_and(|firmware| firmware != &current_firmware);
+        let policy_changed = boot_policy
+            .as_ref()
+            .is_some_and(|policy| policy != current_policy);
+        let secure_changed = secure_desired
+            .as_ref()
+            .is_some_and(|secure| secure != current_secure);
+        let crash_changed = after_crash
+            .as_ref()
+            .is_some_and(|after_crash| after_crash != current_after_crash);
 
         let vcpus_changed =
             vcpus_max != current_vcpus_max || vcpus_at_startup != current_vcpus_startup;
@@ -712,15 +769,43 @@ impl Connection {
             .await?;
         }
 
-        if boot_changed && let Some(order) = boot_order {
+        if boot_changed {
             let mut params = record["HVM_boot_params"]
                 .as_object()
                 .cloned()
                 .unwrap_or_default();
-            params.insert("order".into(), Value::String(order));
+            if let Some(order) = boot_order {
+                params.insert("order".into(), Value::String(order));
+            }
+            if let Some(firmware) = firmware {
+                params.insert("firmware".into(), Value::String(firmware));
+            }
             self.request::<Value>(
                 "VM.set_HVM_boot_params",
                 json!([self.session, reference, Value::Object(params)]),
+            )
+            .await?;
+        }
+        if policy_changed && let Some(policy) = boot_policy {
+            self.request::<Value>(
+                "VM.set_HVM_boot_policy",
+                json!([self.session, reference, policy]),
+            )
+            .await?;
+        }
+        if secure_changed && let Some(secure) = secure_desired {
+            let mut platform = record["platform"].as_object().cloned().unwrap_or_default();
+            platform.insert("secureboot".into(), Value::String(secure));
+            self.request::<Value>(
+                "VM.set_platform",
+                json!([self.session, reference, Value::Object(platform)]),
+            )
+            .await?;
+        }
+        if crash_changed && let Some(after_crash) = after_crash {
+            self.request::<Value>(
+                "VM.set_actions_after_crash",
+                json!([self.session, reference, after_crash]),
             )
             .await?;
         }
@@ -1497,6 +1582,29 @@ impl Connection {
     }
 }
 
+fn valid_firmware(value: &str) -> bool {
+    matches!(value, "bios" | "uefi")
+}
+
+fn valid_after_crash(value: &str) -> bool {
+    matches!(value, "restart" | "destroy" | "preserve" | "rename_restart")
+}
+
+fn valid_boot_order(order: &str) -> bool {
+    !order.is_empty()
+        && order.len() <= 3
+        && order.chars().all(|c| matches!(c, 'c' | 'd' | 'n'))
+        && order
+            .chars()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            == order.len()
+}
+
+fn secure_boot_requires_uefi(firmware: &str, secure_boot: Option<bool>) -> bool {
+    secure_boot == Some(true) && firmware != "uefi"
+}
+
 fn text(record: &Value, key: &str) -> String {
     record[key].as_str().unwrap_or_default().to_owned()
 }
@@ -1660,6 +1768,23 @@ mod tests {
         );
         assert!(owner_vdis(&vbds, &json!({"suspend_VDI": "OpaqueRef:NULL"}), "vm").len() == 1);
     }
+    #[test]
+    fn boot_option_validation_rejects_unsafe_combinations() {
+        assert!(valid_firmware("bios"));
+        assert!(valid_firmware("uefi"));
+        assert!(!valid_firmware("coreboot"));
+        assert!(valid_boot_order("dc"));
+        assert!(valid_boot_order("ncd"));
+        assert!(!valid_boot_order("cc"));
+        assert!(!valid_boot_order("dx"));
+        assert!(valid_after_crash("restart"));
+        assert!(valid_after_crash("rename_restart"));
+        assert!(!valid_after_crash("ignore"));
+        assert!(secure_boot_requires_uefi("bios", Some(true)));
+        assert!(!secure_boot_requires_uefi("uefi", Some(true)));
+        assert!(!secure_boot_requires_uefi("bios", Some(false)));
+    }
+
     #[test]
     fn host_actions_use_async_host_methods() {
         assert_eq!(HostAction::Enable.method(), "Async.host.enable");

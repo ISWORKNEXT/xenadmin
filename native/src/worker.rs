@@ -99,6 +99,10 @@ pub enum Command {
         memory_dynamic_min_mib: u64,
         memory_dynamic_max_mib: u64,
         boot_order: Option<String>,
+        firmware: Option<String>,
+        secure_boot: Option<bool>,
+        boot_policy: Option<String>,
+        after_crash: Option<String>,
     },
     ChangeCd {
         connection_id: String,
@@ -567,6 +571,10 @@ fn dispatch(
                 memory_dynamic_min_mib,
                 memory_dynamic_max_mib,
                 boot_order,
+                firmware,
+                secure_boot,
+                boot_policy,
+                after_crash,
             } => {
                 let result = workspace
                     .update_vm(
@@ -580,6 +588,10 @@ fn dispatch(
                         memory_dynamic_min_mib,
                         memory_dynamic_max_mib,
                         boot_order,
+                        firmware,
+                        secure_boot,
+                        boot_policy,
+                        after_crash,
                     )
                     .await;
                 let _ = events.send(Event::VmEdited { vm_uuid, result });

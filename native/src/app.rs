@@ -1417,6 +1417,22 @@ impl App {
                             .get("order")
                             .cloned()
                             .unwrap_or_else(|| "cd".into()),
+                        firmware: if details.firmware.is_empty() {
+                            "bios".into()
+                        } else {
+                            details.firmware.clone()
+                        },
+                        secure_boot: details.secure_boot.eq_ignore_ascii_case("true"),
+                        boot_policy: if details.hvm_boot_policy.is_empty() {
+                            "BIOS order".into()
+                        } else {
+                            details.hvm_boot_policy.clone()
+                        },
+                        after_crash: if details.after_crash.is_empty() {
+                            "restart".into()
+                        } else {
+                            details.after_crash.clone()
+                        },
                         is_hvm: !details.hvm_boot_policy.is_empty()
                             || !details.hvm_boot_params.is_empty(),
                         running: details.power_state != "Halted",
@@ -1499,6 +1515,10 @@ impl App {
                         memory_dynamic_min_mib,
                         memory_dynamic_max_mib,
                         boot_order: edit.is_hvm.then(|| edit.boot_order.clone()),
+                        firmware: edit.is_hvm.then(|| edit.firmware.clone()),
+                        secure_boot: edit.is_hvm.then_some(edit.secure_boot),
+                        boot_policy: edit.is_hvm.then(|| edit.boot_policy.clone()),
+                        after_crash: Some(edit.after_crash.clone()),
                     });
                 }
                 UiAction::OpenIsoDialog { vbd_uuid, drive } => {

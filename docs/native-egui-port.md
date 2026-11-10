@@ -43,7 +43,7 @@ dependency.
 | Live inventory | Implemented | XenAPI event stream applied to a raw-record cache; heartbeat, reconnect and coordinator redirect |
 | VM performance | Implemented | VM RRD with per-vCPU CPU graph, memory/network graphs, remaining metrics and the same ranges |
 | VM console | Implemented | VNC over XenAPI HTTPS CONNECT tunnel; framebuffer, mouse/wheel, keyboard/Unicode text, Ctrl+Alt+Del, clipboard; external xfreerdp launcher |
-| VM editing | Implemented | Name/description/boot order anytime; vCPUs and static memory while halted; dynamic memory while running when allowed |
+| VM editing | Implemented | Name/description, BIOS/UEFI, secure boot, boot order/policy, after-crash policy; vCPUs/static memory while halted; dynamic memory live when allowed |
 | CD/DVD media | Implemented | List/eject/insert ISO media on existing virtual CD drives from the Storage tab |
 | VM network interfaces | Implemented | Add/remove VIFs, plug/unplug, next-free device slot and optional MAC |
 | VM virtual disks | Implemented | Add (choose SR/size/name), grow, remove disks and create empty CD drives on halted VMs |

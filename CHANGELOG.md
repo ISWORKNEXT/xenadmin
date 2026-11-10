@@ -34,6 +34,7 @@
 - Add optional per-connection HTTP/SOCKS proxy settings with URL validation; XenAPI/RRD traffic uses the proxy.
 - Add a read-only Health & diagnostics page with alert, host, storage, pool capacity and broken VM disk/ISO checks.
 - Add XenSearch-style `name:`, `host:`, `tag:` and `power_state:` filters with quotes, negation and free text.
+- Extend VM editing with BIOS/UEFI firmware, secure boot, boot policy and after-crash behaviour validation.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.
