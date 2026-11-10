@@ -103,6 +103,7 @@ pub enum Command {
         secure_boot: Option<bool>,
         boot_policy: Option<String>,
         after_crash: Option<String>,
+        tags: Vec<String>,
     },
     ChangeCd {
         connection_id: String,
@@ -607,25 +608,30 @@ fn dispatch(
                 secure_boot,
                 boot_policy,
                 after_crash,
+                tags,
             } => {
-                let result = workspace
-                    .update_vm(
-                        &connection_id,
-                        &vm_uuid,
-                        name,
-                        description,
-                        vcpus_max,
-                        vcpus_at_startup,
-                        memory_static_max_mib,
-                        memory_dynamic_min_mib,
-                        memory_dynamic_max_mib,
-                        boot_order,
-                        firmware,
-                        secure_boot,
-                        boot_policy,
-                        after_crash,
-                    )
-                    .await;
+                let result = async {
+                    workspace
+                        .update_vm(
+                            &connection_id,
+                            &vm_uuid,
+                            name,
+                            description,
+                            vcpus_max,
+                            vcpus_at_startup,
+                            memory_static_max_mib,
+                            memory_dynamic_min_mib,
+                            memory_dynamic_max_mib,
+                            boot_order,
+                            firmware,
+                            secure_boot,
+                            boot_policy,
+                            after_crash,
+                        )
+                        .await?;
+                    workspace.set_vm_tags(&connection_id, &vm_uuid, tags).await
+                }
+                .await;
                 let _ = events.send(Event::VmEdited { vm_uuid, result });
             }
             Command::ChangeCd {

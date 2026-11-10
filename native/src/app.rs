@@ -1509,6 +1509,7 @@ impl App {
                         } else {
                             details.after_crash.clone()
                         },
+                        tags: details.tags.join(", "),
                         is_hvm: !details.hvm_boot_policy.is_empty()
                             || !details.hvm_boot_params.is_empty(),
                         running: details.power_state != "Halted",
@@ -1595,6 +1596,13 @@ impl App {
                         secure_boot: edit.is_hvm.then_some(edit.secure_boot),
                         boot_policy: edit.is_hvm.then(|| edit.boot_policy.clone()),
                         after_crash: Some(edit.after_crash.clone()),
+                        tags: edit
+                            .tags
+                            .split(',')
+                            .map(str::trim)
+                            .filter(|tag| !tag.is_empty())
+                            .map(str::to_owned)
+                            .collect(),
                     });
                 }
                 UiAction::OpenIsoDialog { vbd_uuid, drive } => {

@@ -45,6 +45,7 @@ pub struct VmDetails {
     pub pv_drivers_version: String,
     pub pv_drivers_up_to_date: bool,
     pub guest_ips: Vec<String>,
+    pub tags: Vec<String>,
     pub disks: Vec<VmDisk>,
     pub isos: Vec<VmIso>,
     pub interfaces: Vec<VmInterface>,
@@ -374,6 +375,15 @@ impl Connection {
             pv_drivers_version: text(guest, "PV_drivers_version"),
             pv_drivers_up_to_date: guest["PV_drivers_up_to_date"].as_bool().unwrap_or(false),
             guest_ips,
+            tags: vm["tags"]
+                .as_array()
+                .map(|tags| {
+                    tags.iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default(),
             disks,
             isos,
             interfaces,

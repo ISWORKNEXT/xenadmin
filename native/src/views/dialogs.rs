@@ -470,6 +470,16 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                     .char_limit(1024)
                     .margin(egui::Margin::symmetric(8, 5)),
             );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Tags (comma separated)");
+            ui.add_enabled(
+                !edit.submitting,
+                egui::TextEdit::singleline(&mut edit.tags)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("e.g. production, web, xensearch")
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
             ui.add_space(10.0);
             ui.columns(2, |columns| {
                 resources_field(

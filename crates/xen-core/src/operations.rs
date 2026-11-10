@@ -1094,7 +1094,23 @@ impl Connection {
             .await
     }
 
-    /// Update VM HA restart policy, always-run, boot/shutdown delays and affinity.
+    /// Replace the set of tags on a VM or template.
+    pub async fn set_vm_tags(&self, uuid: &str, tags: Vec<String>) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let cleaned = clean_tags(tags)?;
+        let reference: String = self
+            .request("VM.get_by_uuid", json!([self.session, uuid]))
+            .await?;
+        self.request::<Value>("VM.set_tags", json!([self.session, reference, cleaned]))
+            .await?;
+        Ok(())
+    }
+
+    /// Update VM HA restart policy, boot/shutdown delays and affinity.
     pub async fn update_vm_ha(
         &self,
         uuid: &str,
@@ -1797,6 +1813,28 @@ impl Connection {
 
 const MAX_VM_DELAY: u64 = 7 * 24 * 60 * 60;
 
+fn clean_tags(tags: Vec<String>) -> Result<Vec<String>, ApiError> {
+    if tags.len() > 64 {
+        return Err(ApiError::Xen("A VM can have at most 64 tags.".into()));
+    }
+    let mut cleaned = Vec::new();
+    for tag in tags {
+        let tag = tag.trim().to_owned();
+        if tag.is_empty() {
+            continue;
+        }
+        if tag.chars().count() > 64 {
+            return Err(ApiError::Xen(
+                "Each tag must be 64 characters or fewer.".into(),
+            ));
+        }
+        if !cleaned.contains(&tag) {
+            cleaned.push(tag);
+        }
+    }
+    Ok(cleaned)
+}
+
 fn valid_restart_priority(value: &str) -> bool {
     matches!(value, "" | "restart" | "best-effort" | "0" | "1")
 }
@@ -1995,6 +2033,20 @@ mod tests {
         );
         assert!(owner_vdis(&vbds, &json!({"suspend_VDI": "OpaqueRef:NULL"}), "vm").len() == 1);
     }
+    #[test]
+    fn cleans_and_validates_tags() {
+        let tags = clean_tags(vec![
+            " smoke ".into(),
+            "xen".into(),
+            "smoke".into(),
+            String::new(),
+        ])
+        .unwrap();
+        assert_eq!(tags, vec!["smoke".to_string(), "xen".to_string()]);
+        assert!(clean_tags(vec!["x".repeat(65)]).is_err());
+        assert!(clean_tags((0..65).map(|index| format!("tag{index}")).collect()).is_err());
+    }
+
     #[test]
     fn validates_vm_ha_restart_priority_and_delays() {
         for value in ["", "restart", "best-effort", "0", "1"] {

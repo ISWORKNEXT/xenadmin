@@ -860,6 +860,7 @@ pub struct VmEditState {
     pub secure_boot: bool,
     pub boot_policy: String,
     pub after_crash: String,
+    pub tags: String,
     pub is_hvm: bool,
     pub running: bool,
     pub error: Option<String>,
