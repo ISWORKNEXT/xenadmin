@@ -317,6 +317,23 @@ pub enum Command {
     CloseSshConsole {
         console_id: String,
     },
+    OpenRdpConsole {
+        console_id: String,
+        host: String,
+        port: u16,
+        username: String,
+        domain: String,
+        password: String,
+        width: u16,
+        height: u16,
+    },
+    RdpInput {
+        console_id: String,
+        input: crate::rdp::RdpInput,
+    },
+    CloseRdpConsole {
+        console_id: String,
+    },
     ConsoleInput {
         console_id: String,
         input: crate::console::ConsoleInput,
@@ -513,6 +530,21 @@ pub enum Event {
         console_id: String,
         message: Option<String>,
     },
+    RdpOpened {
+        console_id: String,
+        host: String,
+        username: String,
+    },
+    RdpFrame {
+        console_id: String,
+        width: u16,
+        height: u16,
+        pixels: Vec<u32>,
+    },
+    RdpClosed {
+        console_id: String,
+        message: Option<String>,
+    },
     Failed {
         context: String,
         message: String,
@@ -580,6 +612,7 @@ fn run_worker(mut commands: UnboundedReceiver<Command>, events: UnboundedSender<
         let workspace = Workspace::with_profiles(profiles);
         let consoles = crate::console::ConsoleHandles::default();
         let ssh = crate::ssh::SshHandles::default();
+        let rdp = crate::rdp::RdpHandles::default();
         let _ = events.send(Event::Workspace(workspace.view().await));
 
         let mut tick = tokio::time::interval(Duration::from_millis(1_000));
@@ -593,7 +626,7 @@ fn run_worker(mut commands: UnboundedReceiver<Command>, events: UnboundedSender<
                         workspace.close().await;
                         break;
                     }
-                    dispatch(&workspace, &events, &path, &consoles, &ssh, command);
+                    dispatch(&workspace, &events, &path, &consoles, &ssh, &rdp, command);
                 }
                 _ = tick.tick() => {
                     let _ = events.send(Event::Workspace(workspace.view().await));
@@ -609,6 +642,7 @@ fn dispatch(
     path: &Path,
     consoles: &crate::console::ConsoleHandles,
     ssh: &crate::ssh::SshHandles,
+    rdp: &crate::rdp::RdpHandles,
     command: Command,
 ) {
     let workspace = workspace.clone();
@@ -616,6 +650,7 @@ fn dispatch(
     let path = path.to_path_buf();
     let consoles = consoles.clone();
     let ssh = ssh.clone();
+    let rdp = rdp.clone();
 
     tokio::spawn(async move {
         match command {
@@ -1308,6 +1343,42 @@ fn dispatch(
             }
             Command::CloseSshConsole { console_id } => {
                 crate::ssh::close(&ssh, &console_id);
+            }
+            Command::OpenRdpConsole {
+                console_id,
+                host,
+                port,
+                username,
+                domain,
+                password,
+                width,
+                height,
+            } => {
+                if let Err(message) = crate::rdp::open(
+                    events.clone(),
+                    rdp,
+                    console_id.clone(),
+                    host,
+                    port,
+                    username,
+                    domain,
+                    password,
+                    width,
+                    height,
+                )
+                .await
+                {
+                    let _ = events.send(Event::RdpClosed {
+                        console_id,
+                        message: Some(message),
+                    });
+                }
+            }
+            Command::RdpInput { console_id, input } => {
+                crate::rdp::send_input(&rdp, &console_id, input);
+            }
+            Command::CloseRdpConsole { console_id } => {
+                crate::rdp::close(&rdp, &console_id);
             }
             Command::Shutdown => {}
         }

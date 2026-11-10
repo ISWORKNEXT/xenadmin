@@ -72,7 +72,7 @@ impl client::Handler for Client {
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::PublicKeyOrCertificate,
+        _server_public_key: &russh::keys::PublicKey,
     ) -> Result<bool, Self::Error> {
         // Guest appliance host keys are ephemeral and usually not known in
         // advance. The console is explicitly opened by the operator; accept it.

@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod console;
 mod format;
+mod rdp;
 mod search;
 mod ssh;
 mod state;

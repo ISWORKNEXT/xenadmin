@@ -813,6 +813,46 @@ impl App {
                         }
                     }
                 },
+                Event::RdpOpened {
+                    console_id,
+                    host,
+                    username,
+                } => {
+                    if let Some(console) = self.state.rdp_console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.status = crate::state::RdpStatus::Connected;
+                        console.host = host;
+                        console.username = username;
+                        console.message.clear();
+                    }
+                }
+                Event::RdpFrame {
+                    console_id,
+                    width,
+                    height,
+                    pixels,
+                } => {
+                    if let Some(console) = self.state.rdp_console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.width = width;
+                        console.height = height;
+                        console.pixels = pixels;
+                        console.dirty = true;
+                    }
+                }
+                Event::RdpClosed {
+                    console_id,
+                    message,
+                } => {
+                    if let Some(console) = self.state.rdp_console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.status = crate::state::RdpStatus::Closed;
+                        console.message = message.unwrap_or_else(|| "Disconnected.".into());
+                    }
+                }
                 Event::SshOpened {
                     console_id,
                     host,
@@ -2140,6 +2180,104 @@ impl App {
                         connection_id,
                         vm_uuid,
                     });
+                }
+                UiAction::OpenRdpDialog => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let host = self
+                        .state
+                        .vm_state
+                        .ready()
+                        .and_then(|details| details.guest_ips.first())
+                        .cloned()
+                        .unwrap_or_default();
+                    self.state.rdp_credentials = Some(crate::state::RdpCredentialDialog {
+                        connection_id,
+                        vm_uuid,
+                        host,
+                        port: "3389".into(),
+                        username: "Administrator".into(),
+                        domain: String::new(),
+                        password: String::new(),
+                        error: None,
+                    });
+                }
+                UiAction::CloseRdpDialog => self.state.rdp_credentials = None,
+                UiAction::ConnectRdp => {
+                    let Some(dialog) = self.state.rdp_credentials.as_mut() else {
+                        continue;
+                    };
+                    let Some(port) = dialog.port.trim().parse::<u16>().ok() else {
+                        dialog.error = Some("Enter a numeric RDP port.".into());
+                        continue;
+                    };
+                    if let Err(error) = crate::rdp::validate_credentials(
+                        &dialog.host,
+                        port,
+                        &dialog.username,
+                        &dialog.password,
+                    ) {
+                        dialog.error = Some(error);
+                        continue;
+                    }
+                    self.state.rdp_seq += 1;
+                    let console_id = format!("rdp-{}-{}", self.state.rdp_seq, dialog.vm_uuid);
+                    let connection_id = dialog.connection_id.clone();
+                    let vm_uuid = dialog.vm_uuid.clone();
+                    let host = dialog.host.trim().to_owned();
+                    let username = dialog.username.trim().to_owned();
+                    let domain = dialog.domain.trim().to_owned();
+                    let password = std::mem::take(&mut dialog.password);
+                    self.state.rdp_console = Some(crate::state::RdpConsoleState {
+                        console_id: console_id.clone(),
+                        connection_id,
+                        vm_uuid,
+                        host: host.clone(),
+                        username: username.clone(),
+                        status: crate::state::RdpStatus::Connecting,
+                        message: String::new(),
+                        width: 0,
+                        height: 0,
+                        pixels: Vec::new(),
+                        texture: None,
+                        dirty: false,
+                        buttons: 0,
+                    });
+                    self.state.rdp_credentials = None;
+                    self.worker.send(Command::OpenRdpConsole {
+                        console_id,
+                        host,
+                        port,
+                        username,
+                        domain,
+                        password,
+                        width: 1280,
+                        height: 800,
+                    });
+                }
+                UiAction::RdpInput { console_id, input } => {
+                    self.worker.send(Command::RdpInput { console_id, input });
+                }
+                UiAction::CloseRdpConsole => {
+                    if let Some(console) = self.state.rdp_console.as_mut() {
+                        self.worker.send(Command::CloseRdpConsole {
+                            console_id: console.console_id.clone(),
+                        });
+                        console.status = crate::state::RdpStatus::Closed;
+                        console.message = "Disconnected by user.".into();
+                    }
+                }
+                UiAction::ClearRdpConsole => {
+                    self.state.rdp_console = None;
                 }
                 UiAction::OpenSshDialog => {
                     let Some(key) = self

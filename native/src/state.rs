@@ -713,6 +713,40 @@ pub enum SshStatus {
     Closed,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RdpStatus {
+    Connecting,
+    Connected,
+    Closed,
+}
+
+pub struct RdpConsoleState {
+    pub console_id: String,
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub host: String,
+    pub username: String,
+    pub status: RdpStatus,
+    pub message: String,
+    pub width: u16,
+    pub height: u16,
+    pub pixels: Vec<u32>,
+    pub texture: Option<egui::TextureHandle>,
+    pub dirty: bool,
+    pub buttons: u8,
+}
+
+pub struct RdpCredentialDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub host: String,
+    pub port: String,
+    pub username: String,
+    pub domain: String,
+    pub password: String,
+    pub error: Option<String>,
+}
+
 pub struct SshConsoleState {
     pub console_id: String,
     pub connection_id: String,
@@ -1080,6 +1114,9 @@ pub struct UiState {
     pub ssh_console: Option<SshConsoleState>,
     pub ssh_credentials: Option<SshCredentialDialog>,
     pub ssh_seq: u64,
+    pub rdp_console: Option<RdpConsoleState>,
+    pub rdp_credentials: Option<RdpCredentialDialog>,
+    pub rdp_seq: u64,
     pub ad_disable_dialog: Option<AdDisableDialog>,
     pub sr_probe_seq: u64,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
@@ -1183,6 +1220,9 @@ impl Default for UiState {
             ssh_console: None,
             ssh_credentials: None,
             ssh_seq: 0,
+            rdp_console: None,
+            rdp_credentials: None,
+            rdp_seq: 0,
             ad_disable_dialog: None,
             sr_probe_seq: 0,
             network_destroy_confirm: None,
@@ -1320,6 +1360,15 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenRdpDialog,
+    CloseRdpDialog,
+    ConnectRdp,
+    RdpInput {
+        console_id: String,
+        input: crate::rdp::RdpInput,
+    },
+    CloseRdpConsole,
+    ClearRdpConsole,
     OpenSshDialog,
     CloseSshDialog,
     ConnectSsh,

@@ -63,6 +63,8 @@ default and a persisted dark-theme toggle.
   launcher using the guest IPv4 address.
 - Embedded SSH text console with a credential prompt, ANSI-filtered scrollback,
   forwarded keys/text, Ctrl+C and disconnect controls.
+- Embedded RDP console using IronRDP with host/domain/user/password prompt,
+  framebuffer rendering, mouse/keyboard/wheel input, Ctrl+Alt+Del, and disconnect.
 - Host detail page: General, CPU/memory, Performance, Networking, Storage,
   Hardware, Updates, Certificates, Health.
 - Host performance graphs with all CPU cores in one chart, plus memory and

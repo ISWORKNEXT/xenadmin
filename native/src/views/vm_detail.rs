@@ -901,20 +901,32 @@ fn console(
                     {
                         ui.ctx().copy_text(clipboard);
                     }
-                    if let Some(ip) = state
+                    let guest_ip = state
                         .vm_state
                         .ready()
                         .and_then(|details| details.guest_ips.first())
                         .cloned()
-                        && ui
-                            .add(egui::Button::new(
-                                RichText::new("RDP").size(11.0),
-                            ))
-                            .on_hover_text(format!("Open an external RDP client to {ip}"))
+                        .unwrap_or_default();
+                    ui.menu_button(RichText::new("RDP").size(11.0), |ui| {
+                        if ui
+                            .button(RichText::new("Embedded RDP…").size(10.5))
                             .clicked()
-                    {
-                        actions.push(UiAction::LaunchRdp(ip));
-                    }
+                        {
+                            actions.push(UiAction::OpenRdpDialog);
+                            ui.close();
+                        }
+                        if !guest_ip.is_empty()
+                            && ui
+                                .button(
+                                    RichText::new(format!("External xfreerdp ({guest_ip})"))
+                                        .size(10.5),
+                                )
+                                .clicked()
+                        {
+                            actions.push(UiAction::LaunchRdp(guest_ip.clone()));
+                            ui.close();
+                        }
+                    });
                     if ui
                         .add(egui::Button::new(
                             RichText::new("Paste to guest").size(11.0),
@@ -1215,6 +1227,255 @@ fn console(
         actions.extend(input_actions);
     });
     ssh_console_section(ui, state, connection_id, vm, actions);
+    rdp_console_section(ui, state, connection_id, vm, actions);
+}
+
+fn rdp_console_section(
+    ui: &mut Ui,
+    state: &mut UiState,
+    connection_id: &str,
+    vm: &xen_core::xapi::VirtualMachine,
+    actions: &mut Vec<UiAction>,
+) {
+    theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let matching = state.rdp_console.as_ref().is_some_and(|console| {
+            console.vm_uuid == vm.uuid && console.connection_id == connection_id
+        });
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("RDP console").size(15.0).strong());
+            widgets::badge(ui, "RDP", accent());
+            if let Some(console) = state.rdp_console.as_ref().filter(|_| matching) {
+                let (label, color) = match console.status {
+                    crate::state::RdpStatus::Connecting => ("Connecting", amber()),
+                    crate::state::RdpStatus::Connected => ("Connected", green()),
+                    crate::state::RdpStatus::Closed => ("Disconnected", dim_fg()),
+                };
+                ui.label(RichText::new(label).size(10.0).color(color));
+                if console.width > 0 {
+                    ui.label(
+                        RichText::new(format!("{}×{}", console.width, console.height))
+                            .size(9.0)
+                            .color(dim_fg()),
+                    );
+                }
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if matching {
+                    if ui
+                        .add(egui::Button::new(RichText::new("Disconnect").size(10.5)))
+                        .clicked()
+                    {
+                        actions.push(UiAction::CloseRdpConsole);
+                    }
+                    if ui
+                        .add(egui::Button::new(RichText::new("Close").size(10.5)))
+                        .clicked()
+                    {
+                        actions.push(UiAction::ClearRdpConsole);
+                    }
+                    if ui
+                        .add(egui::Button::new(RichText::new("Ctrl+Alt+Del").size(10.5)))
+                        .clicked()
+                        && let Some(console) = state.rdp_console.as_ref()
+                    {
+                        actions.push(UiAction::RdpInput {
+                            console_id: console.console_id.clone(),
+                            input: crate::rdp::RdpInput::CtrlAltDel,
+                        });
+                    }
+                } else if ui
+                    .add_enabled(
+                        vm.power_state == "Running",
+                        egui::Button::new(RichText::new("Open RDP…").size(10.5)),
+                    )
+                    .on_hover_text(if vm.power_state == "Running" {
+                        "Connect to the guest RDP server"
+                    } else {
+                        "Start the VM before opening RDP"
+                    })
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenRdpDialog);
+                }
+            });
+        });
+        ui.add_space(4.0);
+        let Some(console) = state.rdp_console.as_mut().filter(|_| matching) else {
+            ui.label(
+                RichText::new("Open RDP to enter the guest address and credentials.")
+                    .size(10.0)
+                    .color(dim_fg()),
+            );
+            return;
+        };
+        if !console.message.is_empty() {
+            ui.label(RichText::new(&console.message).size(9.5).color(
+                if console.status == crate::state::RdpStatus::Closed {
+                    amber()
+                } else {
+                    muted_fg()
+                },
+            ));
+        }
+        if console.width == 0 || console.height == 0 {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(
+                    RichText::new("Waiting for the RDP framebuffer…")
+                        .size(10.0)
+                        .color(muted_fg()),
+                );
+            });
+            return;
+        }
+        let width = console.width;
+        let height = console.height;
+        if console.dirty || console.texture.is_none() {
+            let pixels: Vec<egui::Color32> = console
+                .pixels
+                .iter()
+                .map(|pixel| {
+                    egui::Color32::from_rgb(
+                        ((pixel >> 16) & 0xff) as u8,
+                        ((pixel >> 8) & 0xff) as u8,
+                        (pixel & 0xff) as u8,
+                    )
+                })
+                .collect();
+            let image = egui::ColorImage {
+                size: [width as usize, height as usize],
+                source_size: egui::Vec2::new(width as f32, height as f32),
+                pixels,
+            };
+            if let Some(texture) = console.texture.as_mut() {
+                texture.set(image, egui::TextureOptions::NEAREST);
+            } else {
+                console.texture = Some(ui.ctx().load_texture(
+                    format!("rdp-{}", console.console_id),
+                    image,
+                    egui::TextureOptions::NEAREST,
+                ));
+            }
+            console.dirty = false;
+        }
+        let Some(texture) = console.texture.as_ref().map(|texture| texture.id()) else {
+            return;
+        };
+        let max_size = egui::Vec2::new(ui.available_width(), 680.0);
+        let scale = (max_size.x / width as f32)
+            .min(max_size.y / height as f32)
+            .max(0.05);
+        let display = egui::Vec2::new(width as f32 * scale, height as f32 * scale);
+        ui.vertical_centered(|ui| {
+            let (rect, response) = ui.allocate_exact_size(display, Sense::click_and_drag());
+            ui.painter().rect_filled(rect, 0.0, egui::Color32::BLACK);
+            ui.painter().image(
+                texture,
+                rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+            if response.clicked() {
+                response.request_focus();
+            }
+            let focused = ui.memory(|memory| memory.has_focus(response.id));
+            if let Some(pos) = ui.input(|input| input.pointer.interact_pos())
+                && (rect.contains(pos) || response.dragged())
+            {
+                let x = (((pos.x - rect.left()) / rect.width()) * width as f32)
+                    .clamp(0.0, (width.saturating_sub(1)) as f32) as u16;
+                let y = (((pos.y - rect.top()) / rect.height()) * height as f32)
+                    .clamp(0.0, (height.saturating_sub(1)) as f32) as u16;
+                actions.push(UiAction::RdpInput {
+                    console_id: console.console_id.clone(),
+                    input: crate::rdp::RdpInput::MouseMove { x, y },
+                });
+                let mut buttons = 0u8;
+                ui.input(|input| {
+                    if input.pointer.button_down(egui::PointerButton::Primary) {
+                        buttons |= 1;
+                    }
+                    if input.pointer.button_down(egui::PointerButton::Middle) {
+                        buttons |= 2;
+                    }
+                    if input.pointer.button_down(egui::PointerButton::Secondary) {
+                        buttons |= 4;
+                    }
+                });
+                for (bit, button) in [(1u8, 0u8), (2, 1), (4, 2)] {
+                    if (buttons & bit) != (console.buttons & bit) {
+                        actions.push(UiAction::RdpInput {
+                            console_id: console.console_id.clone(),
+                            input: crate::rdp::RdpInput::MouseButton {
+                                button,
+                                pressed: buttons & bit != 0,
+                            },
+                        });
+                    }
+                }
+                console.buttons = buttons;
+                let wheel = ui.input(|input| input.smooth_scroll_delta.y);
+                if wheel != 0.0 {
+                    actions.push(UiAction::RdpInput {
+                        console_id: console.console_id.clone(),
+                        input: crate::rdp::RdpInput::Wheel {
+                            vertical: true,
+                            units: (wheel / 40.0).clamp(-10.0, 10.0) as i16,
+                        },
+                    });
+                }
+            }
+            if focused {
+                let modifiers = ui.input(|input| input.modifiers);
+                for event in ui.input(|input| input.events.clone()) {
+                    match event {
+                        egui::Event::Text(text)
+                            if !modifiers.ctrl && !modifiers.alt && !modifiers.command =>
+                        {
+                            actions.push(UiAction::RdpInput {
+                                console_id: console.console_id.clone(),
+                                input: crate::rdp::RdpInput::Text(text),
+                            });
+                        }
+                        egui::Event::Key {
+                            key,
+                            pressed,
+                            repeat,
+                            modifiers,
+                            ..
+                        } => {
+                            if repeat {
+                                continue;
+                            }
+                            let command = modifiers.ctrl || modifiers.alt || modifiers.command;
+                            if !command && is_printable_key(key) {
+                                continue;
+                            }
+                            actions.push(UiAction::RdpInput {
+                                console_id: console.console_id.clone(),
+                                input: crate::rdp::RdpInput::Key {
+                                    key,
+                                    pressed,
+                                    ctrl: modifiers.ctrl,
+                                    alt: modifiers.alt,
+                                    shift: modifiers.shift,
+                                },
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        });
+        ui.label(
+            RichText::new(
+                "Click the framebuffer to focus. Keyboard, mouse clicks and wheel are forwarded.",
+            )
+            .size(9.0)
+            .color(dim_fg()),
+        );
+    });
 }
 
 fn ssh_console_section(
