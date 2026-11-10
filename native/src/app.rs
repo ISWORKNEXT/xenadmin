@@ -21,6 +21,7 @@ pub(crate) struct StartupOptions {
     pub host: Option<String>,
     pub host_tab: Option<crate::state::HostTab>,
     pub vm: Option<String>,
+    pub vm_tab: Option<crate::state::VmTab>,
     pub light: Option<bool>,
 }
 
@@ -31,6 +32,7 @@ pub struct App {
     pending_host: Option<String>,
     pending_host_tab: Option<crate::state::HostTab>,
     pending_vm: Option<String>,
+    pending_vm_tab: Option<crate::state::VmTab>,
 }
 
 impl App {
@@ -42,6 +44,7 @@ impl App {
             host: startup_host,
             host_tab: startup_host_tab,
             vm: startup_vm,
+            vm_tab: startup_vm_tab,
             light: startup_light,
         } = options;
         let preferences = crate::config::load_ui_preferences();
@@ -104,6 +107,7 @@ impl App {
             pending_host: startup_host,
             pending_host_tab: startup_host_tab,
             pending_vm: startup_vm,
+            pending_vm_tab: startup_vm_tab,
         }
     }
 
@@ -276,8 +280,21 @@ impl App {
             } => {
                 self.state.scope = Scope::Connection(connection_id.clone());
                 self.state.view = View::Vms;
-                let _ = vm_uuid;
-                self.state.vm_subtab = crate::state::VmTab::General;
+                let same = matches!(
+                    &self.state.vm_state,
+                    LoadState::Ready(details) if &details.uuid == vm_uuid
+                );
+                if !same {
+                    self.state.vm_subtab = crate::state::VmTab::General;
+                    self.state.vm_seq += 1;
+                    self.state.vm_state = LoadState::Loading;
+                    self.state.vm_perf_state = LoadState::Idle;
+                    self.worker.send(Command::VmDetails {
+                        seq: self.state.vm_seq,
+                        connection_id: connection_id.clone(),
+                        vm_uuid: vm_uuid.clone(),
+                    });
+                }
             }
             ObjectKey::Storage { connection_id, .. } => {
                 self.state.scope = Scope::Connection(connection_id.clone());
@@ -436,6 +453,9 @@ impl App {
                                 },
                                 None,
                             );
+                            if let Some(tab) = self.pending_vm_tab.take() {
+                                self.apply(vec![UiAction::SetVmTab(tab)]);
+                            }
                         }
                     }
                 }
@@ -518,6 +538,22 @@ impl App {
                 Event::HostPerformance { seq, result } => {
                     if seq == self.state.perf_seq {
                         self.state.perf_state = match result {
+                            Ok(performance) => LoadState::Ready(*performance),
+                            Err(message) => LoadState::Error(message),
+                        };
+                    }
+                }
+                Event::VmDetails { seq, result } => {
+                    if seq == self.state.vm_seq {
+                        self.state.vm_state = match result {
+                            Ok(details) => LoadState::Ready(*details),
+                            Err(message) => LoadState::Error(message),
+                        };
+                    }
+                }
+                Event::VmPerformance { seq, result } => {
+                    if seq == self.state.vm_perf_seq {
+                        self.state.vm_perf_state = match result {
                             Ok(performance) => LoadState::Ready(*performance),
                             Err(message) => LoadState::Error(message),
                         };
@@ -780,6 +816,56 @@ impl App {
                         self.apply(vec![UiAction::LoadPerformance]);
                     }
                 }
+                UiAction::SetVmTab(tab) => {
+                    self.state.vm_subtab = tab;
+                    if tab == crate::state::VmTab::Performance
+                        && matches!(
+                            self.state.vm_perf_state,
+                            LoadState::Idle | LoadState::Error(_)
+                        )
+                    {
+                        self.apply(vec![UiAction::LoadVmPerformance]);
+                    }
+                }
+                UiAction::ReloadVmDetails => {
+                    if let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                        && let Some((connection_id, vm_uuid)) = vm_key(&key)
+                    {
+                        self.state.vm_seq += 1;
+                        self.state.vm_state = LoadState::Loading;
+                        self.worker.send(Command::VmDetails {
+                            seq: self.state.vm_seq,
+                            connection_id,
+                            vm_uuid,
+                        });
+                    }
+                }
+                UiAction::LoadVmPerformance => {
+                    if let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                        && let Some((connection_id, vm_uuid)) = vm_key(&key)
+                    {
+                        self.state.vm_perf_seq += 1;
+                        self.state.vm_perf_state = LoadState::Loading;
+                        self.worker.send(Command::VmPerformance {
+                            seq: self.state.vm_perf_seq,
+                            connection_id,
+                            vm_uuid,
+                            range_seconds: self.state.vm_perf_range,
+                        });
+                    }
+                }
+                UiAction::SetVmPerfRange(range) => {
+                    self.state.vm_perf_range = range;
+                    self.apply(vec![UiAction::LoadVmPerformance]);
+                }
                 UiAction::DismissToast(index) => {
                     if index < self.state.toasts.len() {
                         self.state.toasts.remove(index);
@@ -847,5 +933,23 @@ impl eframe::App for App {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.worker.shutdown();
+    }
+}
+
+fn vm_key(key: &ObjectKey) -> Option<(String, String)> {
+    match key {
+        ObjectKey::Vm {
+            connection_id,
+            vm_uuid,
+        }
+        | ObjectKey::Template {
+            connection_id,
+            vm_uuid,
+        }
+        | ObjectKey::Snapshot {
+            connection_id,
+            vm_uuid,
+        } => Some((connection_id.clone(), vm_uuid.clone())),
+        _ => None,
     }
 }

@@ -736,20 +736,20 @@ fn metrics(
     }
 }
 
-fn is_cpu_core(name: &str) -> bool {
+pub(crate) fn is_cpu_core(name: &str) -> bool {
     name.strip_prefix("cpu").is_some_and(|rest| {
         !rest.is_empty() && rest.chars().all(|character| character.is_ascii_digit())
     })
 }
 
-fn is_memory_metric(name: &str) -> bool {
+pub(crate) fn is_memory_metric(name: &str) -> bool {
     matches!(
         name,
         "memory_total_kib" | "memory_free_kib" | "memory" | "memory_internal_free"
     )
 }
 
-fn is_network_metric(name: &str) -> bool {
+pub(crate) fn is_network_metric(name: &str) -> bool {
     name.starts_with("pif_") || name.starts_with("vif_")
 }
 
@@ -793,7 +793,7 @@ fn point_at(series: &MetricSeries, time: u64) -> Option<&xen_core::performance::
         .min_by_key(|point| point.timestamp.abs_diff(time))
 }
 
-fn multi_chart(
+pub(crate) fn multi_chart(
     ui: &mut Ui,
     title: &str,
     series: &[&MetricSeries],
@@ -981,7 +981,7 @@ fn flush_colored(painter: &egui::Painter, segment: &mut Vec<egui::Pos2>, color: 
     }
 }
 
-fn chart(ui: &mut Ui, series: &MetricSeries, start: u64, end: u64, step: u64) {
+pub(crate) fn chart(ui: &mut Ui, series: &MetricSeries, start: u64, end: u64, step: u64) {
     let latest = series
         .points
         .iter()

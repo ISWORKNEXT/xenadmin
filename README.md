@@ -20,7 +20,7 @@ default and a persisted dark-theme toggle.
 - Bulk actions with an explicit target review dialog.
 - XenAPI task progress, failure, success, cancellation and “check again” for
   interrupted tasks without resubmitting the mutation.
-- VM detail page with general information and snapshots.
+- VM detail tabs: General, Performance (VM RRD), Storage, Network, HA and Snapshots.
 - Host detail page: General, CPU/memory, Performance, Networking, Storage,
   Hardware, Updates, Certificates, Health.
 - Host performance graphs with all CPU cores in one chart, plus memory and
@@ -62,6 +62,7 @@ The executable is written to `target/release/xen-native`.
 --host <host-uuid>        open host details after connecting
 --host-tab general|cpu|performance|networking|storage|hardware|updates|certificates|health
 --vm <vm-uuid>            open the VM detail tab after connecting
+--vm-tab general|performance|storage|network|ha|snapshots
 --theme light|dark        start with the light (default) or dark theme
 --on-top                  keep the window above other windows
 ```

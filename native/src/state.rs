@@ -6,6 +6,7 @@ use xen_core::{
     host::{DataSection, HostDetails, InfoGroup},
     operations::{TaskStatus, VmAction},
     performance::HostPerformance,
+    vm::VmDetails,
     workspace::{ConnectionView, Operation, WorkspaceView},
     xapi::{ConnectionSettings, Host, Inventory, VirtualMachine},
 };
@@ -182,16 +183,43 @@ pub struct ObjectTab {
 pub enum VmTab {
     #[default]
     General,
+    Performance,
+    Storage,
+    Network,
+    Ha,
     Snapshots,
 }
 
 impl VmTab {
-    pub const ALL: [VmTab; 2] = [VmTab::General, VmTab::Snapshots];
+    pub const ALL: [VmTab; 6] = [
+        VmTab::General,
+        VmTab::Performance,
+        VmTab::Storage,
+        VmTab::Network,
+        VmTab::Ha,
+        VmTab::Snapshots,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             VmTab::General => "General",
+            VmTab::Performance => "Performance",
+            VmTab::Storage => "Storage",
+            VmTab::Network => "Network",
+            VmTab::Ha => "HA",
             VmTab::Snapshots => "Snapshots",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key.to_ascii_lowercase().as_str() {
+            "general" => Some(VmTab::General),
+            "performance" | "perf" => Some(VmTab::Performance),
+            "storage" | "disks" => Some(VmTab::Storage),
+            "network" | "networking" => Some(VmTab::Network),
+            "ha" => Some(VmTab::Ha),
+            "snapshots" | "snapshot" => Some(VmTab::Snapshots),
+            _ => None,
         }
     }
 }
@@ -527,6 +555,11 @@ pub struct UiState {
     pub tree_expanded: HashSet<String>,
     pub tree_selection: Option<ObjectKey>,
     pub vm_subtab: VmTab,
+    pub vm_state: LoadState<VmDetails>,
+    pub vm_seq: u64,
+    pub vm_perf_state: LoadState<HostPerformance>,
+    pub vm_perf_seq: u64,
+    pub vm_perf_range: u64,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -571,6 +604,11 @@ impl Default for UiState {
             tree_expanded: HashSet::new(),
             tree_selection: None,
             vm_subtab: VmTab::General,
+            vm_state: LoadState::Idle,
+            vm_seq: 0,
+            vm_perf_state: LoadState::Idle,
+            vm_perf_seq: 0,
+            vm_perf_range: 900,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -641,6 +679,10 @@ pub enum UiAction {
     },
     CloseResource,
     SetHostTab(HostTab),
+    SetVmTab(VmTab),
+    ReloadVmDetails,
+    LoadVmPerformance,
+    SetVmPerfRange(u64),
     DismissToast(usize),
     ConfirmRemove(String),
     CancelRemove,

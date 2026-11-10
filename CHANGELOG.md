@@ -7,6 +7,8 @@
 - Increase default typography/readability (110% UI scale) and add a title-bar zoom control plus `Ctrl+Plus` / `Ctrl+Minus` / `Ctrl+0`.
 - Add a dedicated pool overview page and contextual VM/host/snapshot toolbar actions; truncate long object names in tabs and the tree.
 - Render host performance as upstream-style multi-series graphs: CPU cores in one chart, memory and network separately, with legends and compact axes.
+- Add VM read model (disks/VDIs/SRs, VIFs/networks, HA/platform/tools fields) and VM detail tabs for General, Performance, Storage, Network, HA and Snapshots.
+- Add live VM RRD performance with the same multi-series graph model.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.
 - Add the `ui-ux-pro-max` UI/UX design skill under `.opencode/skills/`.

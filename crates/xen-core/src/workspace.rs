@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     operations::{TaskStatus, VmAction},
+    vm::VmDetails,
     xapi::{Connection, ConnectionSettings, Inventory},
 };
 
@@ -233,6 +234,41 @@ impl Workspace {
         active
             .connection
             .host_performance(host_uuid, range_seconds)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub async fn vm_details(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+    ) -> Result<VmDetails, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .vm_details(vm_uuid)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub async fn vm_performance(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        range_seconds: u64,
+    ) -> Result<crate::performance::HostPerformance, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .vm_performance(vm_uuid, range_seconds)
             .await
             .map_err(|error| error.to_string())
     }
@@ -517,6 +553,16 @@ impl Workspace {
             let _ = tokio::time::timeout(Duration::from_secs(3), active.connection.logout()).await;
         }
     }
+}
+
+async fn vm_in_snapshot(snapshot: &RwLock<Inventory>, vm_uuid: &str) -> bool {
+    let snapshot = snapshot.read().await;
+    snapshot
+        .vms
+        .iter()
+        .chain(&snapshot.templates)
+        .chain(&snapshot.snapshots)
+        .any(|vm| vm.uuid == vm_uuid)
 }
 
 fn display_name(settings: &ConnectionSettings, pool_name: &str) -> String {

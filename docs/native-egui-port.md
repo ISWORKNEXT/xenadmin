@@ -28,10 +28,11 @@ dependency.
 | Storage | Implemented | Capacity, usage bars, shared/local, hidden/tools/udev SR filtering |
 | Networks | Implemented | Bridge, MTU, PIF/VIF counts; internal `xenapi` bridge filtered |
 | Activity & tasks | Implemented | Progress, error code, cancel, “check again” without resubmission |
-| VM detail | Implemented | Status, configuration, snapshots, revert, start/shutdown/more actions |
+| VM detail | Implemented | General, Performance, Storage, Network, HA and Snapshots tabs; revert and VM actions |
 | Action review | Implemented | Exact targets, clone/snapshot name, force/revert warnings |
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
 | Host performance | Implemented | Upstream-style CPU (all cores), memory and network graphs with legends; 15 min / 1 h / 24 h, search, remaining metrics and gap handling |
+| VM performance | Implemented | VM RRD with per-vCPU CPU graph, memory/network graphs, remaining metrics and the same ranges |
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
 | Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |
 | Themes | Implemented | Light/white theme by default with a persisted dark toggle |

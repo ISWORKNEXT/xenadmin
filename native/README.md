@@ -24,7 +24,7 @@ native/
       pool_page.rs   pool summary, hosts, storage, networks, VMs
       inventory.rs   VM/template tables, host cards, storage, networks
       tasks.rs       XenAPI task list
-      vm_detail.rs   right-side VM detail panel
+      vm_detail.rs   VM tabs: General, Performance, Storage, Network, HA, Snapshots
       host_details.rs host detail tabs and RRD charts
       dialogs.rs     connect, action review, help, record details
 ```

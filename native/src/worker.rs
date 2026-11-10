@@ -5,6 +5,7 @@ use xen_core::{
     host::HostDetails,
     operations::VmAction,
     performance::HostPerformance,
+    vm::VmDetails,
     workspace::{Workspace, WorkspaceView},
     xapi::ConnectionSettings,
 };
@@ -47,6 +48,17 @@ pub enum Command {
         host_uuid: String,
         range_seconds: u64,
     },
+    VmDetails {
+        seq: u64,
+        connection_id: String,
+        vm_uuid: String,
+    },
+    VmPerformance {
+        seq: u64,
+        connection_id: String,
+        vm_uuid: String,
+        range_seconds: u64,
+    },
     Shutdown,
 }
 
@@ -76,6 +88,14 @@ pub enum Event {
         result: Result<Box<HostDetails>, String>,
     },
     HostPerformance {
+        seq: u64,
+        result: Result<Box<HostPerformance>, String>,
+    },
+    VmDetails {
+        seq: u64,
+        result: Result<Box<VmDetails>, String>,
+    },
+    VmPerformance {
         seq: u64,
         result: Result<Box<HostPerformance>, String>,
     },
@@ -264,6 +284,29 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::HostPerformance { seq, result });
+            }
+            Command::VmDetails {
+                seq,
+                connection_id,
+                vm_uuid,
+            } => {
+                let result = workspace
+                    .vm_details(&connection_id, &vm_uuid)
+                    .await
+                    .map(Box::new);
+                let _ = events.send(Event::VmDetails { seq, result });
+            }
+            Command::VmPerformance {
+                seq,
+                connection_id,
+                vm_uuid,
+                range_seconds,
+            } => {
+                let result = workspace
+                    .vm_performance(&connection_id, &vm_uuid, range_seconds)
+                    .await
+                    .map(Box::new);
+                let _ = events.send(Event::VmPerformance { seq, result });
             }
             Command::Shutdown => {}
         }
