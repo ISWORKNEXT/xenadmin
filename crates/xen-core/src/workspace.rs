@@ -590,6 +590,23 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn introduce_sr(
+        &self,
+        connection_id: &str,
+        uuid: String,
+        name: String,
+        description: String,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .introduce_sr(&uuid, &name, &description, "file", "user", false)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn create_sr(
         &self,
         connection_id: &str,

@@ -96,7 +96,7 @@
 
 ### 4. Storage
 
-- SR create (file-backed), probe, repair, reattach, detach, scan/TRIM/destroy, PBD plug/unplug, list/delete unattached VDI มีแล้ว; ยังไม่มี introduce และ SR ชนิด block/NFS creation
+- SR create/introduce/forget (file-backed), probe, repair, reattach, detach, scan/TRIM/destroy, PBD plug/unplug, list/delete unattached VDI มีแล้ว; ยังไม่มี SR ชนิด block/NFS creation
 - PBD attach/detach, iSCSI IQN/LUN discovery
 - VDI create/destroy/attach/detach/resize/move/migrate
 - VBD create/plug/edit

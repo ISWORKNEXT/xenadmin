@@ -732,6 +732,25 @@ impl App {
                         .toasts
                         .push(Toast::new(message, ToastKind::Error)),
                 },
+                Event::SrIntroduced { result } => match result {
+                    Ok(()) => {
+                        self.state.sr_introduce_dialog = None;
+                        self.state.toasts.push(Toast::new(
+                            "Storage repository introduced. Reattach it to a host to access its disks.",
+                            ToastKind::Success,
+                        ));
+                    }
+                    Err(message) => {
+                        if let Some(dialog) = self.state.sr_introduce_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::SrCreated { result } => match result {
                     Ok(()) => {
                         self.state.sr_create_dialog = None;
@@ -2357,6 +2376,51 @@ impl App {
                     self.worker.send(Command::DestroyNetwork {
                         connection_id: dialog.connection_id.clone(),
                         network_uuid: dialog.network_uuid.clone(),
+                    });
+                }
+                UiAction::OpenSrIntroduce => {
+                    let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
+                    else {
+                        self.state.toasts.push(Toast::new(
+                            "Select a pool before introducing storage.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    self.state.sr_introduce_dialog = Some(crate::state::SrIntroduceDialog {
+                        connection_id,
+                        uuid: String::new(),
+                        name: String::new(),
+                        description: String::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseSrIntroduce => {
+                    if !self
+                        .state
+                        .sr_introduce_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.sr_introduce_dialog = None;
+                    }
+                }
+                UiAction::SaveSrIntroduce => {
+                    let Some(dialog) = self.state.sr_introduce_dialog.as_mut() else {
+                        continue;
+                    };
+                    if dialog.uuid.trim().is_empty() || dialog.name.trim().is_empty() {
+                        dialog.error = Some("Enter the UUID and name.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::IntroduceSr {
+                        connection_id: dialog.connection_id.clone(),
+                        uuid: dialog.uuid.trim().to_owned(),
+                        name: dialog.name.trim().to_owned(),
+                        description: dialog.description.clone(),
                     });
                 }
                 UiAction::OpenSrCreate => {

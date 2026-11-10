@@ -829,6 +829,14 @@ pub fn storage(
                 {
                     actions.push(UiAction::OpenSrProbe);
                 }
+                if ui
+                    .add(egui::Button::new(
+                        RichText::new("Introduce storage").size(10.5),
+                    ))
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenSrIntroduce);
+                }
                 if ui.add(widgets::primary_button("Create storage")).clicked() {
                     actions.push(UiAction::OpenSrCreate);
                 }

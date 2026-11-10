@@ -753,6 +753,15 @@ pub struct NetworkDestroyConfirm {
     pub error: Option<String>,
 }
 
+pub struct SrIntroduceDialog {
+    pub connection_id: String,
+    pub uuid: String,
+    pub name: String,
+    pub description: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct SrCreateDialog {
     pub connection_id: String,
     pub hosts: Vec<(String, String)>,
@@ -987,6 +996,7 @@ pub struct UiState {
     pub snapshot_confirm: Option<SnapshotDeleteConfirm>,
     pub sr_action_confirm: Option<SrActionConfirm>,
     pub sr_create_dialog: Option<SrCreateDialog>,
+    pub sr_introduce_dialog: Option<SrIntroduceDialog>,
     pub sr_reattach_dialog: Option<SrReattachDialog>,
     pub network_create_dialog: Option<NetworkCreateDialog>,
     pub bond_create_dialog: Option<BondCreateDialog>,
@@ -1081,6 +1091,7 @@ impl Default for UiState {
             snapshot_confirm: None,
             sr_action_confirm: None,
             sr_create_dialog: None,
+            sr_introduce_dialog: None,
             sr_reattach_dialog: None,
             network_create_dialog: None,
             bond_create_dialog: None,
@@ -1230,6 +1241,9 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenSrIntroduce,
+    CloseSrIntroduce,
+    SaveSrIntroduce,
     OpenSrCreate,
     CloseSrCreate,
     SaveSrCreate,

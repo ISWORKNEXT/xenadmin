@@ -115,6 +115,25 @@ pub fn storage(
                     .add_enabled(
                         !is_read_only(connection),
                         egui::Button::new(
+                            RichText::new("Forget storage repository…")
+                                .size(11.0)
+                                .color(amber()),
+                        ),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptSrAction {
+                        connection_id: connection_id.clone(),
+                        sr_uuid: sr.uuid.clone(),
+                        sr_name: sr.name.clone(),
+                        action: SrAction::Forget,
+                    });
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection),
+                        egui::Button::new(
                             RichText::new("Destroy storage repository…")
                                 .size(11.0)
                                 .color(red()),

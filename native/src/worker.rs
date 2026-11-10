@@ -69,6 +69,12 @@ pub enum Command {
         description: String,
         location: String,
     },
+    IntroduceSr {
+        connection_id: String,
+        uuid: String,
+        name: String,
+        description: String,
+    },
     ReattachSr {
         connection_id: String,
         sr_uuid: String,
@@ -334,6 +340,9 @@ pub enum Event {
         result: Result<(), String>,
     },
     SrCreated {
+        result: Result<(), String>,
+    },
+    SrIntroduced {
         result: Result<(), String>,
     },
     SrReattached {
@@ -619,6 +628,17 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::HostDetails { seq, result });
+            }
+            Command::IntroduceSr {
+                connection_id,
+                uuid,
+                name,
+                description,
+            } => {
+                let result = workspace
+                    .introduce_sr(&connection_id, uuid, name, description)
+                    .await;
+                let _ = events.send(Event::SrIntroduced { result });
             }
             Command::CreateSr {
                 connection_id,

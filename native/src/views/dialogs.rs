@@ -48,6 +48,9 @@ pub fn show(
     if state.sr_create_dialog.is_some() {
         sr_create_dialog(ctx, state, actions);
     }
+    if state.sr_introduce_dialog.is_some() {
+        sr_introduce_dialog(ctx, state, actions);
+    }
     if state.sr_reattach_dialog.is_some() {
         sr_reattach_dialog(ctx, state, actions);
     }
@@ -1015,6 +1018,9 @@ fn sr_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec
                         xen_core::operations::SrAction::Detach => {
                             "Detaching disconnects this storage from the host. Data on the storage remains, but VMs using it must be stopped."
                         }
+                        xen_core::operations::SrAction::Forget => {
+                            "Forgetting removes only the SR record and its PBDs. Data on the storage is left untouched; use Introduce to add it back."
+                        }
                         _ => {
                             "Destroying an SR removes its record. The SR must be empty; data loss is possible."
                         }
@@ -1283,6 +1289,109 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn sr_introduce_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.sr_introduce_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("sr-introduce-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(600.0);
+            modal_title(
+                ui,
+                "Introduce storage repository",
+                "Adds an existing SR record without modifying its data.",
+            );
+            widgets::field_label(ui, "SR UUID");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.uuid)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("12345678-1234-1234-1234-123456789abc")
+                    .char_limit(36)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Name");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.name)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Description");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::multiline(&mut dialog.description)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(2)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Type").size(9.5).color(muted_fg()));
+                widgets::badge(ui, "file", accent());
+                ui.label(RichText::new("Content").size(9.5).color(muted_fg()));
+                widgets::badge(ui, "user", muted_fg());
+                ui.label(RichText::new("Local only").size(9.5).color(muted_fg()));
+            });
+            ui.label(
+                RichText::new(
+                    "Use Reattach storage repository on the new SR page to attach a host path.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && !dialog.uuid.trim().is_empty()
+                                && !dialog.name.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Introducing…"
+                            } else {
+                                "Introduce storage"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveSrIntroduce);
+    }
+    if close {
+        actions.push(UiAction::CloseSrIntroduce);
     }
 }
 

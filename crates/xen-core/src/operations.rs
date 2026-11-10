@@ -269,6 +269,7 @@ pub enum SrAction {
     Scan,
     Detach,
     Trim,
+    Forget,
     Destroy,
 }
 
@@ -278,12 +279,13 @@ impl SrAction {
             Self::Scan => "Scan storage",
             Self::Detach => "Detach storage repository",
             Self::Trim => "Reclaim storage space",
+            Self::Forget => "Forget storage repository",
             Self::Destroy => "Destroy storage repository",
         }
     }
 
     pub fn destructive(self) -> bool {
-        matches!(self, Self::Destroy | Self::Detach)
+        matches!(self, Self::Destroy | Self::Detach | Self::Forget)
     }
 }
 
@@ -459,6 +461,23 @@ impl Connection {
                 }
                 Ok(())
             }
+            SrAction::Forget => {
+                let pbds = self.records("PBD").await?;
+                for (pbd_ref, pbd) in pbds
+                    .iter()
+                    .filter(|(_, pbd)| pbd["SR"].as_str() == Some(sr_ref.as_str()))
+                {
+                    if pbd["currently_attached"].as_bool() == Some(true) {
+                        self.async_task("Async.PBD.unplug", json!([self.session, pbd_ref]))
+                            .await?;
+                    }
+                    self.async_task("Async.PBD.destroy", json!([self.session, pbd_ref]))
+                        .await?;
+                }
+                self.request::<Value>("SR.forget", json!([self.session, sr_ref]))
+                    .await?;
+                Ok(())
+            }
             SrAction::Destroy => {
                 // Keep the PBD records: some backends (notably `file`) need one
                 // to locate the storage while destroying it. SR.destroy removes
@@ -481,6 +500,47 @@ impl Connection {
                     .await
             }
         }
+    }
+
+    /// Introduce an existing file-backed SR record without touching its data.
+    pub async fn introduce_sr(
+        &self,
+        uuid: &str,
+        name: &str,
+        description: &str,
+        sr_type: &str,
+        content_type: &str,
+        shared: bool,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        validate_sr_introduce(uuid, name, description, sr_type, content_type, shared)?;
+        let srs = self.records("SR").await?;
+        if srs
+            .values()
+            .any(|sr| sr["uuid"].as_str().is_some_and(|value| value == uuid))
+        {
+            return Err(ApiError::Xen(
+                "A storage repository with this UUID is already managed.".into(),
+            ));
+        }
+        self.request::<String>(
+            "SR.introduce",
+            json!([
+                self.session,
+                uuid,
+                name.trim(),
+                description,
+                sr_type,
+                content_type,
+                shared
+            ]),
+        )
+        .await?;
+        Ok(())
     }
 
     /// Create a file-backed SR on a host. The location is an absolute path on
@@ -2307,6 +2367,48 @@ impl Connection {
 
 const MAX_VM_DELAY: u64 = 7 * 24 * 60 * 60;
 
+fn validate_sr_introduce(
+    uuid: &str,
+    name: &str,
+    description: &str,
+    sr_type: &str,
+    content_type: &str,
+    shared: bool,
+) -> Result<(), ApiError> {
+    if uuid::Uuid::parse_str(uuid.trim()).is_err() {
+        return Err(ApiError::Xen(
+            "Enter the storage repository UUID in standard UUID form.".into(),
+        ));
+    }
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 255 {
+        return Err(ApiError::Xen(
+            "Enter a storage repository name between 1 and 255 characters.".into(),
+        ));
+    }
+    if description.chars().count() > 1024 {
+        return Err(ApiError::Xen(
+            "The description must be 1024 characters or fewer.".into(),
+        ));
+    }
+    if sr_type != "file" {
+        return Err(ApiError::Xen(
+            "Only host-local file-backed storage can be introduced here.".into(),
+        ));
+    }
+    if content_type != "user" {
+        return Err(ApiError::Xen(
+            "Only user storage repositories can be introduced here.".into(),
+        ));
+    }
+    if shared {
+        return Err(ApiError::Xen(
+            "File-backed storage repositories cannot be shared.".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_sr_fields(name: &str, description: &str, location: &str) -> Result<(), ApiError> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 255 {
@@ -2605,6 +2707,24 @@ mod tests {
             ),
             "Trim failed: Trim on SR not supported"
         );
+    }
+
+    #[test]
+    fn sr_introduce_fields_are_validated() {
+        let uuid = "cc494741-8793-c045-b2f4-c3b6fb929730";
+        assert!(validate_sr_introduce(uuid, "storage", "", "file", "user", false).is_ok());
+        for bad_uuid in ["", "not-a-uuid", "cc494741"] {
+            assert!(validate_sr_introduce(bad_uuid, "storage", "", "file", "user", false).is_err());
+        }
+        assert!(validate_sr_introduce(uuid, "", "", "file", "user", false).is_err());
+        assert!(validate_sr_introduce(uuid, &"x".repeat(256), "", "file", "user", false).is_err());
+        assert!(
+            validate_sr_introduce(uuid, "storage", &"x".repeat(1025), "file", "user", false)
+                .is_err()
+        );
+        assert!(validate_sr_introduce(uuid, "storage", "", "ext", "user", false).is_err());
+        assert!(validate_sr_introduce(uuid, "storage", "", "file", "iso", false).is_err());
+        assert!(validate_sr_introduce(uuid, "storage", "", "file", "user", true).is_err());
     }
 
     #[test]
