@@ -2,18 +2,17 @@
 
 ## Unreleased
 
-- Add `native/`: a pure-Rust `egui`/`eframe` desktop UI for XCP-ng and XenServer with no Tauri, WebView, React or shadcn/ui dependency.
-- Port the current screens: connections, overview, VMs, templates, hosts, storage, networks, tasks, VM detail, action review, host details and RRD performance charts.
-- Add a custom undecorated title bar with workspace tabs, drag/resize handling, window controls and a light/dark theme toggle.
-- Make the new white theme the default and persist the theme choice.
+- Rework the native UI into an XCP-ng Center-style Infrastructure tree with object tabs, a contextual toolbar and a status bar.
+- Add a custom undecorated title bar, object tabs, drag/resize handling, window controls and a persisted light/dark theme toggle.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.
-- Keep the Tauri/React client in `desktop/` as a legacy parity reference.
+- Add the `ui-ux-pro-max` UI/UX design skill under `.opencode/skills/`.
+- Move the shared XenAPI core to `crates/xen-core` and remove the legacy Tauri/React desktop tree.
 
 ## 0.1.0
 
-- Replace the C# WinForms source and build system with Rust, Tauri and React.
-- Add a shadcn/ui desktop workspace for host, VM, storage and network inventory.
+- Replace the C# WinForms source with a native Rust desktop client.
+- Add pool, host, VM, template, storage and network inventory.
 - Add per-connection TLS certificate bypass, search, filtering, details and manual refresh.
 - Keep XenAPI credentials and sessions in process memory.
 

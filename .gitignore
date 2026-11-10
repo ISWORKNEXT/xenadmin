@@ -1,7 +1,8 @@
-node_modules/
 target/
-dist/
 .env
 .env.*
 *.log
 .DS_Store
+
+__pycache__/
+*.py[cod]

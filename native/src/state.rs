@@ -23,16 +23,6 @@ pub enum View {
 }
 
 impl View {
-    pub const ALL: [View; 7] = [
-        View::Overview,
-        View::Vms,
-        View::Hosts,
-        View::Templates,
-        View::Storage,
-        View::Networks,
-        View::Tasks,
-    ];
-
     pub fn title(self) -> &'static str {
         match self {
             View::Overview => "Overview",
@@ -55,19 +45,6 @@ impl View {
             "networks" => Some(View::Networks),
             "tasks" => Some(View::Tasks),
             _ => None,
-        }
-    }
-
-    /// Compact label for the custom title-bar tabs.
-    pub fn tab_label(self) -> &'static str {
-        match self {
-            View::Overview => "Overview",
-            View::Vms => "VMs",
-            View::Hosts => "Hosts",
-            View::Templates => "Templates",
-            View::Storage => "Storage",
-            View::Networks => "Networks",
-            View::Tasks => "Tasks",
         }
     }
 
@@ -108,6 +85,97 @@ impl Scope {
         match self {
             Scope::Host { host_ref, .. } => Some(host_ref),
             _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ListKind {
+    Vms,
+    Hosts,
+    Templates,
+    Storage,
+    Networks,
+}
+
+impl ListKind {
+    pub fn title(self) -> &'static str {
+        match self {
+            ListKind::Vms => "Virtual machines",
+            ListKind::Hosts => "Hosts",
+            ListKind::Templates => "Templates",
+            ListKind::Storage => "Storage",
+            ListKind::Networks => "Networks",
+        }
+    }
+
+    pub fn view(self) -> View {
+        match self {
+            ListKind::Vms => View::Vms,
+            ListKind::Hosts => View::Hosts,
+            ListKind::Templates => View::Templates,
+            ListKind::Storage => View::Storage,
+            ListKind::Networks => View::Networks,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum ObjectKey {
+    Home,
+    Pool(String),
+    Host {
+        connection_id: String,
+        host_ref: String,
+    },
+    Vm {
+        connection_id: String,
+        vm_uuid: String,
+    },
+    Template {
+        connection_id: String,
+        vm_uuid: String,
+    },
+    Snapshot {
+        connection_id: String,
+        vm_uuid: String,
+    },
+    Storage {
+        connection_id: String,
+        sr_uuid: String,
+    },
+    Network {
+        connection_id: String,
+        network_uuid: String,
+    },
+    List {
+        connection_id: Option<String>,
+        kind: ListKind,
+        host_ref: Option<String>,
+    },
+    Tasks,
+}
+
+#[derive(Clone)]
+pub struct ObjectTab {
+    pub key: ObjectKey,
+    pub title: String,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum VmTab {
+    #[default]
+    General,
+    Snapshots,
+}
+
+impl VmTab {
+    pub const ALL: [VmTab; 2] = [VmTab::General, VmTab::Snapshots];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            VmTab::General => "General",
+            VmTab::Snapshots => "Snapshots",
         }
     }
 }
@@ -437,7 +505,12 @@ pub struct RecordDialog {
 pub struct UiState {
     pub view: View,
     pub scope: Scope,
-    pub expanded: HashSet<String>,
+    pub object_tabs: Vec<ObjectTab>,
+    pub active_tab: usize,
+    pub tree_query: String,
+    pub tree_expanded: HashSet<String>,
+    pub tree_selection: Option<ObjectKey>,
+    pub vm_subtab: VmTab,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -473,7 +546,15 @@ impl Default for UiState {
         Self {
             view: View::Overview,
             scope: Scope::All,
-            expanded: HashSet::new(),
+            object_tabs: vec![ObjectTab {
+                key: ObjectKey::Home,
+                title: "Home".into(),
+            }],
+            active_tab: 0,
+            tree_query: String::new(),
+            tree_expanded: HashSet::new(),
+            tree_selection: None,
+            vm_subtab: VmTab::General,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -509,7 +590,13 @@ impl Default for UiState {
 pub enum UiAction {
     SetView(View),
     SetScope(Scope),
-    ToggleExpand(String),
+    OpenObject {
+        key: ObjectKey,
+        title: String,
+    },
+    ActivateTab(usize),
+    CloseTab(usize),
+    ToggleTreeNode(String),
     Connect {
         settings: ConnectionSettings,
         password: String,
@@ -519,7 +606,6 @@ pub enum UiAction {
     Disconnect(String),
     Remove(String),
     OpenVm(String, String),
-    CloseVm,
     Propose(ActionKind, Vec<(String, String)>),
     SubmitIntent,
     CloseIntent,
@@ -716,6 +802,31 @@ pub fn find_vm<'a>(
         .chain(&inventory.snapshots)
         .find(|vm| vm.uuid == vm_uuid)?;
     Some((connection, vm))
+}
+
+pub fn find_storage<'a>(
+    workspace: &'a WorkspaceView,
+    connection_id: &str,
+    sr_uuid: &str,
+) -> Option<(&'a ConnectionView, &'a xen_core::xapi::Storage)> {
+    let connection = find_connection(workspace, connection_id)?;
+    let inventory = connection_inventory(connection)?;
+    let sr = inventory.storage.iter().find(|sr| sr.uuid == sr_uuid)?;
+    Some((connection, sr))
+}
+
+pub fn find_network<'a>(
+    workspace: &'a WorkspaceView,
+    connection_id: &str,
+    network_uuid: &str,
+) -> Option<(&'a ConnectionView, &'a xen_core::xapi::Network)> {
+    let connection = find_connection(workspace, connection_id)?;
+    let inventory = connection_inventory(connection)?;
+    let network = inventory
+        .networks
+        .iter()
+        .find(|network| network.uuid == network_uuid)?;
+    Some((connection, network))
 }
 
 pub fn running_task(workspace: &WorkspaceView, connection_id: &str, vm_uuid: &str) -> bool {

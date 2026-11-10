@@ -5,8 +5,8 @@ use egui::{
 use xen_core::workspace::WorkspaceView;
 
 use crate::state::{
-    Scope, UiAction, UiState, View, connected_connections, connection_inventory, find_connection,
-    is_read_only,
+    ObjectKey, Scope, UiAction, UiState, connected_connections, connection_inventory,
+    find_connection, is_read_only,
 };
 use crate::theme;
 use crate::theme::*;
@@ -33,7 +33,6 @@ pub fn titlebar(
             let bar_rect = ui.max_rect();
             let ctx = ui.ctx().clone();
 
-            // The whole strip is draggable; buttons added later take precedence.
             let drag = ui.interact(
                 bar_rect,
                 egui::Id::unique("titlebar-drag"),
@@ -45,35 +44,16 @@ pub fn titlebar(
                 ctx.send_viewport_cmd(ViewportCommand::StartDrag);
             }
 
-            let mut selected_rect: Option<Rect> = None;
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 5.0;
                 brand(ui);
-                ui.add_space(3.0);
+                ui.add_space(6.0);
                 separator(ui);
-                ui.add_space(3.0);
-
-                for (index, view) in View::ALL.iter().enumerate() {
-                    let selected = if state.host_route.is_some() {
-                        *view == View::Hosts
-                    } else {
-                        state.view == *view
-                    };
-                    let color = if selected { fg() } else { muted_fg() };
-                    let response = ui
-                        .add(
-                            Button::new(RichText::new(view.tab_label()).size(11.5).color(color))
-                                .frame(false)
-                                .corner_radius(CornerRadius::same(6)),
-                        )
-                        .on_hover_text(format!("{}  ·  Ctrl+{}", view.title(), index + 1));
-                    if selected {
-                        selected_rect = Some(response.rect);
-                    }
-                    if response.clicked() {
-                        actions.push(UiAction::SetView(*view));
-                    }
-                }
+                ui.label(
+                    RichText::new("Infrastructure manager")
+                        .size(9.0)
+                        .color(dim_fg()),
+                );
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
@@ -102,23 +82,221 @@ pub fn titlebar(
                             .on_hover_text("Open Activity & tasks")
                             .clicked()
                     {
-                        actions.push(UiAction::SetView(View::Tasks));
+                        actions.push(UiAction::OpenObject {
+                            key: ObjectKey::Tasks,
+                            title: "Activity & tasks".into(),
+                        });
                     }
                     ui.add_space(8.0);
-                    if ui.available_width() > 260.0 {
-                        scope_pill(ui, state, workspace);
+                    scope_pill(ui, state, workspace);
+                });
+            });
+        });
+}
+
+pub fn toolbar(
+    ui: &mut Ui,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
+) {
+    egui::Panel::top("toolbar")
+        .exact_size(38.0)
+        .resizable(false)
+        .frame(
+            Frame::NONE
+                .fill(panel())
+                .stroke(Stroke::new(1.0, border_soft()))
+                .inner_margin(Margin::symmetric(12, 0)),
+        )
+        .show(ui, |ui| {
+            ui.horizontal_centered(|ui| {
+                let (home_rect, home_response) =
+                    ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
+                if home_response.hovered() {
+                    ui.painter()
+                        .rect_filled(home_rect, CornerRadius::same(6), panel_3());
+                }
+                let color = if home_response.hovered() {
+                    fg()
+                } else {
+                    muted_fg()
+                };
+                let center = home_rect.center();
+                ui.painter().rect_stroke(
+                    Rect::from_center_size(center + vec2(0.0, 2.0), vec2(10.0, 8.0)),
+                    CornerRadius::same(1),
+                    Stroke::new(1.2, color),
+                    egui::StrokeKind::Inside,
+                );
+                ui.painter().line_segment(
+                    [center + vec2(-6.0, -1.0), center + vec2(0.0, -6.0)],
+                    Stroke::new(1.2, color),
+                );
+                ui.painter().line_segment(
+                    [center + vec2(0.0, -6.0), center + vec2(6.0, -1.0)],
+                    Stroke::new(1.2, color),
+                );
+                if home_response.on_hover_text("Home").clicked() {
+                    actions.push(UiAction::OpenObject {
+                        key: ObjectKey::Home,
+                        title: "Home".into(),
+                    });
+                }
+                ui.add_space(6.0);
+                ui.label(RichText::new("Infrastructure").size(10.0).color(dim_fg()));
+                ui.label(RichText::new("›").size(10.0).color(dim_fg()));
+                let title = state
+                    .object_tabs
+                    .get(state.active_tab)
+                    .map_or("Home", |tab| tab.title.as_str());
+                ui.label(RichText::new(title).size(10.5).strong().color(fg()));
+
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add(widgets::primary_button("+  Add connection"))
+                        .clicked()
+                    {
+                        state.connect = Some(crate::state::ConnectState::empty());
+                    }
+                    ui.add_space(6.0);
+                    let busy = state
+                        .scope
+                        .connection_id()
+                        .is_some_and(|id| state.busy.contains(id));
+                    let has_connections = !workspace.connections.is_empty();
+                    if ui
+                        .add_enabled(
+                            has_connections && !busy,
+                            egui::Button::new(
+                                RichText::new(if busy { "Refreshing…" } else { "Refresh" })
+                                    .size(10.5)
+                                    .color(if busy { dim_fg() } else { fg() }),
+                            ),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::Refresh(
+                            state.scope.connection_id().map(str::to_owned),
+                        ));
+                    }
+                    if busy {
+                        ui.spinner();
                     }
                 });
             });
-
-            if let Some(rect) = selected_rect {
-                ui.painter().hline(
-                    Rangef::new(rect.left() + 2.0, rect.right() - 2.0),
-                    bar_rect.bottom() - 1.0,
-                    Stroke::new(2.0, accent()),
-                );
-            }
         });
+}
+
+pub fn object_tabs(
+    ui: &mut Ui,
+    state: &mut UiState,
+    _workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
+) {
+    egui::Panel::top("object-tabs")
+        .exact_size(38.0)
+        .resizable(false)
+        .frame(
+            Frame::NONE
+                .fill(panel_2())
+                .stroke(Stroke::new(1.0, border_soft()))
+                .inner_margin(Margin::symmetric(8, 4)),
+        )
+        .show(ui, |ui| {
+            egui::ScrollArea::horizontal()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        let mut activate = None;
+                        let mut close = None;
+                        for (index, tab) in state.object_tabs.iter().enumerate() {
+                            let active = index == state.active_tab;
+                            let (response, close_clicked) =
+                                object_tab(ui, &tab.title, active, index != 0);
+                            if close_clicked {
+                                close = Some(index);
+                            } else if response.clicked() {
+                                activate = Some(index);
+                            }
+                        }
+                        if let Some(index) = close {
+                            actions.push(UiAction::CloseTab(index));
+                        } else if let Some(index) = activate {
+                            actions.push(UiAction::ActivateTab(index));
+                        }
+                    });
+                });
+        });
+}
+
+fn object_tab(ui: &mut Ui, title: &str, active: bool, closable: bool) -> (egui::Response, bool) {
+    let font = egui::FontId::proportional(10.5);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(title.to_owned(), font.clone(), fg());
+    let text_width = galley.size().x.min(220.0);
+    let width = text_width + if closable { 42.0 } else { 22.0 };
+    let (rect, response) = ui.allocate_exact_size(vec2(width, 28.0), Sense::click());
+    let fill = if active { panel() } else { panel_2() };
+    let stroke = if active {
+        Stroke::new(1.0, border())
+    } else {
+        Stroke::new(1.0, Color32::TRANSPARENT)
+    };
+    ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
+    if active {
+        ui.painter().rect_stroke(
+            rect,
+            CornerRadius::same(6),
+            stroke,
+            egui::StrokeKind::Inside,
+        );
+        ui.painter().hline(
+            Rangef::new(rect.left() + 6.0, rect.right() - 6.0),
+            rect.bottom() - 1.0,
+            Stroke::new(2.0, accent()),
+        );
+    } else if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(6), panel_2());
+    }
+    let color = if active { fg() } else { muted_fg() };
+    ui.painter().text(
+        egui::pos2(rect.left() + 10.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        title,
+        font,
+        color,
+    );
+    let mut close_clicked = false;
+    if closable {
+        let close_rect = Rect::from_center_size(
+            egui::pos2(rect.right() - 14.0, rect.center().y),
+            Vec2::splat(16.0),
+        );
+        let close = ui.interact(
+            close_rect,
+            egui::Id::unique(("tab-close", title, rect.left() as i32)),
+            Sense::click(),
+        );
+        if close.hovered() {
+            ui.painter()
+                .rect_filled(close_rect, CornerRadius::same(4), panel_3());
+        }
+        let x = close_rect.center();
+        ui.painter().line_segment(
+            [x + vec2(-3.0, -3.0), x + vec2(3.0, 3.0)],
+            Stroke::new(1.1, muted_fg()),
+        );
+        ui.painter().line_segment(
+            [x + vec2(3.0, -3.0), x + vec2(-3.0, 3.0)],
+            Stroke::new(1.1, muted_fg()),
+        );
+        close_clicked = close.clicked();
+    }
+    (response, close_clicked)
 }
 
 fn brand(ui: &mut Ui) {

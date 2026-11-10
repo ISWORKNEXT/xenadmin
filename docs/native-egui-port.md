@@ -1,8 +1,8 @@
 # Native egui UI port
 
-Status as of 10 November 2026. The native client lives in `native/` and shares
-`desktop/crates/xen-core` with the legacy Tauri client. It has no Tauri, WebView,
-React or shadcn/ui dependency.
+Status as of 10 November 2026. The native client lives in `native/` and uses the
+shared `crates/xen-core` crate. It has no Tauri, WebView, React or shadcn/ui
+dependency.
 
 ## Stack
 
@@ -19,7 +19,7 @@ React or shadcn/ui dependency.
 | Area | Native status | Notes |
 | --- | --- | --- |
 | Connection dialog | Implemented | Label, host, username, password, read-only, per-connection TLS bypass; production host is locked read-only |
-| Sidebar / scopes | Implemented | All connections, pool, host; expandable host tree; refresh, reconnect, disconnect, remove |
+| Infrastructure tree | Implemented | Pools → hosts, VMs, templates, storage and networks; search, expand/collapse and context menus |
 | Overview | Implemented | Pool/host/VM/task stats, connection cards, memory and storage allocation, recent VMs |
 | Virtual machines | Implemented | Search, power filter, 25-row pagination, multi-select, bulk actions, connection-scoped rows |
 | Templates | Implemented | Search/power filter, detail dialog |
@@ -32,21 +32,20 @@ React or shadcn/ui dependency.
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
 | Host performance | Implemented | 15 min / 1 h / 24 h, metric search, 12 charts per page, gap handling |
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
-| Window chrome | Implemented | Undecorated custom title bar, workspace tabs, drag, resize handles and window controls |
+| Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |
 | Themes | Implemented | Light/white theme by default with a persisted dark toggle |
 
-Keyboard shortcuts: `Ctrl+1` … `Ctrl+7` switch views, `Ctrl+K` opens the VM
-search, `F5` refreshes the visible scope, `Esc` closes modals.
+Keyboard shortcuts: `Ctrl+K` focuses the Infrastructure search, `F5` refreshes
+the active scope, `Ctrl+W` closes the active object tab, `Esc` closes modals.
 
 ## Verification
 
 ### Local fixtures
 
-- `cargo test --workspace --locked` in `desktop/`: 25 core unit tests, 4 host-detail
-  integration tests and 5 workspace tests pass. Two native command tests also run
-  with `--features preview`.
-- Native client: `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and
-  `cargo build` pass.
+- `cargo test --workspace --locked` from the repository root: 25 core unit
+  tests, 4 host-detail integration tests and 5 workspace tests pass.
+- `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and
+  `cargo build -p xen-native` pass.
 - UI exercised against local HTTPS fixtures for inventory, duplicate pool UUIDs,
   stale refresh, VM detail, host details, storage, networks, 168-metric RRD gaps,
   and connect/read-only behaviour.
@@ -68,14 +67,14 @@ The app's session was closed after each run.
 `10.100.1.11` remains production and forced read-only in Rust; it was not
 contacted in this native UI work.
 
-## Deliberate differences from the Tauri client
+## Design choices
 
-- **No WebView/IPC boundary.** UI and core share Rust types; there is no HTTP
-  preview bridge or renderer command serializer in production.
-- **Clone derives on view models.** `xen-core` view structs now derive `Clone`
-  so the worker can hand snapshots to the UI thread without serialization.
+- **No WebView/IPC boundary.** UI and core share Rust types directly.
+- **Clone derives on view models.** `xen-core` view structs derive `Clone` so the
+  worker can hand snapshots to the UI thread without serialization.
 - **Startup/deep-link flags.** `--connect`, `--connect-stdin`, `--view`,
-  `--host`, `--host-tab`, `--vm`, `--on-top` support automation and screenshots.
+  `--host`, `--host-tab`, `--vm`, `--theme`, `--on-top` support automation and
+  screenshots.
 - **Painted glyphs.** Navigation, host/server, window-control and empty-state
   marks are painted with `egui` shapes so they do not depend on a particular
   system font.

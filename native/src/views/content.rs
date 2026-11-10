@@ -2,7 +2,7 @@ use egui::{Align, Layout, RichText, Ui};
 use xen_core::workspace::{ConnectionView, WorkspaceView};
 
 use crate::state::{
-    Scope, UiAction, UiState, View, connection_name, find_connection, scoped_hosts, scoped_targets,
+    ObjectKey, Scope, UiAction, UiState, View, connection_name, find_connection, is_read_only,
     visible_connections,
 };
 use crate::theme::*;
@@ -14,11 +14,31 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
-    if state.host_route.is_some() {
-        super::host_details::show(ui, state, workspace, actions);
-        return;
-    }
+    let key = state
+        .object_tabs
+        .get(state.active_tab)
+        .map(|tab| tab.key.clone())
+        .unwrap_or(ObjectKey::Home);
 
+    match key {
+        ObjectKey::Home | ObjectKey::Pool(_) | ObjectKey::List { .. } | ObjectKey::Tasks => {
+            workspace_page(ui, state, workspace, actions);
+        }
+        ObjectKey::Host { .. } => super::host_details::show(ui, state, workspace, actions),
+        ObjectKey::Vm { .. } | ObjectKey::Template { .. } | ObjectKey::Snapshot { .. } => {
+            super::vm_detail::show(ui, state, workspace, actions);
+        }
+        ObjectKey::Storage { .. } => super::resource_page::storage(ui, state, workspace, actions),
+        ObjectKey::Network { .. } => super::resource_page::network(ui, state, workspace, actions),
+    }
+}
+
+fn workspace_page(
+    ui: &mut Ui,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
+) {
     if let Scope::Connection(id) = state.scope.clone() {
         match find_connection(workspace, &id) {
             None => {
@@ -42,10 +62,8 @@ pub fn show(
         return;
     }
 
-    page_header(ui, state, workspace, actions);
+    page_header(ui, state, workspace);
     ui.add_space(10.0);
-    scope_toolbar(ui, state, workspace, actions);
-    ui.add_space(12.0);
 
     let stale: Vec<(String, String)> = visible_connections(workspace, &state.scope)
         .into_iter()
@@ -78,12 +96,7 @@ pub fn show(
     }
 }
 
-fn page_header(
-    ui: &mut Ui,
-    state: &mut UiState,
-    workspace: &WorkspaceView,
-    actions: &mut Vec<UiAction>,
-) {
+fn page_header(ui: &mut Ui, state: &mut UiState, workspace: &WorkspaceView) {
     let scope_name = super::chrome::scope_name(workspace, &state.scope);
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
@@ -112,114 +125,13 @@ fn page_header(
             );
         });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if ui
-                .add(widgets::primary_button("+  Add connection"))
-                .clicked()
+            if let Some(id) = state.scope.connection_id()
+                && let Some(connection) = find_connection(workspace, id)
+                && is_read_only(connection)
             {
-                state.connect = Some(crate::state::ConnectState::empty());
-            }
-            let busy = !state.busy.is_empty();
-            let has_connections = !visible_connections(workspace, &state.scope).is_empty();
-            if ui
-                .add_enabled(
-                    has_connections && !busy,
-                    egui::Button::new(
-                        RichText::new(if busy {
-                            "Refreshing…".to_owned()
-                        } else if state.scope.connection_id().is_some() {
-                            "Refresh".to_owned()
-                        } else {
-                            "Refresh all".to_owned()
-                        })
-                        .size(12.0)
-                        .color(if busy { muted_fg() } else { fg() }),
-                    ),
-                )
-                .clicked()
-            {
-                actions.push(UiAction::Refresh(
-                    state.scope.connection_id().map(str::to_owned),
-                ));
-            }
-            if busy {
-                ui.spinner();
+                ui.label(RichText::new("Read-only").size(9.5).strong().color(amber()));
             }
         });
-    });
-}
-
-fn scope_toolbar(
-    ui: &mut Ui,
-    state: &mut UiState,
-    workspace: &WorkspaceView,
-    actions: &mut Vec<UiAction>,
-) {
-    let hosts = scoped_hosts(workspace, &state.scope).len();
-    let vms = scoped_targets(workspace, &state.scope).len();
-    ui.horizontal(|ui| {
-        egui::ComboBox::from_id_salt("scope-selector")
-            .selected_text(
-                RichText::new(super::chrome::scope_name(workspace, &state.scope))
-                    .size(11.0)
-                    .color(fg()),
-            )
-            .width(220.0)
-            .show_ui(ui, |ui| {
-                let mut chosen: Option<Scope> = None;
-                if ui
-                    .selectable_label(state.scope == Scope::All, "All connections")
-                    .clicked()
-                {
-                    chosen = Some(Scope::All);
-                }
-                for connection in &workspace.connections {
-                    let id = crate::state::connection_id(connection);
-                    let selected = state.scope == Scope::Connection(id.to_owned());
-                    let label = format!(
-                        "{}{}",
-                        connection_name(connection),
-                        if matches!(connection, ConnectionView::Offline { .. }) {
-                            "  (offline)"
-                        } else {
-                            ""
-                        }
-                    );
-                    if ui.selectable_label(selected, label).clicked() {
-                        chosen = Some(Scope::Connection(id.to_owned()));
-                    }
-                }
-                if let Some(scope) = chosen {
-                    actions.push(UiAction::SetScope(scope));
-                }
-            });
-        ui.label(
-            RichText::new(crate::format::plural(hosts, "host", "hosts"))
-                .size(10.5)
-                .color(muted_fg()),
-        );
-        ui.label(RichText::new("·").size(10.5).color(dim_fg()));
-        ui.label(
-            RichText::new(crate::format::plural(vms, "guest VM", "guest VMs"))
-                .size(10.5)
-                .color(muted_fg()),
-        );
-        if let Some(id) = state.scope.connection_id()
-            && let Some(connection) = find_connection(workspace, id)
-            && crate::state::is_read_only(connection)
-        {
-            let production =
-                crate::state::normalized_host(&crate::state::connection_settings(connection).host)
-                    == "10.100.1.11";
-            widgets::badge(
-                ui,
-                if production {
-                    "Production · read-only"
-                } else {
-                    "Read-only"
-                },
-                amber(),
-            );
-        }
     });
 }
 
@@ -236,7 +148,7 @@ fn offline_page(
         return;
     };
     let settings = crate::state::connection_settings(connection);
-    ui.add_space(60.0);
+    ui.add_space(40.0);
     ui.vertical_centered(|ui| {
         widgets::offline_mark(ui, 64.0);
         ui.add_space(10.0);
@@ -250,7 +162,7 @@ fn offline_page(
                 .size(11.5)
                 .color(muted_fg()),
         );
-        if settings.read_only {
+        if is_read_only(connection) {
             ui.add_space(4.0);
             widgets::badge(ui, "Read-only profile", amber());
         }

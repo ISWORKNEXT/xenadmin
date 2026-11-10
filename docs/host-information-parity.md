@@ -27,9 +27,9 @@ This table is the Task 1 baseline. Task 2 implementation and verification are re
 
 ## Draft read path and boundary
 
-`desktop/crates/xen-core/src/host.rs` drafts `Connection::host_details`: `host.get_by_uuid` → `host.get_record`, then host-scoped read-only record collections (`get_all_records`) for metrics, pool, CPU, PIF/network, PBD/SR, GPU/PCI/vGPU, USB, certificates, messages, patches/updates and crash dumps. It maps sections to ready/unsupported/unavailable. `desktop/crates/xen-core/src/performance.rs` drafts host-clock, data-source and RRD reads. `desktop/src/lib/host-api.ts` defines draft schemas; `desktop/src/HostDetails.tsx` defines the detail tabs.
+`crates/xen-core/src/host.rs` drafts `Connection::host_details`: `host.get_by_uuid` → `host.get_record`, then host-scoped read-only record collections (`get_all_records`) for metrics, pool, CPU, PIF/network, PBD/SR, GPU/PCI/vGPU, USB, certificates, messages, patches/updates and crash dumps. It maps sections to ready/unsupported/unavailable. `crates/xen-core/src/performance.rs` drafts host-clock, data-source and RRD reads. `native/src/views/host_details.rs` defines the detail tabs.
 
-`App.tsx` does not import/render `HostDetails.tsx`; current host selection scopes the overview/VM inventory. Thus the richer UI/API is not integrated into the current flow. All draft backend/UI paths remain **Draft, unverified**. Read paths must use explicit display-field allowlists and keep credentials, auth configuration, license secrets, power-on config and private device config out of output. `MESSAGE_METHOD_UNKNOWN`, permission denial and other read failures must not be shown as an empty list.
+The native client opens host details as an object tab from the Infrastructure tree. The backend and UI are integrated; live qualification on additional XCP-ng versions remains pending. Read paths must use explicit display-field allowlists and keep credentials, auth configuration, license secrets, power-on config and private device config out of output. `MESSAGE_METHOD_UNKNOWN`, permission denial and other read failures must not be shown as an empty list.
 
 ## Acceptance checklist for future Tasks 2–5
 
@@ -74,12 +74,12 @@ Corrected and regression-tested differences found during review:
 
 Local verification on 9 November 2026:
 
-- `cargo test --workspace --features preview --locked`: 36 passed, zero failed. This includes 25 core unit tests, 4 host-detail HTTPS integration tests, 5 workspace tests and 2 native command tests. Fifteen core unit tests target host information.
-- `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets --features preview --locked -- -D warnings`: passed.
-- `cargo build -p xen-desktop --features custom-protocol,preview --locked`: passed. The executable was built but not launched.
+- `cargo test --workspace --locked`: 34 passed, zero failed. This includes 25 core unit tests, 4 host-detail HTTPS integration tests and 5 workspace tests. Fifteen core unit tests target host information.
+- `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets --locked -- -D warnings`: passed.
+- `cargo build -p xen-native --locked`: passed.
 - Local HTTPS fixtures exercise host isolation, private-field redaction, memory formulas, missing dependencies, API absence, permission failures and read-only method selection. Fixture method logs contain method names only.
 - Targeted independent static review found the four findings above resolved.
 
 Task 2 does not establish compatibility with every XCP-ng version or restore the complete legacy Diagnostics catalog. The API returns source information and explicit read/dependency warnings; richer diagnostic workflows still need their own mapping. Performance/RRD remains Task 4. Draft performance code is compiled as part of the shared crate, but no live RRD endpoint has been queried in this task.
 
-No live host calls, production changes, application restart or UI work were performed in Task 2. Task 3 remains unstarted pending user confirmation.
+Task 3 is now implemented in the native client as a host detail object tab and was exercised read-only against `192.168.8.170`. Full RRD graph parity and additional XCP-ng version qualification remain pending.

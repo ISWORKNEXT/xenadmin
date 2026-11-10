@@ -1,7 +1,0 @@
-{
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "main-window",
-  "description": "Main local application window",
-  "windows": ["main"],
-  "permissions": ["core:default"]
-}

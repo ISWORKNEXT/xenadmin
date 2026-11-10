@@ -1,15 +1,33 @@
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Frame, Layout, Margin, RichText, Sense, Stroke,
-    Ui, Vec2,
+    Align, Align2, Color32, CornerRadius, FontId, Frame, Layout, Margin, Rect, RichText, Sense,
+    Stroke, Ui, Vec2, pos2, vec2,
 };
 use xen_core::workspace::{ConnectionView, WorkspaceView};
+use xen_core::xapi::{Host, Network, Storage, VirtualMachine};
 
+use crate::format;
 use crate::state::{
-    ConnectState, Scope, UiAction, UiState, connected_connections, connection_id, connection_name,
-    connection_settings, connection_status, is_read_only,
+    ActionKind, ConnectState, ListKind, ObjectKey, UiAction, UiState, action_allowed,
+    connected_connections, connection_id, connection_inventory, connection_name,
+    connection_settings, connection_status, is_read_only, running_task,
 };
 use crate::theme::*;
 use crate::widgets;
+
+const TREE_WIDTH: f32 = 300.0;
+const ROW_HEIGHT: f32 = 24.0;
+
+#[derive(Clone, Copy)]
+enum TreeIcon {
+    Root,
+    Pool,
+    Host,
+    Vm,
+    Template,
+    Storage,
+    Network,
+    Tasks,
+}
 
 pub fn show(
     ui: &mut Ui,
@@ -18,55 +36,59 @@ pub fn show(
     actions: &mut Vec<UiAction>,
 ) {
     egui::Panel::left("sidebar")
-        .exact_size(244.0)
+        .exact_size(TREE_WIDTH)
         .resizable(false)
         .frame(
             Frame::NONE
                 .fill(panel())
                 .stroke(Stroke::new(1.0, border_soft()))
-                .inner_margin(Margin::symmetric(12, 10)),
+                .inner_margin(Margin::symmetric(10, 8)),
         )
         .show(ui, |ui| {
-            ui.add_space(2.0);
-            workspace_label(ui);
-            ui.add_space(12.0);
-            connections_header(ui, state, actions);
+            ui.spacing_mut().item_spacing.y = 1.0;
+            header(ui, state, workspace);
             ui.add_space(4.0);
-            all_connections_row(ui, state, workspace, actions);
-            ui.add_space(2.0);
+            let response =
+                widgets::search_field(ui, &mut state.tree_query, "Search infrastructure…");
+            if state.focus_search {
+                response.request_focus();
+                state.focus_search = false;
+            }
+            ui.add_space(4.0);
 
             egui::ScrollArea::vertical()
+                .id_salt("infrastructure-tree")
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
+                    let running = workspace
+                        .tasks
+                        .iter()
+                        .filter(|task| {
+                            matches!(task.status, xen_core::operations::TaskStatus::Running)
+                        })
+                        .count();
+                    root_row(ui, state, workspace, actions, running);
+                    ui.add_space(2.0);
                     for connection in &workspace.connections {
-                        connection_row(ui, state, connection, actions);
+                        pool_node(ui, state, workspace, connection, actions);
                     }
                 });
 
             ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
                 ui.add_space(2.0);
                 ui.label(
-                    RichText::new("Ctrl+K search   ·   F5 refresh")
+                    RichText::new("Ctrl+K search · F5 refresh · Ctrl+W close tab")
                         .monospace()
-                        .size(9.0)
+                        .size(8.5)
                         .color(dim_fg()),
                 );
             });
         });
 }
 
-fn workspace_label(ui: &mut Ui) {
+fn header(ui: &mut Ui, state: &mut UiState, workspace: &WorkspaceView) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new("WORKSPACE").size(9.0).color(dim_fg()));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            widgets::badge(ui, "MULTI-HOST", cyan());
-        });
-    });
-}
-
-fn connections_header(ui: &mut Ui, state: &mut UiState, _actions: &mut Vec<UiAction>) {
-    ui.horizontal(|ui| {
-        ui.label(RichText::new("CONNECTIONS").size(9.0).color(dim_fg()));
+        ui.label(RichText::new("INFRASTRUCTURE").size(9.0).color(dim_fg()));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if ui
                 .add(
@@ -77,249 +99,903 @@ fn connections_header(ui: &mut Ui, state: &mut UiState, _actions: &mut Vec<UiAct
             {
                 state.connect = Some(ConnectState::empty());
             }
+            ui.label(
+                RichText::new(format!(
+                    "{}/{}",
+                    connected_connections(workspace).len(),
+                    workspace.connections.len()
+                ))
+                .monospace()
+                .size(9.0)
+                .color(dim_fg()),
+            );
         });
     });
 }
 
-fn all_connections_row(
+fn root_row(
     ui: &mut Ui,
     state: &mut UiState,
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
+    running: usize,
 ) {
-    let connected = connected_connections(workspace).len();
-    let total = workspace.connections.len();
-    let selected = state.scope == Scope::All;
-
-    let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 30.0), Sense::click());
-    let hovered = response.hovered();
-    if selected || hovered {
-        ui.painter().rect_filled(
-            rect,
-            CornerRadius::same(7),
-            if selected { panel_3() } else { panel_2() },
-        );
+    let selected = state
+        .object_tabs
+        .get(state.active_tab)
+        .is_some_and(|tab| tab.key == ObjectKey::Home);
+    let (main, _) = tree_row(
+        ui,
+        "root",
+        0,
+        "Infrastructure",
+        TreeIcon::Root,
+        selected,
+        false,
+        true,
+        Some(format!(
+            "{}/{}",
+            connected_connections(workspace).len(),
+            workspace.connections.len()
+        )),
+    );
+    if main.clicked() {
+        actions.push(UiAction::OpenObject {
+            key: ObjectKey::Home,
+            title: "Home".into(),
+        });
     }
-    ui.painter().text(
-        egui::pos2(rect.left() + 14.0, rect.center().y),
-        Align2::LEFT_CENTER,
-        "All connections",
-        FontId::proportional(12.0),
-        if selected || hovered {
-            fg()
-        } else {
-            muted_fg()
-        },
+    main.context_menu(|ui| {
+        if ui.button("Home").clicked() {
+            actions.push(UiAction::OpenObject {
+                key: ObjectKey::Home,
+                title: "Home".into(),
+            });
+            ui.close();
+        }
+        if ui.button("Activity & tasks").clicked() {
+            actions.push(UiAction::OpenObject {
+                key: ObjectKey::Tasks,
+                title: "Activity & tasks".into(),
+            });
+            ui.close();
+        }
+        ui.separator();
+        if ui.button("Refresh all").clicked() {
+            actions.push(UiAction::Refresh(None));
+            ui.close();
+        }
+        if ui.button("Add connection").clicked() {
+            state.connect = Some(ConnectState::empty());
+            ui.close();
+        }
+    });
+
+    let tasks_selected = state
+        .object_tabs
+        .get(state.active_tab)
+        .is_some_and(|tab| tab.key == ObjectKey::Tasks);
+    let (tasks, _) = tree_row(
+        ui,
+        "tasks",
+        0,
+        "Activity & tasks",
+        TreeIcon::Tasks,
+        tasks_selected,
+        false,
+        true,
+        (running > 0).then(|| running.to_string()),
     );
-    ui.painter().text(
-        egui::pos2(rect.right() - 10.0, rect.center().y),
-        Align2::RIGHT_CENTER,
-        format!("{connected}/{total}"),
-        FontId::monospace(9.5),
-        dim_fg(),
-    );
-    if response.clicked() {
-        actions.push(UiAction::SetScope(Scope::All));
+    if tasks.clicked() {
+        actions.push(UiAction::OpenObject {
+            key: ObjectKey::Tasks,
+            title: "Activity & tasks".into(),
+        });
     }
 }
 
-fn connection_row(
+fn pool_node(
     ui: &mut Ui,
     state: &mut UiState,
+    workspace: &WorkspaceView,
     connection: &ConnectionView,
     actions: &mut Vec<UiAction>,
 ) {
     let id = connection_id(connection).to_owned();
-    let selected = state.scope == Scope::Connection(id.clone());
-    let expanded = state.expanded.contains(&id);
+    let name = connection_name(connection);
     let status = connection_status(connection);
     let read_only = is_read_only(connection);
-    let name = connection_name(connection);
+    let node_id = format!("pool:{id}");
+    let expanded = tree_open(state, &node_id);
+    let selected = state
+        .object_tabs
+        .get(state.active_tab)
+        .is_some_and(|tab| matches!(&tab.key, ObjectKey::Pool(cid) if cid == &id));
+    let needle = state.tree_query.trim().to_lowercase();
+    let pool_matches = needle.is_empty() || name.to_lowercase().contains(&needle);
 
-    let frame = Frame::NONE
-        .fill(if selected {
-            panel_3()
-        } else {
-            Color32::TRANSPARENT
+    let inventory = connection_inventory(connection);
+    let hosts: Vec<&Host> = inventory
+        .map(|inventory| {
+            inventory
+                .hosts
+                .iter()
+                .filter(|host| {
+                    pool_matches
+                        || needle.is_empty()
+                        || host.name.to_lowercase().contains(&needle)
+                        || host.address.to_lowercase().contains(&needle)
+                })
+                .collect()
         })
-        .corner_radius(CornerRadius::same(7))
-        .inner_margin(Margin::symmetric(6, 4));
-    frame.show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 4.0;
-            let (chevron_rect, chevron) =
-                ui.allocate_exact_size(Vec2::new(14.0, 18.0), Sense::click());
-            let center = chevron_rect.center();
-            let color = if chevron.hovered() { fg() } else { dim_fg() };
-            let stroke = Stroke::new(1.3, color);
-            if expanded {
-                ui.painter().line_segment(
-                    [
-                        egui::pos2(center.x - 3.0, center.y - 1.5),
-                        egui::pos2(center.x, center.y + 1.5),
-                    ],
-                    stroke,
-                );
-                ui.painter().line_segment(
-                    [
-                        egui::pos2(center.x, center.y + 1.5),
-                        egui::pos2(center.x + 3.0, center.y - 1.5),
-                    ],
-                    stroke,
-                );
-            } else {
-                ui.painter().line_segment(
-                    [
-                        egui::pos2(center.x - 1.5, center.y - 3.0),
-                        egui::pos2(center.x + 1.5, center.y),
-                    ],
-                    stroke,
-                );
-                ui.painter().line_segment(
-                    [
-                        egui::pos2(center.x + 1.5, center.y),
-                        egui::pos2(center.x - 1.5, center.y + 3.0),
-                    ],
-                    stroke,
-                );
-            }
-            if chevron.clicked() {
-                actions.push(UiAction::ToggleExpand(id.clone()));
-            }
-            widgets::dot(ui, widgets::connection_color(status), 7.0);
-            let label =
-                ui.add(
-                    egui::Label::new(RichText::new(&name).size(11.5).color(
-                        if status == "offline" {
-                            muted_fg()
-                        } else {
-                            fg()
-                        },
-                    ))
-                    .truncate()
-                    .sense(Sense::click()),
-                );
-            if label.clicked() {
-                actions.push(UiAction::SetScope(Scope::Connection(id.clone())));
-            }
-            if read_only {
-                ui.label(RichText::new("RO").size(7.5).color(dim_fg()))
-                    .on_hover_text("Read-only connection");
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                connection_menu(ui, state, connection, actions);
-            });
-        });
-    });
+        .unwrap_or_default();
+    let vms: Vec<&VirtualMachine> = inventory
+        .map(|inventory| {
+            inventory
+                .vms
+                .iter()
+                .filter(|vm| {
+                    pool_matches
+                        || needle.is_empty()
+                        || vm.name.to_lowercase().contains(&needle)
+                        || vm.uuid.to_lowercase().contains(&needle)
+                        || vm.host_name.to_lowercase().contains(&needle)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let templates: Vec<&VirtualMachine> = inventory
+        .map(|inventory| {
+            inventory
+                .templates
+                .iter()
+                .filter(|vm| {
+                    pool_matches || needle.is_empty() || vm.name.to_lowercase().contains(&needle)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let storage: Vec<&Storage> = inventory
+        .map(|inventory| {
+            inventory
+                .storage
+                .iter()
+                .filter(|sr| {
+                    let hidden = sr.storage_type == "udev"
+                        || sr.storage_type == "tmpfs"
+                        || sr.name.starts_with("__gui__")
+                        || sr.name == "XenServer Tools"
+                        || sr.name == "XCP-ng Tools";
+                    !hidden
+                        && (pool_matches
+                            || needle.is_empty()
+                            || sr.name.to_lowercase().contains(&needle)
+                            || sr.storage_type.to_lowercase().contains(&needle))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let networks: Vec<&Network> = inventory
+        .map(|inventory| {
+            inventory
+                .networks
+                .iter()
+                .filter(|network| {
+                    network.bridge != "xenapi"
+                        && (pool_matches
+                            || needle.is_empty()
+                            || network.name.to_lowercase().contains(&needle))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
-    if expanded {
-        if let Some(inventory) = crate::state::connection_inventory(connection) {
-            for host in &inventory.hosts {
-                host_row(ui, state, &id, &host.reference, &host.name, actions);
+    let has_match = pool_matches
+        || !needle.is_empty()
+            && (!hosts.is_empty()
+                || !vms.is_empty()
+                || !templates.is_empty()
+                || !storage.is_empty()
+                || !networks.is_empty());
+    if !needle.is_empty() && !has_match {
+        return;
+    }
+
+    let (main, chevron) = tree_row(
+        ui,
+        &node_id,
+        0,
+        &name,
+        TreeIcon::Pool,
+        selected,
+        true,
+        expanded,
+        Some(if status == "offline" {
+            "offline".into()
+        } else if read_only {
+            "RO".into()
+        } else {
+            String::new()
+        }),
+    );
+    if let Some(chevron) = chevron
+        && chevron.clicked()
+    {
+        actions.push(UiAction::ToggleTreeNode(node_id.clone()));
+    }
+    if main.clicked() {
+        actions.push(UiAction::OpenObject {
+            key: ObjectKey::Pool(id.clone()),
+            title: name.clone(),
+        });
+    }
+    main.context_menu(|ui| {
+        if status == "offline" {
+            if ui.button("Connect to this host").clicked() {
+                state.connect = Some(ConnectState::from_profile(
+                    id.clone(),
+                    connection_settings(connection).clone(),
+                ));
+                ui.close();
+            }
+        } else {
+            if ui.button("Refresh inventory").clicked() {
+                actions.push(UiAction::Refresh(Some(id.clone())));
+                ui.close();
+            }
+            if ui.button("Reconnect / edit").clicked() {
+                state.connect = Some(ConnectState::from_profile(
+                    id.clone(),
+                    connection_settings(connection).clone(),
+                ));
+                ui.close();
+            }
+            if ui.button("Disconnect").clicked() {
+                actions.push(UiAction::Disconnect(id.clone()));
+                ui.close();
+            }
+            ui.separator();
+            ui.add_enabled(false, egui::Button::new("Disconnect before removing"));
+        }
+        if status == "offline" {
+            ui.separator();
+            if ui.button("Remove saved connection").clicked() {
+                actions.push(UiAction::ConfirmRemove(id.clone()));
+                ui.close();
             }
         }
-        if matches!(connection, ConnectionView::Offline { .. }) {
-            ui.horizontal(|ui| {
-                ui.add_space(24.0);
-                ui.label(
-                    RichText::new("Reconnect to load hosts")
-                        .size(10.0)
-                        .color(dim_fg()),
-                );
+    });
+
+    if !expanded {
+        return;
+    }
+
+    let groups = [
+        (
+            ListKind::Hosts,
+            "Hosts",
+            hosts.len(),
+            TreeIcon::Host,
+            hosts.is_empty(),
+        ),
+        (
+            ListKind::Vms,
+            "Virtual machines",
+            vms.len(),
+            TreeIcon::Vm,
+            vms.is_empty(),
+        ),
+        (
+            ListKind::Templates,
+            "Templates",
+            templates.len(),
+            TreeIcon::Template,
+            templates.is_empty(),
+        ),
+        (
+            ListKind::Storage,
+            "Storage",
+            storage.len(),
+            TreeIcon::Storage,
+            storage.is_empty(),
+        ),
+        (
+            ListKind::Networks,
+            "Networks",
+            networks.len(),
+            TreeIcon::Network,
+            networks.is_empty(),
+        ),
+    ];
+
+    for (kind, title, count, icon, empty) in groups {
+        if !needle.is_empty() && empty {
+            continue;
+        }
+        let group_id = format!("group:{kind:?}:{id}");
+        let group_open = tree_open(state, &group_id);
+        let group_selected = state.object_tabs.get(state.active_tab).is_some_and(|tab| {
+            matches!(
+                &tab.key,
+                ObjectKey::List {
+                    connection_id: Some(cid),
+                    kind: list_kind,
+                    host_ref: None,
+                } if cid == &id && *list_kind == kind
+            )
+        });
+        let (group_main, group_chevron) = tree_row(
+            ui,
+            &group_id,
+            1,
+            title,
+            icon,
+            group_selected,
+            true,
+            group_open,
+            Some(count.to_string()),
+        );
+        if let Some(chevron) = group_chevron
+            && chevron.clicked()
+        {
+            actions.push(UiAction::ToggleTreeNode(group_id.clone()));
+        }
+        if group_main.clicked() {
+            actions.push(UiAction::OpenObject {
+                key: ObjectKey::List {
+                    connection_id: Some(id.clone()),
+                    kind,
+                    host_ref: None,
+                },
+                title: title.into(),
             });
+        }
+        if !group_open {
+            continue;
+        }
+
+        match kind {
+            ListKind::Hosts => {
+                for host in &hosts {
+                    host_leaf(ui, state, workspace, &id, host, actions);
+                }
+            }
+            ListKind::Vms => {
+                for vm in &vms {
+                    vm_leaf(ui, state, workspace, &id, vm, actions);
+                }
+            }
+            ListKind::Templates => {
+                for template in &templates {
+                    template_leaf(ui, state, workspace, &id, template, actions);
+                }
+            }
+            ListKind::Storage => {
+                for sr in &storage {
+                    storage_leaf(ui, state, &id, sr, actions);
+                }
+            }
+            ListKind::Networks => {
+                for network in &networks {
+                    network_leaf(ui, state, &id, network, actions);
+                }
+            }
         }
     }
 }
 
-fn host_row(
+fn host_leaf(
+    ui: &mut Ui,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    connection_id: &str,
+    host: &Host,
+    actions: &mut Vec<UiAction>,
+) {
+    let key = ObjectKey::Host {
+        connection_id: connection_id.to_owned(),
+        host_ref: host.reference.clone(),
+    };
+    let selected = active_key(state).is_some_and(|active| *active == key);
+    let (main, _) = tree_row(
+        ui,
+        &format!("host:{connection_id}:{}", host.reference),
+        2,
+        &host.name,
+        TreeIcon::Host,
+        selected,
+        false,
+        true,
+        (!host.enabled).then(|| "disabled".into()),
+    );
+    if main.clicked() {
+        actions.push(UiAction::OpenObject {
+            key,
+            title: host.name.clone(),
+        });
+    }
+    main.context_menu(|ui| {
+        if ui.button("Open host details").clicked() {
+            actions.push(UiAction::OpenObject {
+                key: ObjectKey::Host {
+                    connection_id: connection_id.to_owned(),
+                    host_ref: host.reference.clone(),
+                },
+                title: host.name.clone(),
+            });
+            ui.close();
+        }
+        if ui.button("Refresh inventory").clicked() {
+            actions.push(UiAction::Refresh(Some(connection_id.to_owned())));
+            ui.close();
+        }
+        ui.separator();
+        ui.label(
+            RichText::new(format!("{} · {}", host.address, host.version))
+                .size(9.0)
+                .color(dim_fg()),
+        );
+        let _ = workspace;
+    });
+}
+
+fn vm_leaf(
+    ui: &mut Ui,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    connection_id: &str,
+    vm: &VirtualMachine,
+    actions: &mut Vec<UiAction>,
+) {
+    let key = ObjectKey::Vm {
+        connection_id: connection_id.to_owned(),
+        vm_uuid: vm.uuid.clone(),
+    };
+    let selected = active_key(state).is_some_and(|active| *active == key);
+    let power = widgets::power_style(&vm.power_state).1;
+    let task = running_task(workspace, connection_id, &vm.uuid);
+    let (main, _) = tree_row_colored(
+        ui,
+        &format!("vm:{connection_id}:{}", vm.uuid),
+        2,
+        &vm.name,
+        TreeIcon::Vm,
+        selected,
+        false,
+        true,
+        None,
+        power,
+        task,
+    );
+    if main.clicked() {
+        actions.push(UiAction::OpenObject {
+            key,
+            title: vm.name.clone(),
+        });
+    }
+    main.context_menu(|ui| {
+        if ui.button("Open").clicked() {
+            actions.push(UiAction::OpenObject {
+                key: ObjectKey::Vm {
+                    connection_id: connection_id.to_owned(),
+                    vm_uuid: vm.uuid.clone(),
+                },
+                title: vm.name.clone(),
+            });
+            ui.close();
+        }
+        ui.separator();
+        let read_only = workspace
+            .connections
+            .iter()
+            .find(|connection| crate::state::connection_id(connection) == connection_id)
+            .is_some_and(is_read_only);
+        if read_only {
+            ui.label(RichText::new("Read-only").size(9.0).color(amber()));
+        }
+        for kind in ActionKind::MENU {
+            let allowed = action_allowed(workspace, connection_id, vm, kind.operation());
+            let color = if kind.destructive() { red() } else { fg() };
+            if ui
+                .add_enabled(
+                    allowed,
+                    egui::Button::new(RichText::new(kind.label()).size(10.5).color(color))
+                        .frame(false),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    kind,
+                    vec![(connection_id.to_owned(), vm.uuid.clone())],
+                ));
+                ui.close();
+            }
+        }
+    });
+}
+
+fn template_leaf(
+    ui: &mut Ui,
+    state: &mut UiState,
+    _workspace: &WorkspaceView,
+    connection_id: &str,
+    template: &VirtualMachine,
+    actions: &mut Vec<UiAction>,
+) {
+    let key = ObjectKey::Template {
+        connection_id: connection_id.to_owned(),
+        vm_uuid: template.uuid.clone(),
+    };
+    let selected = active_key(state).is_some_and(|active| *active == key);
+    let (main, _) = tree_row(
+        ui,
+        &format!("template:{connection_id}:{}", template.uuid),
+        2,
+        &template.name,
+        TreeIcon::Template,
+        selected,
+        false,
+        true,
+        None,
+    );
+    if main.clicked() {
+        actions.push(UiAction::OpenObject {
+            key,
+            title: template.name.clone(),
+        });
+    }
+}
+
+fn storage_leaf(
     ui: &mut Ui,
     state: &mut UiState,
     connection_id: &str,
-    host_ref: &str,
-    name: &str,
+    sr: &Storage,
     actions: &mut Vec<UiAction>,
 ) {
-    let selected = matches!(&state.scope, Scope::Host { connection_id: current, host_ref: current_host }
-        if current == connection_id && current_host == host_ref);
-    let width = ui.available_width();
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 26.0), Sense::click());
-    if selected || response.hovered() {
-        ui.painter().rect_filled(
-            rect,
-            CornerRadius::same(6),
-            if selected { panel_3() } else { panel_2() },
+    let key = ObjectKey::Storage {
+        connection_id: connection_id.to_owned(),
+        sr_uuid: sr.uuid.clone(),
+    };
+    let selected = active_key(state).is_some_and(|active| *active == key);
+    let badge = if sr.total == 0 {
+        None
+    } else {
+        Some(format!("{:.0}%", format::percent(sr.used, sr.total)))
+    };
+    let (main, _) = tree_row(
+        ui,
+        &format!("sr:{connection_id}:{}", sr.uuid),
+        2,
+        &sr.name,
+        TreeIcon::Storage,
+        selected,
+        false,
+        true,
+        badge,
+    );
+    if main.clicked() {
+        actions.push(UiAction::OpenObject {
+            key,
+            title: sr.name.clone(),
+        });
+    }
+}
+
+fn network_leaf(
+    ui: &mut Ui,
+    state: &mut UiState,
+    connection_id: &str,
+    network: &Network,
+    actions: &mut Vec<UiAction>,
+) {
+    let key = ObjectKey::Network {
+        connection_id: connection_id.to_owned(),
+        network_uuid: network.uuid.clone(),
+    };
+    let selected = active_key(state).is_some_and(|active| *active == key);
+    let (main, _) = tree_row(
+        ui,
+        &format!("net:{connection_id}:{}", network.uuid),
+        2,
+        &network.name,
+        TreeIcon::Network,
+        selected,
+        false,
+        true,
+        None,
+    );
+    if main.clicked() {
+        actions.push(UiAction::OpenObject {
+            key,
+            title: network.name.clone(),
+        });
+    }
+}
+
+fn active_key(state: &UiState) -> Option<&ObjectKey> {
+    state.object_tabs.get(state.active_tab).map(|tab| &tab.key)
+}
+
+fn tree_open(state: &UiState, id: &str) -> bool {
+    !state.tree_query.trim().is_empty() || state.tree_expanded.contains(id)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn tree_row(
+    ui: &mut Ui,
+    id: &str,
+    depth: usize,
+    label: &str,
+    icon: TreeIcon,
+    selected: bool,
+    has_children: bool,
+    expanded: bool,
+    badge: Option<String>,
+) -> (egui::Response, Option<egui::Response>) {
+    tree_row_colored(
+        ui,
+        id,
+        depth,
+        label,
+        icon,
+        selected,
+        has_children,
+        expanded,
+        badge,
+        muted_fg(),
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn tree_row_colored(
+    ui: &mut Ui,
+    id: &str,
+    depth: usize,
+    label: &str,
+    icon: TreeIcon,
+    selected: bool,
+    has_children: bool,
+    expanded: bool,
+    badge: Option<String>,
+    icon_color: Color32,
+    task_dot: bool,
+) -> (egui::Response, Option<egui::Response>) {
+    let width = ui.available_width().max(120.0);
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::hover());
+    let indent = depth as f32 * 14.0;
+    let chevron_rect = Rect::from_min_size(
+        pos2(rect.left() + indent, rect.top()),
+        vec2(16.0, ROW_HEIGHT),
+    );
+    let main_rect = Rect::from_min_max(
+        pos2(chevron_rect.right(), rect.top()),
+        pos2(rect.right(), rect.bottom()),
+    );
+    let chevron = has_children.then(|| {
+        ui.interact(
+            chevron_rect,
+            egui::Id::unique(("tree-chevron", id)),
+            Sense::click(),
+        )
+    });
+    let response = ui.interact(
+        main_rect,
+        egui::Id::unique(("tree-row", id)),
+        Sense::click(),
+    );
+    let hovered = response.hovered() || chevron.as_ref().is_some_and(|c| c.hovered());
+    let painter = ui.painter();
+    if selected {
+        painter.rect_filled(rect, CornerRadius::same(5), panel_3());
+        painter.rect_filled(
+            Rect::from_min_size(
+                pos2(rect.left() + indent - 4.0, rect.top() + 4.0),
+                vec2(2.0, ROW_HEIGHT - 8.0),
+            ),
+            CornerRadius::same(1),
+            accent(),
+        );
+    } else if hovered {
+        painter.rect_filled(rect, CornerRadius::same(5), panel_2());
+    }
+
+    if let Some(chevron) = &chevron {
+        let center = chevron_rect.center();
+        let color = if chevron.hovered() { fg() } else { dim_fg() };
+        let stroke = Stroke::new(1.2, color);
+        if expanded {
+            painter.line_segment(
+                [
+                    pos2(center.x - 3.0, center.y - 1.5),
+                    pos2(center.x, center.y + 1.5),
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    pos2(center.x, center.y + 1.5),
+                    pos2(center.x + 3.0, center.y - 1.5),
+                ],
+                stroke,
+            );
+        } else {
+            painter.line_segment(
+                [
+                    pos2(center.x - 1.5, center.y - 3.0),
+                    pos2(center.x + 1.5, center.y),
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    pos2(center.x + 1.5, center.y),
+                    pos2(center.x - 1.5, center.y + 3.0),
+                ],
+                stroke,
+            );
+        }
+    }
+
+    let icon_rect = Rect::from_min_size(
+        pos2(rect.left() + indent + 17.0, rect.top() + 6.0),
+        Vec2::splat(12.0),
+    );
+    paint_icon(
+        painter,
+        icon_rect,
+        icon,
+        if selected { accent() } else { icon_color },
+    );
+    let text_color = if selected { fg() } else { muted_fg() };
+    painter.text(
+        pos2(icon_rect.right() + 6.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        FontId::proportional(11.0),
+        text_color,
+    );
+    if task_dot {
+        painter.circle_filled(pos2(rect.right() - 8.0, rect.center().y), 2.5, amber());
+    } else if let Some(badge) = badge
+        && !badge.is_empty()
+    {
+        painter.text(
+            pos2(rect.right() - 8.0, rect.center().y),
+            Align2::RIGHT_CENTER,
+            badge,
+            FontId::monospace(8.5),
+            if selected { muted_fg() } else { dim_fg() },
         );
     }
-    let dot_center = egui::pos2(rect.left() + 28.0, rect.center().y);
-    ui.painter()
-        .circle_filled(dot_center, 2.5, if selected { accent() } else { dim_fg() });
-    ui.painter().text(
-        egui::pos2(rect.left() + 38.0, rect.center().y),
-        Align2::LEFT_CENTER,
-        name,
-        FontId::proportional(11.0),
-        if selected || response.hovered() {
-            fg()
-        } else {
-            muted_fg()
-        },
-    );
-    if response.clicked() {
-        actions.push(UiAction::SetScope(Scope::Host {
-            connection_id: connection_id.to_owned(),
-            host_ref: host_ref.to_owned(),
-        }));
-    }
+    (response, chevron)
 }
 
-fn connection_menu(
-    ui: &mut Ui,
-    state: &mut UiState,
-    connection: &ConnectionView,
-    actions: &mut Vec<UiAction>,
-) {
-    ui.menu_button(RichText::new("...").size(11.0).color(dim_fg()), |ui| {
-        connection_menu_items(ui, state, connection, actions);
-    });
-}
-
-fn connection_menu_items(
-    ui: &mut Ui,
-    state: &mut UiState,
-    connection: &ConnectionView,
-    actions: &mut Vec<UiAction>,
-) {
-    let id = connection_id(connection).to_owned();
-    let status = connection_status(connection);
-    if ui.button("Refresh inventory").clicked() {
-        actions.push(UiAction::Refresh(Some(id.clone())));
-        ui.close();
-    }
-    let label = if status == "offline" {
-        "Connect to this host"
-    } else {
-        "Reconnect / edit"
-    };
-    if ui.button(label).clicked() {
-        state.connect = Some(ConnectState::from_profile(
-            id.clone(),
-            connection_settings(connection).clone(),
-        ));
-        ui.close();
-    }
-    if status != "offline" && ui.button("Disconnect").clicked() {
-        actions.push(UiAction::Disconnect(id.clone()));
-        ui.close();
-    }
-    ui.separator();
-    if status == "offline" {
-        if ui.button("Remove saved connection").clicked() {
-            actions.push(UiAction::ConfirmRemove(id.clone()));
-            ui.close();
+fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, color: Color32) {
+    let stroke = Stroke::new(1.1, color);
+    let center = rect.center();
+    match icon {
+        TreeIcon::Root => {
+            for offset in [-4.0, 0.0, 4.0] {
+                painter.line_segment(
+                    [
+                        pos2(rect.left() + 1.0, center.y + offset),
+                        pos2(rect.right() - 1.0, center.y + offset),
+                    ],
+                    stroke,
+                );
+            }
         }
-    } else {
-        ui.add_enabled(false, egui::Button::new("Disconnect before removing"));
+        TreeIcon::Pool => {
+            painter.rect_stroke(
+                rect.shrink(1.5),
+                CornerRadius::same(3),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+            painter.circle_filled(center, 1.6, color);
+        }
+        TreeIcon::Host => {
+            for offset in [-3.5, 0.0, 3.5] {
+                painter.line_segment(
+                    [
+                        pos2(rect.left() + 2.0, center.y + offset),
+                        pos2(rect.right() - 3.0, center.y + offset),
+                    ],
+                    stroke,
+                );
+                painter.circle_filled(pos2(rect.right() - 1.5, center.y + offset), 0.9, color);
+            }
+        }
+        TreeIcon::Vm => {
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    pos2(rect.left() + 1.0, rect.top() + 2.0),
+                    pos2(rect.right() - 1.0, rect.bottom() - 4.0),
+                ),
+                CornerRadius::same(2),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+            painter.line_segment(
+                [
+                    pos2(center.x - 2.5, rect.bottom() - 1.0),
+                    pos2(center.x + 2.5, rect.bottom() - 1.0),
+                ],
+                stroke,
+            );
+        }
+        TreeIcon::Template => {
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    pos2(rect.left() + 3.0, rect.top() + 1.0),
+                    pos2(rect.right() - 1.0, rect.bottom() - 3.0),
+                ),
+                CornerRadius::same(2),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    pos2(rect.left() + 1.0, rect.top() + 3.0),
+                    pos2(rect.right() - 3.0, rect.bottom() - 1.0),
+                ),
+                CornerRadius::same(2),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+        }
+        TreeIcon::Storage => {
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    pos2(rect.left() + 1.0, rect.top() + 1.0),
+                    pos2(rect.right() - 1.0, rect.bottom() - 1.0),
+                ),
+                CornerRadius::same(3),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+            for offset in [-2.0, 2.0] {
+                painter.line_segment(
+                    [
+                        pos2(rect.left() + 2.0, center.y + offset),
+                        pos2(rect.right() - 2.0, center.y + offset),
+                    ],
+                    stroke,
+                );
+            }
+        }
+        TreeIcon::Network => {
+            for (dx, dy) in [(-4.0, 3.0), (4.0, 3.0), (0.0, -4.0)] {
+                painter.circle_filled(pos2(center.x + dx, center.y + dy), 1.5, color);
+            }
+            painter.line_segment(
+                [
+                    pos2(center.x - 3.0, center.y + 2.0),
+                    pos2(center.x, center.y - 3.0),
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    pos2(center.x, center.y - 3.0),
+                    pos2(center.x + 3.0, center.y + 2.0),
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    pos2(center.x - 4.0, center.y + 3.0),
+                    pos2(center.x + 4.0, center.y + 3.0),
+                ],
+                stroke,
+            );
+        }
+        TreeIcon::Tasks => {
+            painter.circle_stroke(center, 4.5, stroke);
+            painter.line_segment([center, pos2(center.x, center.y - 2.2)], stroke);
+            painter.line_segment([center, pos2(center.x + 2.0, center.y + 1.0)], stroke);
+        }
     }
 }
