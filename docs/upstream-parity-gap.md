@@ -105,7 +105,7 @@
 
 ### 5. Networking
 
-- Create network (มีแล้ว), bond, VLAN, SR-IOV, CHIN; destroy network (มีแล้ว)
+- Create network/bond/VLAN (มีแล้ว), destroy network พร้อม VLAN/bond cleanup (มีแล้ว); SR-IOV/CHIN ยังไม่มี
 - Secondary management purpose
 - PIF rescan/plug/unplug, PIF properties
 - VIF edit network/locking mode (create/delete/plug/unplug มีแล้ว)

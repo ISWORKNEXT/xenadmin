@@ -6,6 +6,7 @@ use chrono::{DateTime, Local};
 use crate::config::{GroupBy, SavedSearch};
 use xen_core::{
     host::{DataSection, HostDetails, InfoGroup},
+    network::PifSummary,
     operations::{TaskStatus, VmAction},
     performance::HostPerformance,
     vm::{SrVdi, VdiSummary, VmDetails, VmIso},
@@ -696,6 +697,29 @@ impl ConsoleState {
     }
 }
 
+pub struct BondCreateDialog {
+    pub connection_id: String,
+    pub name: String,
+    pub mode: String,
+    pub mtu: String,
+    pub autoplug: bool,
+    pub members: HashSet<String>,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct VlanCreateDialog {
+    pub connection_id: String,
+    pub pif_uuid: Option<String>,
+    pub tag: String,
+    pub name: String,
+    pub description: String,
+    pub mtu: String,
+    pub autoplug: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct NetworkCreateDialog {
     pub connection_id: String,
     pub name: String,
@@ -950,6 +974,13 @@ pub struct UiState {
     pub sr_create_dialog: Option<SrCreateDialog>,
     pub sr_reattach_dialog: Option<SrReattachDialog>,
     pub network_create_dialog: Option<NetworkCreateDialog>,
+    pub bond_create_dialog: Option<BondCreateDialog>,
+    pub vlan_create_dialog: Option<VlanCreateDialog>,
+    pub pif_catalog: Vec<PifSummary>,
+    pub pif_catalog_connection: Option<String>,
+    pub pif_catalog_loading: bool,
+    pub pif_catalog_error: Option<String>,
+    pub pif_catalog_seq: u64,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
     pub query: String,
     pub group_by: GroupBy,
@@ -1028,6 +1059,13 @@ impl Default for UiState {
             sr_create_dialog: None,
             sr_reattach_dialog: None,
             network_create_dialog: None,
+            bond_create_dialog: None,
+            vlan_create_dialog: None,
+            pif_catalog: Vec::new(),
+            pif_catalog_connection: None,
+            pif_catalog_loading: false,
+            pif_catalog_error: None,
+            pif_catalog_seq: 0,
             network_destroy_confirm: None,
             query: String::new(),
             group_by: GroupBy::None,
@@ -1120,6 +1158,21 @@ pub enum UiAction {
         connection_id: String,
         message_uuid: String,
     },
+    LoadPifCatalog {
+        seq: u64,
+        connection_id: String,
+    },
+    SetPifPlugged {
+        connection_id: String,
+        pif_uuid: String,
+        plugged: bool,
+    },
+    OpenBondCreate,
+    CloseBondCreate,
+    SaveBondCreate,
+    OpenVlanCreate,
+    CloseVlanCreate,
+    SaveVlanCreate,
     OpenNetworkCreate,
     CloseNetworkCreate,
     SaveNetwork,

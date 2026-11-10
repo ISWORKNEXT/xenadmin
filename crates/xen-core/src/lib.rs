@@ -1,6 +1,7 @@
 pub mod console;
 pub mod health;
 pub mod host;
+pub mod network;
 pub mod operations;
 pub mod performance;
 pub mod transport;

@@ -38,7 +38,7 @@ dependency.
 
 | Alerts | Implemented (basic) | Priority 1–4 XenAPI messages with dismiss; diagnostics/health checks are still separate |
 | Storage repository actions | Implemented | Create file-backed SR, reattach/detach, scan/TRIM/destroy, user-VDI inventory and safe deletion |
-| Network actions | Implemented (basic) | Create internal networks and confirmed destroy from the Networks page |
+| Network actions | Implemented | Create internal networks, bonds and VLANs; destroy cleans dependent VLAN/bond PIFs; physical PIF plug/unplug with management protection |
 | Host performance | Implemented | Upstream-style CPU (all cores), memory and network graphs with legends; 15 min / 1 h / 24 h, search, remaining metrics and gap handling |
 | Live inventory | Implemented | XenAPI event stream applied to a raw-record cache; heartbeat, reconnect and coordinator redirect |
 | VM performance | Implemented | VM RRD with per-vCPU CPU graph, memory/network graphs, remaining metrics and the same ranges |

@@ -53,6 +53,7 @@ fn main() -> eframe::Result {
     let startup_vm = argument("--vm");
     let startup_health = std::env::args().any(|arg| arg == "--health");
     let startup_sr = argument("--sr");
+    let startup_network = argument("--network");
     let startup_search = argument("--search");
     let startup_group_by =
         argument("--group-by").and_then(|value| config::GroupBy::from_key(&value));
@@ -90,6 +91,7 @@ fn main() -> eframe::Result {
                     vm_tab: startup_vm_tab,
                     health: startup_health,
                     sr: startup_sr,
+                    network: startup_network,
                     search: startup_search,
                     group_by: startup_group_by,
                     saved_search: startup_saved_search,

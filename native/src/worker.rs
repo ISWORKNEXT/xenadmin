@@ -85,6 +85,32 @@ pub enum Command {
         connection_id: String,
         network_uuid: String,
     },
+    PifCatalog {
+        seq: u64,
+        connection_id: String,
+    },
+    SetPifPlugged {
+        connection_id: String,
+        pif_uuid: String,
+        plugged: bool,
+    },
+    CreateBond {
+        connection_id: String,
+        name: String,
+        members: Vec<String>,
+        mode: String,
+        mtu: u64,
+        autoplug: bool,
+    },
+    CreateVlan {
+        connection_id: String,
+        pif_uuid: String,
+        tag: i64,
+        name: String,
+        description: String,
+        mtu: u64,
+        autoplug: bool,
+    },
     DeleteSnapshots {
         connection_id: String,
         vm_uuid: String,
@@ -292,6 +318,13 @@ pub enum Event {
     },
     NetworkChanged {
         action: String,
+        result: Result<(), String>,
+    },
+    PifCatalog {
+        seq: u64,
+        result: Result<Vec<xen_core::network::PifSummary>, String>,
+    },
+    PifChanged {
         result: Result<(), String>,
     },
     VmDetails {
@@ -576,6 +609,62 @@ fn dispatch(
                 let _ = events.send(Event::SrActionFinished {
                     sr_uuid,
                     action,
+                    result,
+                });
+            }
+            Command::PifCatalog { seq, connection_id } => {
+                let result = workspace.pif_catalog(&connection_id).await;
+                let _ = events.send(Event::PifCatalog { seq, result });
+            }
+            Command::SetPifPlugged {
+                connection_id,
+                pif_uuid,
+                plugged,
+            } => {
+                let result = workspace
+                    .set_pif_plugged(&connection_id, &pif_uuid, plugged)
+                    .await;
+                let _ = pif_uuid;
+                let _ = events.send(Event::PifChanged { result });
+            }
+            Command::CreateBond {
+                connection_id,
+                name,
+                members,
+                mode,
+                mtu,
+                autoplug,
+            } => {
+                let result = workspace
+                    .create_bond(&connection_id, name, members, mode, mtu, autoplug)
+                    .await;
+                let _ = events.send(Event::NetworkChanged {
+                    action: "bond_create".into(),
+                    result,
+                });
+            }
+            Command::CreateVlan {
+                connection_id,
+                pif_uuid,
+                tag,
+                name,
+                description,
+                mtu,
+                autoplug,
+            } => {
+                let result = workspace
+                    .create_vlan(
+                        &connection_id,
+                        &pif_uuid,
+                        tag,
+                        name,
+                        description,
+                        mtu,
+                        autoplug,
+                    )
+                    .await;
+                let _ = events.send(Event::NetworkChanged {
+                    action: "vlan_create".into(),
                     result,
                 });
             }

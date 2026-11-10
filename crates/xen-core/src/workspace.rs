@@ -12,6 +12,7 @@ use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
 use crate::{
+    network::PifSummary,
     operations::{TaskStatus, VmAction},
     vm::{VdiSummary, VmDetails},
     xapi::{ApiError, Connection, ConnectionSettings, Inventory, RawInventory},
@@ -384,6 +385,86 @@ impl Workspace {
         active
             .connection
             .change_cd(vm_uuid, vbd_uuid, iso_uuid.as_deref())
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn pif_catalog(&self, connection_id: &str) -> Result<Vec<PifSummary>, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .pif_catalog()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub async fn network_pifs(
+        &self,
+        connection_id: &str,
+        network_uuid: &str,
+    ) -> Result<Vec<PifSummary>, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .network_pifs(network_uuid)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub async fn set_pif_plugged(
+        &self,
+        connection_id: &str,
+        pif_uuid: &str,
+        plugged: bool,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .set_pif_plugged(pif_uuid, plugged)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn create_bond(
+        &self,
+        connection_id: &str,
+        name: String,
+        members: Vec<String>,
+        mode: String,
+        mtu: u64,
+        autoplug: bool,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_bond(&name, members, &mode, mtu, autoplug)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_vlan(
+        &self,
+        connection_id: &str,
+        pif_uuid: &str,
+        tag: i64,
+        name: String,
+        description: String,
+        mtu: u64,
+        autoplug: bool,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_vlan(pif_uuid, tag, &name, &description, mtu, autoplug)
             .await
             .map_err(|error| error.to_string())?;
         refresh_inventory_cache(&active).await

@@ -29,6 +29,8 @@ default and a persisted dark-theme toggle.
 - Change or eject CD/DVD media from the VM Storage tab, with a searchable list
   of ISO images from ISO storage repositories.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.
+- Manage physical interfaces on the network page (plug/unplug with management
+  protection), and create bonds or VLANs with validation.
 - Add, attach existing VDIs, move disks between storage repositories, resize
   and remove virtual disks while the VM is halted, change a data disk between
   RO/RW, toggle the bootable flag, hot-plug and unplug data disks on running
@@ -101,6 +103,7 @@ The executable is written to `target/release/xen-native`.
 --vm-tab general|performance|storage|network|ha|snapshots|console
 --health                  open the pool Health & diagnostics page
 --sr UUID                 open a storage repository page
+--network UUID            open a network page
 --search QUERY            prefill the VM/template search (e.g. power_state:running)
 --group-by none|connection|host|power|tag
 --saved-search NAME       apply a saved search on startup

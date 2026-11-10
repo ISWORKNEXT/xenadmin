@@ -364,9 +364,42 @@ pub fn network(
         actions,
     );
 
+    if state.pif_catalog_connection.as_deref() != Some(connection_id.as_str()) {
+        state.pif_catalog = Vec::new();
+        state.pif_catalog_error = None;
+        state.pif_catalog_connection = Some(connection_id.clone());
+        state.pif_catalog_loading = true;
+        state.pif_catalog_seq += 1;
+        actions.push(UiAction::LoadPifCatalog {
+            seq: state.pif_catalog_seq,
+            connection_id: connection_id.clone(),
+        });
+    }
+
     ui.horizontal(|ui| {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.menu_button(RichText::new("Manage network…").size(10.5), |ui| {
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection),
+                        egui::Button::new(RichText::new("Create bond…").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenBondCreate);
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection),
+                        egui::Button::new(RichText::new("Create VLAN…").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenVlanCreate);
+                    ui.close();
+                }
+                ui.separator();
                 if ui
                     .add_enabled(
                         !is_read_only(connection),
@@ -426,6 +459,154 @@ pub fn network(
                 false,
             );
         });
+    });
+
+    ui.add_space(8.0);
+    theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let pifs: Vec<&xen_core::network::PifSummary> = state
+            .pif_catalog
+            .iter()
+            .filter(|pif| pif.network_uuid == network.uuid)
+            .collect();
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Physical interfaces").size(15.0).strong());
+            widgets::badge(ui, pifs.len().to_string(), muted_fg());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add(egui::Button::new(RichText::new("Refresh").size(10.0)))
+                    .clicked()
+                {
+                    state.pif_catalog_connection = None;
+                }
+            });
+        });
+        ui.add_space(4.0);
+        if state.pif_catalog_loading {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(
+                    RichText::new("Loading interfaces…")
+                        .size(10.5)
+                        .color(muted_fg()),
+                );
+            });
+            return;
+        }
+        if let Some(error) = &state.pif_catalog_error {
+            ui.label(RichText::new(error).size(10.0).color(red()));
+            return;
+        }
+        if pifs.is_empty() {
+            ui.label(
+                RichText::new("No physical interfaces are attached to this network.")
+                    .size(10.5)
+                    .color(dim_fg()),
+            );
+            return;
+        }
+        TableBuilder::new(ui)
+            .id_salt("network-pifs")
+            .striped(true)
+            .cell_layout(Layout::left_to_right(Align::Center))
+            .column(Column::remainder().at_least(130.0))
+            .column(Column::exact(65.0))
+            .column(Column::initial(140.0))
+            .column(Column::exact(55.0))
+            .column(Column::exact(90.0))
+            .column(Column::exact(70.0))
+            .column(Column::exact(80.0))
+            .header(26.0, |mut header| {
+                for title in [
+                    "Host",
+                    "Device",
+                    "MAC",
+                    "VLAN",
+                    "Management",
+                    "Attached",
+                    "Actions",
+                ] {
+                    header.col(|ui| {
+                        ui.label(RichText::new(title).size(9.5).color(muted_fg()));
+                    });
+                }
+            })
+            .body(|body| {
+                body.rows(28.0, pifs.len(), |mut row| {
+                    let pif = pifs[row.index()];
+                    row.col(|ui| {
+                        ui.add(
+                            egui::Label::new(RichText::new(&pif.host_name).size(10.5)).truncate(),
+                        );
+                    });
+                    row.col(|ui| {
+                        ui.label(
+                            RichText::new(&pif.device)
+                                .monospace()
+                                .size(10.0)
+                                .color(muted_fg()),
+                        );
+                    });
+                    row.col(|ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&pif.mac)
+                                    .monospace()
+                                    .size(9.0)
+                                    .color(dim_fg()),
+                            )
+                            .truncate(),
+                        );
+                    });
+                    row.col(|ui| {
+                        ui.label(
+                            RichText::new(if pif.vlan > 0 {
+                                pif.vlan.to_string()
+                            } else {
+                                "—".into()
+                            })
+                            .size(9.5)
+                            .color(muted_fg()),
+                        );
+                    });
+                    row.col(|ui| {
+                        if pif.management {
+                            ui.label(RichText::new("Protected").size(9.0).color(amber()));
+                        } else {
+                            ui.label(RichText::new("—").size(9.5).color(dim_fg()));
+                        }
+                    });
+                    row.col(|ui| {
+                        ui.label(
+                            RichText::new(if pif.attached { "Yes" } else { "No" })
+                                .size(9.5)
+                                .color(if pif.attached { green() } else { dim_fg() }),
+                        );
+                    });
+                    row.col(|ui| {
+                        if is_read_only(connection) {
+                            ui.label(RichText::new("—").size(9.5).color(dim_fg()));
+                        } else if pif.management {
+                            ui.label(RichText::new("Protected").size(9.0).color(amber()));
+                        } else if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(if pif.attached { "Unplug" } else { "Plug" })
+                                        .size(9.5),
+                                )
+                                .small(),
+                            )
+                            .clicked()
+                        {
+                            actions.push(UiAction::SetPifPlugged {
+                                connection_id: connection_id.clone(),
+                                pif_uuid: pif.uuid.clone(),
+                                plugged: !pif.attached,
+                            });
+                        }
+                    });
+                });
+            });
     });
 }
 

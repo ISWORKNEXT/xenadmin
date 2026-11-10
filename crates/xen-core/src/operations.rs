@@ -391,6 +391,38 @@ impl Connection {
         if network["uuid"].as_str() != Some(network_uuid) {
             return Err(ApiError::Protocol);
         }
+        let (pifs, bonds) = tokio::join!(self.records("PIF"), self.records("Bond"));
+        let pifs = pifs?;
+        let bonds = bonds?;
+        let attached_pifs: Vec<(&String, &Value)> = pifs
+            .iter()
+            .filter(|(_, pif)| pif["network"].as_str() == Some(network_ref.as_str()))
+            .collect();
+        if attached_pifs
+            .iter()
+            .any(|(_, pif)| pif["management"].as_bool() == Some(true))
+        {
+            return Err(ApiError::Xen(
+                "A network carrying the management interface cannot be destroyed.".into(),
+            ));
+        }
+        for (_, pif) in &attached_pifs {
+            let vlan_ref = pif["VLAN_master_of"].as_str().unwrap_or_default();
+            if number_i64(pif, "VLAN") > 0 && !vlan_ref.is_empty() && vlan_ref != "OpaqueRef:NULL" {
+                self.request::<Value>("VLAN.destroy", json!([self.session, vlan_ref]))
+                    .await?;
+            }
+        }
+        for (bond_ref, bond) in &bonds {
+            let touches_network = bond["master"]
+                .as_str()
+                .and_then(|master| pifs.get(master))
+                .is_some_and(|master| master["network"].as_str() == Some(network_ref.as_str()));
+            if touches_network {
+                self.async_task("Async.Bond.destroy", json!([self.session, bond_ref]))
+                    .await?;
+            }
+        }
         self.async_task("Async.network.destroy", json!([self.session, network_ref]))
             .await
     }
@@ -2267,7 +2299,7 @@ impl Connection {
         }
     }
 
-    async fn async_task(&self, method: &str, params: Value) -> Result<(), ApiError> {
+    pub(crate) async fn async_task(&self, method: &str, params: Value) -> Result<(), ApiError> {
         let task: String = self.request(method, params).await?;
         wait_task(self, &task).await
     }
@@ -2319,6 +2351,13 @@ fn trim_error(value: &str) -> String {
         return format!("Trim failed: {message}");
     }
     format!("Trim failed: {value}")
+}
+
+fn number_i64(record: &Value, key: &str) -> i64 {
+    record[key]
+        .as_i64()
+        .or_else(|| record[key].as_str().and_then(|value| value.parse().ok()))
+        .unwrap_or(-1)
 }
 
 fn valid_vbd_mode(mode: &str) -> bool {

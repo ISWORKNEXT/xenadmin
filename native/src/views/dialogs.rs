@@ -51,6 +51,12 @@ pub fn show(
     if state.sr_reattach_dialog.is_some() {
         sr_reattach_dialog(ctx, state, actions);
     }
+    if state.bond_create_dialog.is_some() {
+        bond_create_dialog(ctx, state, actions);
+    }
+    if state.vlan_create_dialog.is_some() {
+        vlan_create_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1274,6 +1280,310 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn bond_create_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let candidates: Vec<(String, String, String, String)> = state
+        .pif_catalog
+        .iter()
+        .filter(|pif| pif.bond_candidate())
+        .map(|pif| {
+            (
+                pif.uuid.clone(),
+                pif.host_name.clone(),
+                pif.device.clone(),
+                pif.mac.clone(),
+            )
+        })
+        .collect();
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.bond_create_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("bond-create-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(600.0);
+            modal_title(
+                ui,
+                "Create bond",
+                "Combines two or more physical interfaces into one network.",
+            );
+            widgets::field_label(ui, "Network name");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.name)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                columns[0].label(RichText::new("Mode").size(9.5).color(muted_fg()));
+                let mode_label = match dialog.mode.as_str() {
+                    "active-backup" => "Active-backup",
+                    "lacp" => "LACP",
+                    _ => "Balance SLB",
+                };
+                egui::ComboBox::from_id_salt("bond-mode")
+                    .selected_text(RichText::new(mode_label).size(11.0))
+                    .width(columns[0].available_width())
+                    .show_ui(&mut columns[0], |ui| {
+                        for (value, label) in [
+                            ("balance-slb", "Balance SLB"),
+                            ("active-backup", "Active-backup"),
+                            ("lacp", "LACP"),
+                        ] {
+                            if ui
+                                .selectable_label(
+                                    dialog.mode == value,
+                                    RichText::new(label).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.mode = value.into();
+                            }
+                        }
+                    });
+                widgets::field_label(&mut columns[1], "MTU");
+                columns[1].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.mtu)
+                        .char_limit(4)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+            });
+            ui.add_space(6.0);
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.autoplug,
+                    RichText::new("Automatically plug the new bond network").size(10.5),
+                ),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Member interfaces");
+            if candidates.is_empty() {
+                ui.label(
+                    RichText::new("No spare physical interfaces are available.")
+                        .size(10.0)
+                        .color(amber()),
+                );
+            }
+            egui::ScrollArea::vertical()
+                .max_height(180.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for (uuid, host, device, mac) in &candidates {
+                        let mut checked = dialog.members.contains(uuid);
+                        if ui
+                            .add_enabled(
+                                !dialog.submitting,
+                                egui::Checkbox::new(
+                                    &mut checked,
+                                    RichText::new(format!("{host} · {device} · {mac}")).size(10.5),
+                                ),
+                            )
+                            .changed()
+                        {
+                            if checked {
+                                dialog.members.insert(uuid.clone());
+                            } else {
+                                dialog.members.remove(uuid);
+                            }
+                        }
+                    }
+                });
+            ui.label(
+                RichText::new("Management interfaces are excluded from bonding.")
+                    .size(9.0)
+                    .color(dim_fg()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && dialog.members.len() >= 2
+                                && !dialog.name.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Creating…"
+                            } else {
+                                "Create bond"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveBondCreate);
+    }
+    if close {
+        actions.push(UiAction::CloseBondCreate);
+    }
+}
+
+fn vlan_create_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let candidates: Vec<(String, String, String)> = state
+        .pif_catalog
+        .iter()
+        .filter(|pif| pif.vlan_candidate())
+        .map(|pif| (pif.uuid.clone(), pif.host_name.clone(), pif.device.clone()))
+        .collect();
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.vlan_create_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("vlan-create-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(600.0);
+            modal_title(
+                ui,
+                "Create VLAN",
+                "Creates a tagged network on a physical interface.",
+            );
+            widgets::field_label(ui, "Parent interface");
+            let parent_label = dialog
+                .pif_uuid
+                .as_ref()
+                .and_then(|uuid| candidates.iter().find(|(id, _, _)| id == uuid))
+                .map(|(_, host, device)| format!("{host} · {device}"))
+                .unwrap_or_else(|| "Select an interface".into());
+            egui::ComboBox::from_id_salt("vlan-parent")
+                .selected_text(RichText::new(parent_label).size(11.0))
+                .width(ui.available_width())
+                .show_ui(ui, |ui| {
+                    for (uuid, host, device) in &candidates {
+                        if ui
+                            .selectable_label(
+                                dialog.pif_uuid.as_deref() == Some(uuid.as_str()),
+                                RichText::new(format!("{host} · {device}")).size(11.0),
+                            )
+                            .clicked()
+                        {
+                            dialog.pif_uuid = Some(uuid.clone());
+                        }
+                    }
+                });
+            if candidates.is_empty() {
+                ui.label(
+                    RichText::new("No spare physical interface is available for a VLAN.")
+                        .size(10.0)
+                        .color(amber()),
+                );
+            }
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "VLAN tag");
+                columns[0].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.tag)
+                        .char_limit(4)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                widgets::field_label(&mut columns[1], "MTU");
+                columns[1].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.mtu)
+                        .char_limit(4)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Network name");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.name)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Description");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::multiline(&mut dialog.description)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(2)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(6.0);
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.autoplug,
+                    RichText::new("Automatically plug the new VLAN network").size(10.5),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && dialog.pif_uuid.is_some()
+                                && !dialog.name.trim().is_empty()
+                                && !dialog.tag.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Creating…"
+                            } else {
+                                "Create VLAN"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveVlanCreate);
+    }
+    if close {
+        actions.push(UiAction::CloseVlanCreate);
     }
 }
 

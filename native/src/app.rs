@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use chrono::Local;
@@ -25,6 +26,7 @@ pub(crate) struct StartupOptions {
     pub vm_tab: Option<crate::state::VmTab>,
     pub health: bool,
     pub sr: Option<String>,
+    pub network: Option<String>,
     pub search: Option<String>,
     pub group_by: Option<crate::config::GroupBy>,
     pub saved_search: Option<String>,
@@ -41,6 +43,7 @@ pub struct App {
     pending_vm_tab: Option<crate::state::VmTab>,
     pending_health: bool,
     pending_sr: Option<String>,
+    pending_network: Option<String>,
 }
 
 impl App {
@@ -55,6 +58,7 @@ impl App {
             vm_tab: startup_vm_tab,
             health: startup_health,
             sr: startup_sr,
+            network: startup_network,
             search: startup_search,
             group_by: startup_group_by,
             saved_search: startup_saved_search,
@@ -139,6 +143,7 @@ impl App {
             pending_vm_tab: startup_vm_tab,
             pending_health: startup_health,
             pending_sr: startup_sr,
+            pending_network: startup_network,
         }
     }
 
@@ -573,6 +578,27 @@ impl App {
                             self.open_object(key, None);
                         }
                     }
+                    if let Some(uuid) = self.pending_network.clone() {
+                        let mut found = None;
+                        for connection in &self.workspace.connections {
+                            if let Some(inventory) = crate::state::connection_inventory(connection)
+                                && inventory
+                                    .networks
+                                    .iter()
+                                    .any(|network| network.uuid == uuid)
+                            {
+                                found = Some(ObjectKey::Network {
+                                    connection_id: connection_id(connection).to_owned(),
+                                    network_uuid: uuid.clone(),
+                                });
+                                break;
+                            }
+                        }
+                        if let Some(key) = found {
+                            self.pending_network = None;
+                            self.open_object(key, None);
+                        }
+                    }
                     if self.pending_health
                         && let Some(connection_id) =
                             self.state.scope.connection_id().map(str::to_owned)
@@ -738,15 +764,49 @@ impl App {
                         }
                     }
                 },
+                Event::PifCatalog { seq, result } => {
+                    if seq == self.state.pif_catalog_seq {
+                        self.state.pif_catalog_loading = false;
+                        match result {
+                            Ok(pifs) => {
+                                self.state.pif_catalog = pifs;
+                                self.state.pif_catalog_error = None;
+                            }
+                            Err(message) => {
+                                self.state.pif_catalog = Vec::new();
+                                self.state.pif_catalog_error = Some(message);
+                            }
+                        }
+                    }
+                }
+                Event::PifChanged { result } => match result {
+                    Ok(()) => {
+                        self.state.toasts.push(Toast::new(
+                            "Physical interface updated.",
+                            ToastKind::Success,
+                        ));
+                        self.state.pif_catalog_connection = None;
+                        self.state.pif_catalog_loading = false;
+                    }
+                    Err(message) => self
+                        .state
+                        .toasts
+                        .push(Toast::new(message, ToastKind::Error)),
+                },
                 Event::NetworkChanged { action, result } => match result {
                     Ok(()) => {
                         self.state.network_create_dialog = None;
                         self.state.network_destroy_confirm = None;
+                        self.state.bond_create_dialog = None;
+                        self.state.vlan_create_dialog = None;
+                        self.state.pif_catalog_connection = None;
+                        self.state.pif_catalog_loading = false;
                         self.state.toasts.push(Toast::new(
-                            if action == "create" {
-                                "Network created."
-                            } else {
-                                "Network destroyed."
+                            match action.as_str() {
+                                "create" => "Network created.",
+                                "bond_create" => "Bond created.",
+                                "vlan_create" => "VLAN created.",
+                                _ => "Network destroyed.",
                             },
                             ToastKind::Success,
                         ));
@@ -759,6 +819,16 @@ impl App {
                             handled = true;
                         }
                         if let Some(dialog) = self.state.network_destroy_confirm.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(dialog) = self.state.bond_create_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(dialog) = self.state.vlan_create_dialog.as_mut() {
                             dialog.submitting = false;
                             dialog.error = Some(message.clone());
                             handled = true;
@@ -1821,6 +1891,157 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::LoadPifCatalog { seq, connection_id } => {
+                    self.worker.send(Command::PifCatalog { seq, connection_id });
+                }
+                UiAction::SetPifPlugged {
+                    connection_id,
+                    pif_uuid,
+                    plugged,
+                } => {
+                    self.worker.send(Command::SetPifPlugged {
+                        connection_id,
+                        pif_uuid,
+                        plugged,
+                    });
+                }
+                UiAction::OpenBondCreate => {
+                    let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
+                    else {
+                        self.state.toasts.push(Toast::new(
+                            "Select a pool before creating a bond.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    if !self
+                        .state
+                        .pif_catalog
+                        .iter()
+                        .any(|pif| pif.bond_candidate())
+                    {
+                        self.state.toasts.push(Toast::new(
+                            "No spare physical interfaces are available for a bond.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    }
+                    self.state.bond_create_dialog = Some(crate::state::BondCreateDialog {
+                        connection_id,
+                        name: "bond0".into(),
+                        mode: "balance-slb".into(),
+                        mtu: "1500".into(),
+                        autoplug: true,
+                        members: HashSet::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseBondCreate => {
+                    if !self
+                        .state
+                        .bond_create_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.bond_create_dialog = None;
+                    }
+                }
+                UiAction::SaveBondCreate => {
+                    let Some(dialog) = self.state.bond_create_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(mtu) = dialog.mtu.trim().parse::<u64>().ok() else {
+                        dialog.error = Some("Enter a whole-number MTU.".into());
+                        continue;
+                    };
+                    if dialog.members.len() < 2 {
+                        dialog.error = Some("Select at least two interfaces.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::CreateBond {
+                        connection_id: dialog.connection_id.clone(),
+                        name: dialog.name.trim().to_owned(),
+                        members: dialog.members.iter().cloned().collect(),
+                        mode: dialog.mode.clone(),
+                        mtu,
+                        autoplug: dialog.autoplug,
+                    });
+                }
+                UiAction::OpenVlanCreate => {
+                    let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
+                    else {
+                        self.state.toasts.push(Toast::new(
+                            "Select a pool before creating a VLAN.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    let Some(parent) = self
+                        .state
+                        .pif_catalog
+                        .iter()
+                        .find(|pif| pif.vlan_candidate())
+                        .map(|pif| pif.uuid.clone())
+                    else {
+                        self.state.toasts.push(Toast::new(
+                            "No spare physical interface is available for a VLAN.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    self.state.vlan_create_dialog = Some(crate::state::VlanCreateDialog {
+                        connection_id,
+                        pif_uuid: Some(parent),
+                        tag: "100".into(),
+                        name: "VLAN 100".into(),
+                        description: String::new(),
+                        mtu: "1500".into(),
+                        autoplug: true,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseVlanCreate => {
+                    if !self
+                        .state
+                        .vlan_create_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.vlan_create_dialog = None;
+                    }
+                }
+                UiAction::SaveVlanCreate => {
+                    let Some(dialog) = self.state.vlan_create_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(tag) = dialog.tag.trim().parse::<i64>().ok() else {
+                        dialog.error = Some("Enter a whole-number VLAN tag.".into());
+                        continue;
+                    };
+                    let Some(mtu) = dialog.mtu.trim().parse::<u64>().ok() else {
+                        dialog.error = Some("Enter a whole-number MTU.".into());
+                        continue;
+                    };
+                    let Some(pif_uuid) = dialog.pif_uuid.clone() else {
+                        dialog.error = Some("Select a parent interface.".into());
+                        continue;
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::CreateVlan {
+                        connection_id: dialog.connection_id.clone(),
+                        pif_uuid,
+                        tag,
+                        name: dialog.name.trim().to_owned(),
+                        description: dialog.description.clone(),
+                        mtu,
+                        autoplug: dialog.autoplug,
                     });
                 }
                 UiAction::OpenNetworkCreate => {
