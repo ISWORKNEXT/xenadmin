@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: linux-x86_64
+            binary: xen-native
+          - os: windows-latest
+            target: windows-x86_64
+            binary: xen-native.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Release build
+        run: cargo build --release -p xen-native --locked
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAME="xen-desktop-${GITHUB_REF_NAME}-${TARGET}"
+          mkdir -p "release-assets/${NAME}"
+          cp "target/release/${BINARY}" "release-assets/${NAME}/xen-desktop"
+          cp README.md docs/native-egui-port.md "release-assets/${NAME}/"
+          cat > "release-assets/${NAME}/RUN.txt" <<'EOF'
+          Xen Desktop (Linux x86_64)
+
+          Run:
+            ./xen-desktop
+
+          Requires a Wayland or X11 session and glibc. Profiles are stored under
+          $XDG_CONFIG_HOME/xen-desktop (or ~/.config/xen-desktop).
+          EOF
+          tar -czf "release-assets/${NAME}.tar.gz" -C release-assets "${NAME}"
+          rm -rf "release-assets/${NAME}"
+        env:
+          TARGET: ${{ matrix.target }}
+          BINARY: ${{ matrix.binary }}
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAME="xen-desktop-${GITHUB_REF_NAME}-${TARGET}"
+          mkdir -p "release-assets/${NAME}"
+          cp "target/release/${BINARY}" "release-assets/${NAME}/xen-desktop.exe"
+          cp README.md docs/native-egui-port.md "release-assets/${NAME}/"
+          cat > "release-assets/${NAME}/RUN.txt" <<'EOF'
+          Xen Desktop (Windows x86_64)
+
+          Run:
+            xen-desktop.exe
+
+          Profiles are stored under %APPDATA%\xen-desktop.
+          EOF
+          7z a -tzip "release-assets/${NAME}.zip" "release-assets/${NAME}" >/dev/null
+          rm -rf "release-assets/${NAME}"
+        env:
+          TARGET: ${{ matrix.target }}
+          BINARY: ${{ matrix.binary }}
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.target }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Generate checksums
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          ls -1 | grep -v '^SHA256SUMS$' | xargs -r sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

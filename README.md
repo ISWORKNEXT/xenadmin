@@ -9,6 +9,12 @@ left (pools → hosts, virtual machines, templates, storage, networks) and
 visual language is new: a custom undecorated title bar, a white/light theme by
 default and a persisted dark-theme toggle.
 
+## Releases
+
+GitHub Actions builds and publishes Linux and Windows packages for every `v*`
+tag. The workflow runs typecheck, Clippy and the full test suite before
+packaging. See `.github/workflows/release.yml`.
+
 ## Features
 
 - Multiple pools with independent sessions, an all-connections home view and
