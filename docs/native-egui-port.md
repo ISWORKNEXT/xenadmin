@@ -33,8 +33,8 @@ dependency.
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
 | Host actions | Implemented | Enable/disable, power-on, evacuate, PIF rescan, restart toolstack, reboot, shutdown with confirmation |
 | Proxy | Implemented | Per-connection HTTP/SOCKS proxy for XenAPI and RRD traffic; console tunnel is direct |
-| Health diagnostics | Implemented (basic) | Alerts, host availability, SR capacity/PBDs, pool host count, broken VM disk/ISO references |
-| XenSearch filtering | Implemented (basic) | name/host/tag/power_state fields, quotes, negation and free text; saved searches/grouping remain |
+| Health diagnostics | Implemented (basic) | Alerts, hosts, SR capacity/PBDs/local storage, management PIFs/bridges, HA config, guest tools, pool capacity, broken disks |
+| XenSearch filtering | Implemented (basic) | name/host/tag/power_state plus uuid/description/os/kind/connection and vcpus/memory comparators; saved searches/grouping remain |
 
 | Alerts | Implemented (basic) | Priority 1–4 XenAPI messages with dismiss; diagnostics/health checks are still separate |
 | Storage repository actions | Implemented (basic) | Scan and confirmed destroy from the SR page |

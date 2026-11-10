@@ -251,7 +251,21 @@ impl Connection {
     }
 
     pub async fn raw_inventory(&self) -> Result<RawInventory, ApiError> {
-        let (pools, hosts, metrics, vms, storage, networks, tasks, messages, vbds, vdis, pbds) = tokio::join!(
+        let (
+            pools,
+            hosts,
+            metrics,
+            vms,
+            storage,
+            networks,
+            tasks,
+            messages,
+            vbds,
+            vdis,
+            pbds,
+            guest_metrics,
+            pifs,
+        ) = tokio::join!(
             self.records("pool"),
             self.records("host"),
             self.records("host_metrics"),
@@ -262,7 +276,9 @@ impl Connection {
             self.records("message"),
             self.records("VBD"),
             self.records("VDI"),
-            self.records("PBD")
+            self.records("PBD"),
+            self.records("VM_guest_metrics"),
+            self.records("PIF")
         );
         Ok(RawInventory {
             pools: pools?,
@@ -278,6 +294,8 @@ impl Connection {
             vbds: vbds.unwrap_or_default(),
             vdis: vdis.unwrap_or_default(),
             pbds: pbds.unwrap_or_default(),
+            guest_metrics: guest_metrics.unwrap_or_default(),
+            pifs: pifs.unwrap_or_default(),
         })
     }
 
@@ -311,6 +329,8 @@ pub struct RawInventory {
     pub(crate) vbds: HashMap<String, Value>,
     pub(crate) vdis: HashMap<String, Value>,
     pub(crate) pbds: HashMap<String, Value>,
+    pub(crate) guest_metrics: HashMap<String, Value>,
+    pub(crate) pifs: HashMap<String, Value>,
 }
 
 impl RawInventory {
@@ -335,6 +355,8 @@ impl RawInventory {
                 "vbd" => &mut self.vbds,
                 "vdi" => &mut self.vdis,
                 "pbd" => &mut self.pbds,
+                "vm_guest_metrics" => &mut self.guest_metrics,
+                "pif" => &mut self.pifs,
                 _ => continue,
             };
             if operation == "del" {

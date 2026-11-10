@@ -4,9 +4,37 @@ use xen_core::xapi::VirtualMachine;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Field {
     Name,
+    Uuid,
+    Description,
+    Os,
+    Kind,
+    Connection,
     PowerState,
     Host,
     Tag,
+    Vcpus,
+    Memory,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Comparison {
+    Eq,
+    Gt,
+    Ge,
+    Lt,
+    Le,
+}
+
+impl Comparison {
+    fn matches(self, actual: u64, expected: u64) -> bool {
+        match self {
+            Self::Eq => actual == expected,
+            Self::Gt => actual > expected,
+            Self::Ge => actual >= expected,
+            Self::Lt => actual < expected,
+            Self::Le => actual <= expected,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -14,6 +42,8 @@ struct Term {
     negated: bool,
     field: Option<Field>,
     value: String,
+    comparison: Option<Comparison>,
+    number: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -32,19 +62,32 @@ impl SearchQuery {
             let (field, value) = match token.split_once(':') {
                 Some((field, value)) => match field.to_ascii_lowercase().as_str() {
                     "name" | "label" | "vm" => (Some(Field::Name), value),
+                    "uuid" => (Some(Field::Uuid), value),
+                    "description" | "desc" => (Some(Field::Description), value),
+                    "os" | "os_type" => (Some(Field::Os), value),
+                    "kind" | "type" => (Some(Field::Kind), value),
+                    "connection" | "pool" => (Some(Field::Connection), value),
                     "power_state" | "power" | "state" => (Some(Field::PowerState), value),
                     "host" | "hostname" => (Some(Field::Host), value),
                     "tag" | "tags" => (Some(Field::Tag), value),
+                    "vcpus" | "cpu" | "cpus" => (Some(Field::Vcpus), value),
+                    "memory" | "mem" => (Some(Field::Memory), value),
                     _ => (None, token.as_str()),
                 },
                 None => (None, token.as_str()),
             };
             let value = value.trim();
             if !value.is_empty() {
+                let (comparison, numeric_value) = split_comparison(value);
+                let number = matches!(field, Some(Field::Vcpus | Field::Memory))
+                    .then(|| parse_number(numeric_value))
+                    .flatten();
                 terms.push(Term {
                     negated,
                     field,
                     value: value.to_owned(),
+                    comparison,
+                    number,
                 });
             }
         }
@@ -63,9 +106,22 @@ impl Term {
         let needle = self.value.to_lowercase();
         let matched = match self.field {
             Some(Field::Name) => vm.name.to_lowercase().contains(&needle),
+            Some(Field::Uuid) => vm.uuid.to_lowercase().contains(&needle),
+            Some(Field::Description) => vm.description.to_lowercase().contains(&needle),
+            Some(Field::Os) => vm.os.to_lowercase().contains(&needle),
+            Some(Field::Kind) => vm.kind.eq_ignore_ascii_case(&needle),
+            Some(Field::Connection) => connection_name.to_lowercase().contains(&needle),
             Some(Field::PowerState) => power_matches(&vm.power_state, &needle),
             Some(Field::Host) => vm.host_name.to_lowercase().contains(&needle),
             Some(Field::Tag) => vm.tags.iter().any(|tag| tag.to_lowercase() == needle),
+            Some(Field::Vcpus) => self
+                .number
+                .zip(self.comparison)
+                .is_some_and(|(number, comparison)| comparison.matches(vm.vcpus, number)),
+            Some(Field::Memory) => self
+                .number
+                .zip(self.comparison)
+                .is_some_and(|(number, comparison)| comparison.matches(vm.memory, number)),
             None => {
                 vm.name.to_lowercase().contains(&needle)
                     || vm.uuid.to_lowercase().contains(&needle)
@@ -80,6 +136,41 @@ impl Term {
         };
         matched != self.negated
     }
+}
+
+fn split_comparison(value: &str) -> (Option<Comparison>, &str) {
+    for (prefix, comparison) in [
+        (">=", Comparison::Ge),
+        ("<=", Comparison::Le),
+        (">", Comparison::Gt),
+        ("<", Comparison::Lt),
+        ("=", Comparison::Eq),
+    ] {
+        if let Some(rest) = value.strip_prefix(prefix) {
+            return (Some(comparison), rest.trim());
+        }
+    }
+    (Some(Comparison::Eq), value)
+}
+
+fn parse_number(value: &str) -> Option<u64> {
+    let value = value.trim().to_ascii_lowercase();
+    for (suffix, multiplier) in [
+        ("gib", 1024u64 * 1024 * 1024),
+        ("gb", 1024u64 * 1024 * 1024),
+        ("g", 1024u64 * 1024 * 1024),
+        ("mib", 1024u64 * 1024),
+        ("mb", 1024u64 * 1024),
+        ("m", 1024u64 * 1024),
+        ("kib", 1024u64),
+        ("kb", 1024u64),
+        ("k", 1024u64),
+    ] {
+        if let Some(number) = value.strip_suffix(suffix) {
+            return number.parse::<u64>().ok()?.checked_mul(multiplier);
+        }
+    }
+    value.parse().ok()
 }
 
 fn power_matches(state: &str, needle: &str) -> bool {
@@ -146,8 +237,8 @@ mod tests {
             description: "production frontend".into(),
             power_state: "Running".into(),
             vcpus: 2,
-            memory: 1024,
-            os: String::new(),
+            memory: 8 * 1024 * 1024 * 1024,
+            os: "linux".into(),
             tags: vec!["prod".into(), "frontend".into()],
         }
     }
@@ -162,6 +253,11 @@ mod tests {
         assert!(query.terms[2].negated);
         assert_eq!(query.terms[2].field, Some(Field::Tag));
         assert_eq!(query.terms[3].field, None);
+        let numeric = SearchQuery::parse("vcpus:>=4 memory:<8g");
+        assert_eq!(numeric.terms[0].comparison, Some(Comparison::Ge));
+        assert_eq!(numeric.terms[0].number, Some(4));
+        assert_eq!(numeric.terms[1].comparison, Some(Comparison::Lt));
+        assert_eq!(numeric.terms[1].number, Some(8 * 1024 * 1024 * 1024));
     }
 
     #[test]
@@ -173,6 +269,15 @@ mod tests {
         assert!(SearchQuery::parse("host:host-a").matches(&vm, "conn"));
         assert!(SearchQuery::parse("tag:prod").matches(&vm, "conn"));
         assert!(!SearchQuery::parse("tag:pro").matches(&vm, "conn"));
+        assert!(SearchQuery::parse("uuid:1234").matches(&vm, "conn"));
+        assert!(SearchQuery::parse("description:frontend").matches(&vm, "conn"));
+        assert!(SearchQuery::parse("os:linux").matches(&vm, "conn"));
+        assert!(SearchQuery::parse("kind:vm").matches(&vm, "conn"));
+        assert!(SearchQuery::parse("connection:conn").matches(&vm, "conn"));
+        assert!(SearchQuery::parse("vcpus:>=2").matches(&vm, "conn"));
+        assert!(!SearchQuery::parse("vcpus:>2").matches(&vm, "conn"));
+        assert!(SearchQuery::parse("memory:>=8g").matches(&vm, "conn"));
+        assert!(!SearchQuery::parse("memory:>8g").matches(&vm, "conn"));
         assert!(!SearchQuery::parse("host:host-b").matches(&vm, "conn"));
         assert!(!SearchQuery::parse("-tag:prod").matches(&vm, "conn"));
         assert!(SearchQuery::parse("tag:prod -tag:test").matches(&vm, "conn"));

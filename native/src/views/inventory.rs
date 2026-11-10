@@ -249,7 +249,7 @@ fn toolbar(
             let response = widgets::search_field(
                 ui,
                 &mut state.query,
-                "Search name:/host:/tag:/power_state: …",
+                "Search name:/host:/tag:/memory:/power_state: …",
             );
             if state.focus_search {
                 response.request_focus();
