@@ -106,6 +106,7 @@ The executable is written to `target/release/xen-native`.
 --sr UUID                 open a storage repository page
 --network UUID            open a network page
 --auth                    open the Authentication & RBAC page
+--pool-status             open the Pool status page
 --search QUERY            prefill the VM/template search (e.g. power_state:running)
 --group-by none|connection|host|power|tag
 --saved-search NAME       apply a saved search on startup

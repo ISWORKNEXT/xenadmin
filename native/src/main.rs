@@ -53,6 +53,7 @@ fn main() -> eframe::Result {
     let startup_vm = argument("--vm");
     let startup_health = std::env::args().any(|arg| arg == "--health");
     let startup_auth = std::env::args().any(|arg| arg == "--auth");
+    let startup_pool_status = std::env::args().any(|arg| arg == "--pool-status");
     let startup_sr = argument("--sr");
     let startup_network = argument("--network");
     let startup_search = argument("--search");
@@ -92,6 +93,7 @@ fn main() -> eframe::Result {
                     vm_tab: startup_vm_tab,
                     health: startup_health,
                     auth: startup_auth,
+                    pool_status: startup_pool_status,
                     sr: startup_sr,
                     network: startup_network,
                     search: startup_search,

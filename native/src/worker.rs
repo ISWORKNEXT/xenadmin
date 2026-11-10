@@ -141,6 +141,10 @@ pub enum Command {
         seq: u64,
         connection_id: String,
     },
+    PoolStatus {
+        seq: u64,
+        connection_id: String,
+    },
     DeleteSnapshots {
         connection_id: String,
         vm_uuid: String,
@@ -378,6 +382,10 @@ pub enum Event {
     AuthInfo {
         seq: u64,
         result: Result<xen_core::auth::AuthInfo, String>,
+    },
+    PoolStatus {
+        seq: u64,
+        result: Result<Box<xen_core::pool_status::PoolStatus>, String>,
     },
     VmDetails {
         seq: u64,
@@ -674,6 +682,10 @@ fn dispatch(
                     action,
                     result,
                 });
+            }
+            Command::PoolStatus { seq, connection_id } => {
+                let result = workspace.pool_status(&connection_id).await.map(Box::new);
+                let _ = events.send(Event::PoolStatus { seq, result });
             }
             Command::AuthInfo { seq, connection_id } => {
                 let result = workspace.auth_info(&connection_id).await;

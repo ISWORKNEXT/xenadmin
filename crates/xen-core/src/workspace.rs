@@ -391,6 +391,19 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn pool_status(
+        &self,
+        connection_id: &str,
+    ) -> Result<crate::pool_status::PoolStatus, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .pool_status()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     pub async fn auth_info(&self, connection_id: &str) -> Result<crate::auth::AuthInfo, String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;

@@ -26,6 +26,7 @@ pub(crate) struct StartupOptions {
     pub vm_tab: Option<crate::state::VmTab>,
     pub health: bool,
     pub auth: bool,
+    pub pool_status: bool,
     pub sr: Option<String>,
     pub network: Option<String>,
     pub search: Option<String>,
@@ -44,6 +45,7 @@ pub struct App {
     pending_vm_tab: Option<crate::state::VmTab>,
     pending_health: bool,
     pending_auth: bool,
+    pending_pool_status: bool,
     pending_sr: Option<String>,
     pending_network: Option<String>,
 }
@@ -60,6 +62,7 @@ impl App {
             vm_tab: startup_vm_tab,
             health: startup_health,
             auth: startup_auth,
+            pool_status: startup_pool_status,
             sr: startup_sr,
             network: startup_network,
             search: startup_search,
@@ -146,6 +149,7 @@ impl App {
             pending_vm_tab: startup_vm_tab,
             pending_health: startup_health,
             pending_auth: startup_auth,
+            pending_pool_status: startup_pool_status,
             pending_sr: startup_sr,
             pending_network: startup_network,
         }
@@ -199,6 +203,7 @@ impl App {
                 .map_or_else(|| "Network".into(), |(_, network)| network.name.clone()),
             ObjectKey::Health { .. } => "Health & diagnostics".into(),
             ObjectKey::Auth { .. } => "Authentication & RBAC".into(),
+            ObjectKey::PoolStatus { .. } => "Pool status".into(),
             ObjectKey::List { kind, host_ref, .. } => {
                 if let Some(host_ref) = host_ref {
                     let host = self
@@ -350,6 +355,9 @@ impl App {
                 self.state.scope = Scope::Connection(connection_id.clone());
             }
             ObjectKey::Auth { connection_id } => {
+                self.state.scope = Scope::Connection(connection_id.clone());
+            }
+            ObjectKey::PoolStatus { connection_id } => {
                 self.state.scope = Scope::Connection(connection_id.clone());
             }
             ObjectKey::List {
@@ -586,6 +594,13 @@ impl App {
                             self.open_object(key, None);
                         }
                     }
+                    if self.pending_pool_status
+                        && let Some(connection_id) =
+                            self.state.scope.connection_id().map(str::to_owned)
+                    {
+                        self.pending_pool_status = false;
+                        self.open_object(ObjectKey::PoolStatus { connection_id }, None);
+                    }
                     if self.pending_auth
                         && let Some(connection_id) =
                             self.state.scope.connection_id().map(str::to_owned)
@@ -798,6 +813,14 @@ impl App {
                         }
                     }
                 },
+                Event::PoolStatus { seq, result } => {
+                    if seq == self.state.pool_status_seq {
+                        self.state.pool_status_state = match result {
+                            Ok(status) => LoadState::Ready(*status),
+                            Err(message) => LoadState::Error(message),
+                        };
+                    }
+                }
                 Event::AuthInfo { seq, result } => {
                     if seq == self.state.auth_seq {
                         self.state.auth_state = match result {
@@ -2010,6 +2033,23 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::LoadPoolStatus => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.pool_status_seq += 1;
+                    self.state.pool_status_state = LoadState::Loading;
+                    self.worker.send(Command::PoolStatus {
+                        seq: self.state.pool_status_seq,
+                        connection_id,
                     });
                 }
                 UiAction::LoadAuth => {

@@ -159,6 +159,9 @@ pub enum ObjectKey {
     Auth {
         connection_id: String,
     },
+    PoolStatus {
+        connection_id: String,
+    },
     List {
         connection_id: Option<String>,
         kind: ListKind,
@@ -179,7 +182,8 @@ impl ObjectKey {
             | ObjectKey::Storage { connection_id, .. }
             | ObjectKey::Network { connection_id, .. }
             | ObjectKey::Health { connection_id }
-            | ObjectKey::Auth { connection_id } => Some(connection_id),
+            | ObjectKey::Auth { connection_id }
+            | ObjectKey::PoolStatus { connection_id } => Some(connection_id),
             ObjectKey::List { connection_id, .. } => connection_id.as_deref(),
         }
     }
@@ -1032,6 +1036,8 @@ pub struct UiState {
     pub host_state: LoadState<HostDetails>,
     pub auth_state: LoadState<xen_core::auth::AuthInfo>,
     pub auth_seq: u64,
+    pub pool_status_state: LoadState<xen_core::pool_status::PoolStatus>,
+    pub pool_status_seq: u64,
     pub host_seq: u64,
     pub perf_range: u64,
     pub perf_state: LoadState<HostPerformance>,
@@ -1127,6 +1133,8 @@ impl Default for UiState {
             host_state: LoadState::Idle,
             auth_state: LoadState::Idle,
             auth_seq: 0,
+            pool_status_state: LoadState::Idle,
+            pool_status_seq: 0,
             host_seq: 0,
             perf_range: 900,
             perf_state: LoadState::Idle,
@@ -1282,6 +1290,7 @@ pub enum UiAction {
     CancelDeleteVdi,
     ConfirmDeleteVdi,
     LoadAuth,
+    LoadPoolStatus,
     OpenHaEdit,
     CloseHaEdit,
     SaveHaEdit,
