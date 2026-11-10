@@ -51,6 +51,7 @@
 - Add data-disk RO/RW mode editing while halted plus hot-plug/unplug on running VMs, with mode/state validation.
 - Add offline disk moves between SRs via copy-and-swap, preserving VBD properties and cleaning up the source VDI.
 - Fix SR destroy to unplug (not delete) PBDs first so backends such as `file` can locate storage during destruction.
+- Add host-local file-backed SR creation, PBD reattach/detach and TRIM via the XAPI trim plugin, with path/name validation.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

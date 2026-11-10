@@ -62,6 +62,19 @@ pub enum Command {
         sr_uuid: String,
         action: xen_core::operations::SrAction,
     },
+    CreateSr {
+        connection_id: String,
+        host_uuid: String,
+        name: String,
+        description: String,
+        location: String,
+    },
+    ReattachSr {
+        connection_id: String,
+        sr_uuid: String,
+        host_uuid: String,
+        location: String,
+    },
     CreateNetwork {
         connection_id: String,
         name: String,
@@ -268,6 +281,13 @@ pub enum Event {
     SrActionFinished {
         sr_uuid: String,
         action: xen_core::operations::SrAction,
+        result: Result<(), String>,
+    },
+    SrCreated {
+        result: Result<(), String>,
+    },
+    SrReattached {
+        sr_uuid: String,
         result: Result<(), String>,
     },
     NetworkChanged {
@@ -523,6 +543,29 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::HostDetails { seq, result });
+            }
+            Command::CreateSr {
+                connection_id,
+                host_uuid,
+                name,
+                description,
+                location,
+            } => {
+                let result = workspace
+                    .create_sr(&connection_id, &host_uuid, name, description, location)
+                    .await;
+                let _ = events.send(Event::SrCreated { result });
+            }
+            Command::ReattachSr {
+                connection_id,
+                sr_uuid,
+                host_uuid,
+                location,
+            } => {
+                let result = workspace
+                    .reattach_sr(&connection_id, &sr_uuid, &host_uuid, location)
+                    .await;
+                let _ = events.send(Event::SrReattached { sr_uuid, result });
             }
             Command::SrAction {
                 connection_id,

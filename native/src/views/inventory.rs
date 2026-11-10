@@ -808,6 +808,27 @@ pub fn storage(
             }
         }
     }
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(format::plural(
+                rows.len(),
+                "storage repository",
+                "storage repositories",
+            ))
+            .size(10.0)
+            .color(dim_fg()),
+        );
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if let Some(id) = state.scope.connection_id()
+                && find_connection(workspace, id)
+                    .is_some_and(|connection| !is_read_only(connection))
+                && ui.add(widgets::primary_button("Create storage")).clicked()
+            {
+                actions.push(UiAction::OpenSrCreate);
+            }
+        });
+    });
+    ui.add_space(6.0);
     if rows.is_empty() {
         widgets::empty_state(
             ui,

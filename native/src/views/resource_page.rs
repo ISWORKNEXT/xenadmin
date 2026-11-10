@@ -56,7 +56,51 @@ pub fn storage(
                     });
                     ui.close();
                 }
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection),
+                        egui::Button::new(RichText::new("Reattach storage repository…").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenSrReattach);
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection) && sr.pbd_attached > 0,
+                        egui::Button::new(RichText::new("Reclaim space (TRIM)").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptSrAction {
+                        connection_id: connection_id.clone(),
+                        sr_uuid: sr.uuid.clone(),
+                        sr_name: sr.name.clone(),
+                        action: SrAction::Trim,
+                    });
+                    ui.close();
+                }
                 ui.separator();
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection) && sr.pbd_count > 0,
+                        egui::Button::new(
+                            RichText::new("Detach storage repository…")
+                                .size(11.0)
+                                .color(amber()),
+                        ),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptSrAction {
+                        connection_id: connection_id.clone(),
+                        sr_uuid: sr.uuid.clone(),
+                        sr_name: sr.name.clone(),
+                        action: SrAction::Detach,
+                    });
+                    ui.close();
+                }
                 if ui
                     .add_enabled(
                         !is_read_only(connection),
@@ -92,6 +136,12 @@ pub fn storage(
                 ui,
                 "Scope",
                 if sr.shared { "Shared" } else { "Local" },
+                false,
+            );
+            widgets::kv(
+                ui,
+                "PBDs",
+                &format!("{} attached / {}", sr.pbd_attached, sr.pbd_count),
                 false,
             );
             widgets::kv(

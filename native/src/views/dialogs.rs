@@ -45,6 +45,12 @@ pub fn show(
     if state.move_disk_dialog.is_some() {
         move_disk_dialog(ctx, state, actions);
     }
+    if state.sr_create_dialog.is_some() {
+        sr_create_dialog(ctx, state, actions);
+    }
+    if state.sr_reattach_dialog.is_some() {
+        sr_reattach_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -996,9 +1002,14 @@ fn sr_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec
             ui.add_space(8.0);
             if dialog.action.destructive() {
                 ui.label(
-                    RichText::new(
-                        "Destroying an SR removes its record. The SR must be empty; data loss is possible.",
-                    )
+                    RichText::new(match dialog.action {
+                        xen_core::operations::SrAction::Detach => {
+                            "Detaching disconnects this storage from the host. Data on the storage remains, but VMs using it must be stopped."
+                        }
+                        _ => {
+                            "Destroying an SR removes its record. The SR must be empty; data loss is possible."
+                        }
+                    })
                     .size(9.5)
                     .color(red()),
                 );
@@ -1263,6 +1274,226 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn sr_create_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.sr_create_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("sr-create-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(600.0);
+            modal_title(
+                ui,
+                "Create storage repository",
+                "Creates a host-local, file-backed SR at an existing absolute path.",
+            );
+            widgets::field_label(ui, "Name");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.name)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Description");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::multiline(&mut dialog.description)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(2)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Host");
+            let host_label = dialog
+                .host_uuid
+                .as_ref()
+                .and_then(|uuid| dialog.hosts.iter().find(|(id, _)| id == uuid))
+                .map(|(_, name)| name.as_str())
+                .unwrap_or("Select a host");
+            ui.add_enabled_ui(!dialog.submitting, |ui| {
+                egui::ComboBox::from_id_salt("sr-create-host")
+                    .selected_text(RichText::new(host_label).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for (uuid, name) in &dialog.hosts {
+                            if ui
+                                .selectable_label(
+                                    dialog.host_uuid.as_deref() == Some(uuid.as_str()),
+                                    RichText::new(name).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.host_uuid = Some(uuid.clone());
+                            }
+                        }
+                    });
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Location on host");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.location)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("/var/tmp/xen-storage")
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.label(
+                RichText::new("The path must be absolute and should be dedicated to this SR.")
+                    .size(9.0)
+                    .color(dim_fg()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && !dialog.name.trim().is_empty()
+                                && !dialog.location.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Creating…"
+                            } else {
+                                "Create storage"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveSrCreate);
+    }
+    if close {
+        actions.push(UiAction::CloseSrCreate);
+    }
+}
+
+fn sr_reattach_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.sr_reattach_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("sr-reattach-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(580.0);
+            modal_title(
+                ui,
+                "Reattach storage repository",
+                "Creates and plugs a PBD using the host-local path.",
+            );
+            ui.label(RichText::new(&dialog.sr_name).size(11.5).strong());
+            ui.label(
+                RichText::new(&dialog.sr_uuid)
+                    .monospace()
+                    .size(9.0)
+                    .color(dim_fg()),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Host");
+            let host_label = dialog
+                .host_uuid
+                .as_ref()
+                .and_then(|uuid| dialog.hosts.iter().find(|(id, _)| id == uuid))
+                .map(|(_, name)| name.as_str())
+                .unwrap_or("Select a host");
+            ui.add_enabled_ui(!dialog.submitting, |ui| {
+                egui::ComboBox::from_id_salt("sr-reattach-host")
+                    .selected_text(RichText::new(host_label).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for (uuid, name) in &dialog.hosts {
+                            if ui
+                                .selectable_label(
+                                    dialog.host_uuid.as_deref() == Some(uuid.as_str()),
+                                    RichText::new(name).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.host_uuid = Some(uuid.clone());
+                            }
+                        }
+                    });
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Location on host");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.location)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("/var/tmp/xen-storage")
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && !dialog.location.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Attaching…"
+                            } else {
+                                "Reattach storage"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveSrReattach);
+    }
+    if close {
+        actions.push(UiAction::CloseSrReattach);
     }
 }
 

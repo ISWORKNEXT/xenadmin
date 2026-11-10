@@ -267,26 +267,23 @@ pub struct RemoteTask {
 #[serde(rename_all = "snake_case")]
 pub enum SrAction {
     Scan,
+    Detach,
+    Trim,
     Destroy,
 }
 
 impl SrAction {
-    fn method(self) -> &'static str {
-        match self {
-            Self::Scan => "Async.SR.scan",
-            Self::Destroy => "Async.SR.destroy",
-        }
-    }
-
     pub fn title(self) -> &'static str {
         match self {
             Self::Scan => "Scan storage",
+            Self::Detach => "Detach storage repository",
+            Self::Trim => "Reclaim storage space",
             Self::Destroy => "Destroy storage repository",
         }
     }
 
     pub fn destructive(self) -> bool {
-        matches!(self, Self::Destroy)
+        matches!(self, Self::Destroy | Self::Detach)
     }
 }
 
@@ -413,20 +410,168 @@ impl Connection {
         if sr["uuid"].as_str() != Some(sr_uuid) {
             return Err(ApiError::Protocol);
         }
-        if action == SrAction::Destroy {
-            let pbds = self.records("PBD").await?;
-            for (pbd_ref, pbd) in pbds
-                .iter()
-                .filter(|(_, pbd)| pbd["SR"].as_str() == Some(sr_ref.as_str()))
-            {
-                if pbd["currently_attached"].as_bool() == Some(true) {
-                    self.async_task("Async.PBD.unplug", json!([self.session, pbd_ref]))
+        match action {
+            SrAction::Trim => self.sr_trim(sr_uuid).await,
+            SrAction::Detach => {
+                let pbds = self.records("PBD").await?;
+                for (pbd_ref, pbd) in pbds
+                    .iter()
+                    .filter(|(_, pbd)| pbd["SR"].as_str() == Some(sr_ref.as_str()))
+                {
+                    if pbd["currently_attached"].as_bool() == Some(true) {
+                        self.async_task("Async.PBD.unplug", json!([self.session, pbd_ref]))
+                            .await?;
+                    }
+                    self.async_task("Async.PBD.destroy", json!([self.session, pbd_ref]))
                         .await?;
                 }
+                Ok(())
+            }
+            SrAction::Destroy => {
+                // Keep the PBD records: some backends (notably `file`) need one
+                // to locate the storage while destroying it. SR.destroy removes
+                // them once the backend has finished.
+                let pbds = self.records("PBD").await?;
+                for (pbd_ref, pbd) in pbds
+                    .iter()
+                    .filter(|(_, pbd)| pbd["SR"].as_str() == Some(sr_ref.as_str()))
+                {
+                    if pbd["currently_attached"].as_bool() == Some(true) {
+                        self.async_task("Async.PBD.unplug", json!([self.session, pbd_ref]))
+                            .await?;
+                    }
+                }
+                self.async_task("Async.SR.destroy", json!([self.session, sr_ref]))
+                    .await
+            }
+            SrAction::Scan => {
+                self.async_task("Async.SR.scan", json!([self.session, sr_ref]))
+                    .await
             }
         }
-        self.async_task(action.method(), json!([self.session, sr_ref]))
-            .await
+    }
+
+    /// Create a file-backed SR on a host. The location is an absolute path on
+    /// that host's local filesystem.
+    pub async fn create_sr(
+        &self,
+        host_uuid: &str,
+        name: &str,
+        description: &str,
+        location: &str,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        validate_sr_fields(name, description, location)?;
+        let host_ref: String = self
+            .request("host.get_by_uuid", json!([self.session, host_uuid]))
+            .await?;
+        let host: Value = self
+            .request("host.get_record", json!([self.session, host_ref]))
+            .await?;
+        if host["uuid"].as_str() != Some(host_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        self.request::<String>(
+            "SR.create",
+            json!([
+                self.session,
+                host_ref,
+                {"location": location},
+                "0",
+                name,
+                description,
+                "file",
+                "user",
+                false,
+                {}
+            ]),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Reattach a detached SR by creating/plugging a PBD for the host.
+    pub async fn reattach_sr(
+        &self,
+        sr_uuid: &str,
+        host_uuid: &str,
+        location: &str,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        validate_sr_location(location)?;
+        let sr_ref: String = self
+            .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
+            .await?;
+        let host_ref: String = self
+            .request("host.get_by_uuid", json!([self.session, host_uuid]))
+            .await?;
+        let pbds = self.records("PBD").await?;
+        if let Some((pbd_ref, pbd)) = pbds.iter().find(|(_, pbd)| {
+            pbd["SR"].as_str() == Some(sr_ref.as_str())
+                && pbd["host"].as_str() == Some(host_ref.as_str())
+        }) {
+            if pbd["currently_attached"].as_bool() == Some(true) {
+                return Ok(());
+            }
+            self.async_task("Async.PBD.plug", json!([self.session, pbd_ref]))
+                .await?;
+            return Ok(());
+        }
+        let pbd_ref: String = self
+            .request(
+                "PBD.create",
+                json!([self.session, {
+                    "host": host_ref,
+                    "SR": sr_ref,
+                    "device_config": {"location": location},
+                    "other_config": {}
+                }]),
+            )
+            .await?;
+        self.async_task("Async.PBD.plug", json!([self.session, pbd_ref]))
+            .await?;
+        Ok(())
+    }
+
+    async fn sr_trim(&self, sr_uuid: &str) -> Result<(), ApiError> {
+        let pbds = self.records("PBD").await?;
+        let sr_ref: String = self
+            .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
+            .await?;
+        let Some((_, pbd)) = pbds.iter().find(|(_, pbd)| {
+            pbd["SR"].as_str() == Some(sr_ref.as_str())
+                && pbd["currently_attached"].as_bool() == Some(true)
+        }) else {
+            return Err(ApiError::Xen(
+                "Attach the storage repository to a host before reclaiming space.".into(),
+            ));
+        };
+        let host_ref = text(pbd, "host");
+        let result: String = self
+            .request(
+                "host.call_plugin",
+                json!([
+                    self.session,
+                    host_ref,
+                    "trim",
+                    "do_trim",
+                    {"sr_uuid": sr_uuid}
+                ]),
+            )
+            .await?;
+        if trim_succeeded(&result) {
+            Ok(())
+        } else {
+            Err(ApiError::Xen(trim_error(&result)))
+        }
     }
 
     pub async fn dismiss_alert(&self, message_uuid: &str) -> Result<(), ApiError> {
@@ -2130,6 +2275,52 @@ impl Connection {
 
 const MAX_VM_DELAY: u64 = 7 * 24 * 60 * 60;
 
+fn validate_sr_fields(name: &str, description: &str, location: &str) -> Result<(), ApiError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 255 {
+        return Err(ApiError::Xen(
+            "Enter a storage repository name between 1 and 255 characters.".into(),
+        ));
+    }
+    if description.chars().count() > 1024 {
+        return Err(ApiError::Xen(
+            "The description must be 1024 characters or fewer.".into(),
+        ));
+    }
+    validate_sr_location(location)
+}
+
+fn validate_sr_location(location: &str) -> Result<(), ApiError> {
+    let location = location.trim();
+    if !location.starts_with('/')
+        || location == "/"
+        || location.contains("..")
+        || location.chars().count() > 255
+        || location.chars().any(char::is_control)
+    {
+        return Err(ApiError::Xen(
+            "Enter an absolute host path such as /var/tmp/xen-storage.".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn trim_succeeded(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("true")
+}
+
+fn trim_error(value: &str) -> String {
+    if let Some(message) = value
+        .split("<key>errmsg</key>")
+        .nth(1)
+        .and_then(|rest| rest.split("<value>").nth(1))
+        .and_then(|rest| rest.split("</value>").next())
+    {
+        return format!("Trim failed: {message}");
+    }
+    format!("Trim failed: {value}")
+}
+
 fn valid_vbd_mode(mode: &str) -> bool {
     matches!(mode, "RO" | "RW")
 }
@@ -2358,6 +2549,43 @@ mod tests {
         );
         assert!(owner_vdis(&vbds, &json!({"suspend_VDI": "OpaqueRef:NULL"}), "vm").len() == 1);
     }
+    #[test]
+    fn trim_results_are_interpreted() {
+        assert!(trim_succeeded("true"));
+        assert!(trim_succeeded(" TRUE "));
+        assert!(!trim_succeeded("false"));
+        assert!(!trim_succeeded(
+            "<trim_response><key_value_pair><key>errcode</key><value>UnsupportedSRForTrim</value></key_value_pair><key_value_pair><key>errmsg</key><value>Trim on SR not supported</value></key_value_pair></trim_response>"
+        ));
+        assert_eq!(
+            trim_error(
+                "<trim_response><key_value_pair><key>errmsg</key><value>Trim on SR not supported</value></key_value_pair></trim_response>"
+            ),
+            "Trim failed: Trim on SR not supported"
+        );
+    }
+
+    #[test]
+    fn sr_create_fields_and_locations_are_validated() {
+        assert!(validate_sr_fields("storage", "", "/var/tmp/xen-storage").is_ok());
+        assert!(validate_sr_fields("", "", "/var/tmp/xen-storage").is_err());
+        assert!(validate_sr_fields(&"x".repeat(256), "", "/var/tmp/xen-storage").is_err());
+        assert!(validate_sr_fields("storage", &"x".repeat(1025), "/var/tmp/xen-storage").is_err());
+        for location in [
+            "",
+            "/",
+            "var/tmp/xen-storage",
+            "/var/../etc",
+            "/var/\nstorage",
+        ] {
+            assert!(
+                validate_sr_fields("storage", "", location).is_err(),
+                "{location:?} should fail"
+            );
+        }
+        assert!(validate_sr_location("/var/tmp/xen-storage").is_ok());
+    }
+
     #[test]
     fn disk_mode_validation_is_strict() {
         assert!(valid_vbd_mode("RO"));

@@ -431,6 +431,61 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn create_sr(
+        &self,
+        connection_id: &str,
+        host_uuid: &str,
+        name: String,
+        description: String,
+        location: String,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !active
+            .snapshot
+            .read()
+            .await
+            .hosts
+            .iter()
+            .any(|host| host.uuid == host_uuid)
+        {
+            return Err("This host is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .create_sr(host_uuid, &name, &description, &location)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn reattach_sr(
+        &self,
+        connection_id: &str,
+        sr_uuid: &str,
+        host_uuid: &str,
+        location: String,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !active
+            .snapshot
+            .read()
+            .await
+            .storage
+            .iter()
+            .any(|sr| sr.uuid == sr_uuid)
+        {
+            return Err("This storage repository is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .reattach_sr(sr_uuid, host_uuid, &location)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn sr_action(
         &self,
         connection_id: &str,

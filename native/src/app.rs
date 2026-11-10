@@ -691,6 +691,53 @@ impl App {
                         .toasts
                         .push(Toast::new(message, ToastKind::Error)),
                 },
+                Event::SrCreated { result } => match result {
+                    Ok(()) => {
+                        self.state.sr_create_dialog = None;
+                        self.state.toasts.push(Toast::new(
+                            "Storage repository created.",
+                            ToastKind::Success,
+                        ));
+                    }
+                    Err(message) => {
+                        if let Some(dialog) = self.state.sr_create_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
+                Event::SrReattached { sr_uuid, result } => match result {
+                    Ok(()) => {
+                        if self
+                            .state
+                            .sr_reattach_dialog
+                            .as_ref()
+                            .is_some_and(|dialog| dialog.sr_uuid == sr_uuid)
+                        {
+                            self.state.sr_reattach_dialog = None;
+                        }
+                        self.state.toasts.push(Toast::new(
+                            "Storage repository reattached.",
+                            ToastKind::Success,
+                        ));
+                    }
+                    Err(message) => {
+                        if let Some(dialog) = self.state.sr_reattach_dialog.as_mut()
+                            && dialog.sr_uuid == sr_uuid
+                        {
+                            dialog.submitting = false;
+                            dialog.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::NetworkChanged { action, result } => match result {
                     Ok(()) => {
                         self.state.network_create_dialog = None;
@@ -1867,6 +1914,148 @@ impl App {
                     self.worker.send(Command::DestroyNetwork {
                         connection_id: dialog.connection_id.clone(),
                         network_uuid: dialog.network_uuid.clone(),
+                    });
+                }
+                UiAction::OpenSrCreate => {
+                    let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
+                    else {
+                        self.state.toasts.push(Toast::new(
+                            "Select a pool before creating a storage repository.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    let hosts: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .hosts
+                                    .iter()
+                                    .map(|host| (host.uuid.clone(), host.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    if hosts.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "No host is available for the new storage repository.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    }
+                    self.state.sr_create_dialog = Some(crate::state::SrCreateDialog {
+                        connection_id,
+                        host_uuid: hosts.first().map(|(uuid, _)| uuid.clone()),
+                        hosts,
+                        name: String::new(),
+                        description: String::new(),
+                        location: String::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseSrCreate => {
+                    if !self
+                        .state
+                        .sr_create_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.sr_create_dialog = None;
+                    }
+                }
+                UiAction::SaveSrCreate => {
+                    let Some(dialog) = self.state.sr_create_dialog.as_mut() else {
+                        continue;
+                    };
+                    if dialog.name.trim().is_empty() {
+                        dialog.error = Some("Enter a storage repository name.".into());
+                        continue;
+                    }
+                    let Some(host_uuid) = dialog.host_uuid.clone() else {
+                        dialog.error = Some("Select a host.".into());
+                        continue;
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::CreateSr {
+                        connection_id: dialog.connection_id.clone(),
+                        host_uuid,
+                        name: dialog.name.trim().to_owned(),
+                        description: dialog.description.clone(),
+                        location: dialog.location.trim().to_owned(),
+                    });
+                }
+                UiAction::OpenSrReattach => {
+                    let Some(ObjectKey::Storage {
+                        connection_id,
+                        sr_uuid,
+                    }) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some(sr) = find_connection(&self.workspace, &connection_id)
+                        .and_then(crate::state::connection_inventory)
+                        .and_then(|inventory| {
+                            inventory.storage.iter().find(|sr| sr.uuid == sr_uuid)
+                        })
+                    else {
+                        continue;
+                    };
+                    let hosts: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .hosts
+                                    .iter()
+                                    .map(|host| (host.uuid.clone(), host.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    if hosts.is_empty() {
+                        continue;
+                    }
+                    self.state.sr_reattach_dialog = Some(crate::state::SrReattachDialog {
+                        connection_id,
+                        sr_uuid: sr.uuid.clone(),
+                        sr_name: sr.name.clone(),
+                        host_uuid: hosts.first().map(|(uuid, _)| uuid.clone()),
+                        hosts,
+                        location: String::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseSrReattach => {
+                    if !self
+                        .state
+                        .sr_reattach_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.sr_reattach_dialog = None;
+                    }
+                }
+                UiAction::SaveSrReattach => {
+                    let Some(dialog) = self.state.sr_reattach_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(host_uuid) = dialog.host_uuid.clone() else {
+                        dialog.error = Some("Select a host.".into());
+                        continue;
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::ReattachSr {
+                        connection_id: dialog.connection_id.clone(),
+                        sr_uuid: dialog.sr_uuid.clone(),
+                        host_uuid,
+                        location: dialog.location.trim().to_owned(),
                     });
                 }
                 UiAction::PromptSrAction {

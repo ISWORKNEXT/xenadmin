@@ -447,15 +447,31 @@ impl RawInventory {
         let mut storage: Vec<_> = self
             .storage
             .values()
-            .map(|r| Storage {
-                uuid: text(r, "uuid"),
-                name: text(r, "name_label"),
-                storage_type: text(r, "type"),
-                content_type: text(r, "content_type"),
-                description: text(r, "name_description"),
-                total: number(r, "physical_size"),
-                used: number(r, "physical_utilisation"),
-                shared: boolean(r, "shared"),
+            .map(|r| {
+                let pbd_refs = r["PBDs"].as_array().cloned().unwrap_or_default();
+                let pbd_count = pbd_refs.len();
+                let pbd_attached = pbd_refs
+                    .iter()
+                    .filter(|reference| {
+                        reference.as_str().is_some_and(|reference| {
+                            self.pbds.get(reference).is_some_and(|pbd| {
+                                pbd["currently_attached"].as_bool() == Some(true)
+                            })
+                        })
+                    })
+                    .count();
+                Storage {
+                    uuid: text(r, "uuid"),
+                    name: text(r, "name_label"),
+                    storage_type: text(r, "type"),
+                    content_type: text(r, "content_type"),
+                    description: text(r, "name_description"),
+                    total: number(r, "physical_size"),
+                    used: number(r, "physical_utilisation"),
+                    shared: boolean(r, "shared"),
+                    pbd_count,
+                    pbd_attached,
+                }
             })
             .collect();
         storage.sort_by(|a, b| a.name.cmp(&b.name));
@@ -735,6 +751,8 @@ pub struct Storage {
     pub total: u64,
     pub used: u64,
     pub shared: bool,
+    pub pbd_count: usize,
+    pub pbd_attached: usize,
 }
 
 #[derive(Clone, Serialize)]
