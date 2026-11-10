@@ -863,18 +863,57 @@ fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
 fn network_create(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
     let mut close = false;
     let mut save = false;
+    let pifs: Vec<(String, String, String)> = state
+        .pif_catalog
+        .iter()
+        .map(|pif| (pif.uuid.clone(), pif.host_name.clone(), pif.device.clone()))
+        .collect();
     let Some(dialog) = state.network_create_dialog.as_mut() else {
         return;
     };
     let response = egui::Modal::new(egui::Id::unique("network-create-modal"))
         .frame(theme::modal_frame())
         .show(ctx, |ui| {
-            ui.set_width(520.0);
+            ui.set_width(560.0);
             modal_title(
                 ui,
                 "Add network",
-                "Creates an internal XenAPI network. Attach a PIF or VIF afterwards.",
+                match dialog.kind.as_str() {
+                    "sriov" => "Creates an SR-IOV logical network on a physical function.",
+                    "chin" => "Creates a cross-host internal network tunnelled over management.",
+                    _ => "Creates an internal XenAPI network. Attach a PIF or VIF afterwards.",
+                },
             );
+            widgets::field_label(ui, "Type");
+            egui::ComboBox::from_id_salt("network-kind")
+                .selected_text(
+                    RichText::new(match dialog.kind.as_str() {
+                        "sriov" => "SR-IOV logical network",
+                        "chin" => "Cross-host internal (CHIN)",
+                        _ => "Internal network",
+                    })
+                    .size(11.0),
+                )
+                .width(ui.available_width())
+                .show_ui(ui, |ui| {
+                    for (value, label) in [
+                        ("internal", "Internal network"),
+                        ("sriov", "SR-IOV logical network"),
+                        ("chin", "Cross-host internal (CHIN)"),
+                    ] {
+                        if ui
+                            .selectable_label(
+                                dialog.kind == value,
+                                RichText::new(label).size(11.0),
+                            )
+                            .clicked()
+                        {
+                            dialog.kind = value.into();
+                            dialog.pif_uuid = None;
+                        }
+                    }
+                });
+            ui.add_space(8.0);
             widgets::field_label(ui, "Name");
             ui.add_enabled(
                 !dialog.submitting,
@@ -894,14 +933,123 @@ fn network_create(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<Ui
                     .margin(egui::Margin::symmetric(8, 5)),
             );
             ui.add_space(8.0);
-            widgets::field_label(ui, "MTU");
-            ui.add_enabled(
-                !dialog.submitting,
-                egui::TextEdit::singleline(&mut dialog.mtu)
-                    .desired_width(f32::INFINITY)
-                    .char_limit(4)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "MTU");
+                columns[0].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.mtu)
+                        .char_limit(4)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                columns[1].add_enabled(
+                    !dialog.submitting,
+                    egui::Checkbox::new(
+                        &mut dialog.autoplug,
+                        RichText::new("Automatically plug new VIFs").size(10.0),
+                    ),
+                );
+            });
+            if dialog.kind != "internal" {
+                ui.add_space(8.0);
+                widgets::field_label(
+                    ui,
+                    if dialog.kind == "sriov" {
+                        "Physical function (PF)"
+                    } else {
+                        "Transport (management) interface"
+                    },
+                );
+                let candidates: Vec<&(String, String, String)> = pifs
+                    .iter()
+                    .filter(|(uuid, host, device)| {
+                        let Some(pif) = state.pif_catalog.iter().find(|pif| pif.uuid == *uuid)
+                        else {
+                            return false;
+                        };
+                        let _ = (host, device);
+                        if dialog.kind == "sriov" {
+                            pif.sriov_candidate()
+                        } else {
+                            pif.chin_candidate()
+                        }
+                    })
+                    .collect();
+                let selected = dialog
+                    .pif_uuid
+                    .as_ref()
+                    .and_then(|uuid| candidates.iter().find(|(id, _, _)| id == uuid))
+                    .map(|(_, host, device)| format!("{host} · {device}"))
+                    .unwrap_or_else(|| {
+                        if state.pif_catalog_loading {
+                            "Loading interfaces…".into()
+                        } else {
+                            "Select an interface".into()
+                        }
+                    });
+                egui::ComboBox::from_id_salt("network-pif")
+                    .selected_text(RichText::new(selected).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for (uuid, host, device) in &candidates {
+                            if ui
+                                .selectable_label(
+                                    dialog.pif_uuid.as_deref() == Some(uuid.as_str()),
+                                    RichText::new(format!("{host} · {device}")).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.pif_uuid = Some(uuid.clone());
+                            }
+                        }
+                    });
+                if candidates.is_empty() && !state.pif_catalog_loading {
+                    ui.label(
+                        RichText::new(if dialog.kind == "sriov" {
+                            "No spare physical function is available; management, VLAN and bonded interfaces are excluded."
+                        } else {
+                            "No attached management interface is available."
+                        })
+                        .size(9.0)
+                        .color(amber()),
+                    );
+                }
+                if dialog.kind == "chin" {
+                    ui.add_space(8.0);
+                    widgets::field_label(ui, "Tunnel protocol");
+                    egui::ComboBox::from_id_salt("chin-protocol")
+                        .selected_text(
+                            RichText::new(if dialog.protocol == "vxlan" {
+                                "VXLAN"
+                            } else {
+                                "GRE"
+                            })
+                            .size(11.0),
+                        )
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for (value, label) in [("gre", "GRE"), ("vxlan", "VXLAN")] {
+                                if ui
+                                    .selectable_label(
+                                        dialog.protocol == value,
+                                        RichText::new(label).size(11.0),
+                                    )
+                                    .clicked()
+                                {
+                                    dialog.protocol = value.into();
+                                }
+                            }
+                        });
+                }
+                ui.label(
+                    RichText::new(if dialog.kind == "sriov" {
+                        "SR-IOV on the management interface is blocked to protect connectivity."
+                    } else {
+                        "CHIN requires a management interface on every pool host; add hosts before creating it."
+                    })
+                    .size(9.0)
+                    .color(dim_fg()),
+                );
+            }
             if let Some(error) = &dialog.error {
                 ui.add_space(8.0);
                 ui.label(RichText::new(error).size(10.0).color(red()));
@@ -920,7 +1068,9 @@ fn network_create(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<Ui
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui
                         .add_enabled(
-                            !dialog.submitting && !dialog.name.trim().is_empty(),
+                            !dialog.submitting
+                                && !dialog.name.trim().is_empty()
+                                && (dialog.kind == "internal" || dialog.pif_uuid.is_some()),
                             widgets::primary_button(if dialog.submitting {
                                 "Creating…"
                             } else {

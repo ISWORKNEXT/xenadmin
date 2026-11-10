@@ -393,9 +393,16 @@ impl Connection {
         if network["uuid"].as_str() != Some(network_uuid) {
             return Err(ApiError::Protocol);
         }
-        let (pifs, bonds) = tokio::join!(self.records("PIF"), self.records("Bond"));
+        let (pifs, bonds, network_sriovs, tunnels) = tokio::join!(
+            self.records("PIF"),
+            self.records("Bond"),
+            self.records("network_sriov"),
+            self.records("tunnel")
+        );
         let pifs = pifs?;
         let bonds = bonds?;
+        let network_sriovs = network_sriovs.unwrap_or_default();
+        let tunnels = tunnels.unwrap_or_default();
         let attached_pifs: Vec<(&String, &Value)> = pifs
             .iter()
             .filter(|(_, pif)| pif["network"].as_str() == Some(network_ref.as_str()))
@@ -407,6 +414,30 @@ impl Connection {
             return Err(ApiError::Xen(
                 "A network carrying the management interface cannot be destroyed.".into(),
             ));
+        }
+        // Tear down SR-IOV logical PIFs and CHIN tunnels before the network.
+        for (sriov_ref, sriov) in &network_sriovs {
+            let logical_is_attached = sriov["logical_PIF"]
+                .as_str()
+                .and_then(|logical| pifs.get(logical))
+                .is_some_and(|pif| pif["network"].as_str() == Some(network_ref.as_str()));
+            if logical_is_attached {
+                self.async_task(
+                    "Async.Network_sriov.destroy",
+                    json!([self.session, sriov_ref]),
+                )
+                .await?;
+            }
+        }
+        for (tunnel_ref, tunnel) in &tunnels {
+            let access_is_attached = tunnel["access_PIF"]
+                .as_str()
+                .and_then(|access| pifs.get(access))
+                .is_some_and(|pif| pif["network"].as_str() == Some(network_ref.as_str()));
+            if access_is_attached {
+                self.async_task("Async.Tunnel.destroy", json!([self.session, tunnel_ref]))
+                    .await?;
+            }
         }
         for (_, pif) in &attached_pifs {
             let vlan_ref = pif["VLAN_master_of"].as_str().unwrap_or_default();

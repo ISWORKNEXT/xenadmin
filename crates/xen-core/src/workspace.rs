@@ -872,6 +872,46 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn create_sriov_network(
+        &self,
+        connection_id: &str,
+        name: String,
+        description: String,
+        mtu: u64,
+        autoplug: bool,
+        pif_uuids: Vec<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_sriov_network(&name, &description, mtu, autoplug, pif_uuids)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_chin_network(
+        &self,
+        connection_id: &str,
+        name: String,
+        description: String,
+        mtu: u64,
+        autoplug: bool,
+        protocol: String,
+        pif_uuids: Vec<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_chin_network(&name, &description, mtu, autoplug, &protocol, pif_uuids)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn create_bond(
         &self,
         connection_id: &str,

@@ -100,6 +100,23 @@ pub enum Command {
         pif_uuid: String,
         plugged: bool,
     },
+    CreateSriovNetwork {
+        connection_id: String,
+        name: String,
+        description: String,
+        mtu: u64,
+        autoplug: bool,
+        pif_uuids: Vec<String>,
+    },
+    CreateChinNetwork {
+        connection_id: String,
+        name: String,
+        description: String,
+        mtu: u64,
+        autoplug: bool,
+        protocol: String,
+        pif_uuids: Vec<String>,
+    },
     CreateBond {
         connection_id: String,
         name: String,
@@ -1245,6 +1262,54 @@ fn dispatch(
                     .await;
                 let _ = pif_uuid;
                 let _ = events.send(Event::PifChanged { result });
+            }
+            Command::CreateSriovNetwork {
+                connection_id,
+                name,
+                description,
+                mtu,
+                autoplug,
+                pif_uuids,
+            } => {
+                let result = workspace
+                    .create_sriov_network(
+                        &connection_id,
+                        name,
+                        description,
+                        mtu,
+                        autoplug,
+                        pif_uuids,
+                    )
+                    .await;
+                let _ = events.send(Event::NetworkChanged {
+                    action: "sriov_create".into(),
+                    result,
+                });
+            }
+            Command::CreateChinNetwork {
+                connection_id,
+                name,
+                description,
+                mtu,
+                autoplug,
+                protocol,
+                pif_uuids,
+            } => {
+                let result = workspace
+                    .create_chin_network(
+                        &connection_id,
+                        name,
+                        description,
+                        mtu,
+                        autoplug,
+                        protocol,
+                        pif_uuids,
+                    )
+                    .await;
+                let _ = events.send(Event::NetworkChanged {
+                    action: "chin_create".into(),
+                    result,
+                });
             }
             Command::CreateBond {
                 connection_id,

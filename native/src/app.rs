@@ -1311,6 +1311,8 @@ impl App {
                                 "create" => "Network created.",
                                 "bond_create" => "Bond created.",
                                 "vlan_create" => "VLAN created.",
+                                "sriov_create" => "SR-IOV network created.",
+                                "chin_create" => "Cross-host network created.",
                                 _ => "Network destroyed.",
                             },
                             ToastKind::Success,
@@ -4000,11 +4002,25 @@ impl App {
                         ));
                         continue;
                     };
+                    let connection_id_for_pifs = connection_id.clone();
+                    self.state.pif_catalog = Vec::new();
+                    self.state.pif_catalog_error = None;
+                    self.state.pif_catalog_connection = Some(connection_id_for_pifs.clone());
+                    self.state.pif_catalog_loading = true;
+                    self.state.pif_catalog_seq += 1;
+                    self.worker.send(Command::PifCatalog {
+                        seq: self.state.pif_catalog_seq,
+                        connection_id: connection_id_for_pifs,
+                    });
                     self.state.network_create_dialog = Some(crate::state::NetworkCreateDialog {
                         connection_id,
+                        kind: "internal".into(),
                         name: String::new(),
                         description: String::new(),
                         mtu: "1500".into(),
+                        pif_uuid: None,
+                        protocol: "gre".into(),
+                        autoplug: true,
                         submitting: false,
                         error: None,
                     });
@@ -4035,14 +4051,70 @@ impl App {
                         dialog.error = Some("MTU must be between 1500 and 9000.".into());
                         continue;
                     }
+                    if dialog.kind != "internal" && dialog.pif_uuid.is_none() {
+                        dialog.error = Some("Select a physical interface.".into());
+                        continue;
+                    }
+                    let pif_uuids: Vec<String> = dialog.pif_uuid.iter().cloned().collect();
+                    if dialog.kind == "sriov"
+                        && let Err(error) = xen_core::network::validate_sriov_network(
+                            &dialog.name,
+                            &dialog.description,
+                            mtu,
+                            &pif_uuids,
+                        )
+                    {
+                        dialog.error = Some(error.to_string());
+                        continue;
+                    }
+                    if dialog.kind == "chin"
+                        && let Err(error) = xen_core::network::validate_chin_network(
+                            &dialog.name,
+                            &dialog.description,
+                            mtu,
+                            &dialog.protocol,
+                            &pif_uuids,
+                        )
+                    {
+                        dialog.error = Some(error.to_string());
+                        continue;
+                    }
                     dialog.submitting = true;
                     dialog.error = None;
-                    self.worker.send(Command::CreateNetwork {
-                        connection_id: dialog.connection_id.clone(),
-                        name: dialog.name.trim().to_owned(),
-                        description: dialog.description.clone(),
-                        mtu,
-                    });
+                    let connection_id = dialog.connection_id.clone();
+                    let name = dialog.name.trim().to_owned();
+                    let description = dialog.description.clone();
+                    match dialog.kind.as_str() {
+                        "sriov" => {
+                            self.worker.send(Command::CreateSriovNetwork {
+                                connection_id,
+                                name,
+                                description,
+                                mtu,
+                                autoplug: dialog.autoplug,
+                                pif_uuids,
+                            });
+                        }
+                        "chin" => {
+                            self.worker.send(Command::CreateChinNetwork {
+                                connection_id,
+                                name,
+                                description,
+                                mtu,
+                                autoplug: dialog.autoplug,
+                                protocol: dialog.protocol.clone(),
+                                pif_uuids,
+                            });
+                        }
+                        _ => {
+                            self.worker.send(Command::CreateNetwork {
+                                connection_id,
+                                name,
+                                description,
+                                mtu,
+                            });
+                        }
+                    }
                 }
                 UiAction::PromptDestroyNetwork {
                     connection_id,

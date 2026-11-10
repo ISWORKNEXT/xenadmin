@@ -40,6 +40,18 @@ impl PifSummary {
             && self.vlan == -1
             && self.bond_master.is_empty()
     }
+
+    pub fn sriov_candidate(&self) -> bool {
+        self.physical
+            && !self.management
+            && self.attached
+            && self.vlan == -1
+            && self.bond_master.is_empty()
+    }
+
+    pub fn chin_candidate(&self) -> bool {
+        self.management && self.attached && self.vlan == -1
+    }
 }
 
 impl Connection {
@@ -147,6 +159,153 @@ impl Connection {
         };
         self.async_task(method, json!([self.session, pif_ref]))
             .await
+    }
+
+    /// Create an SR-IOV logical network and enable it on the selected PFs.
+    pub async fn create_sriov_network(
+        &self,
+        name: &str,
+        description: &str,
+        mtu: u64,
+        autoplug: bool,
+        pif_uuids: Vec<String>,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        validate_sriov_network(name, description, mtu, &pif_uuids)?;
+        let mut members = Vec::new();
+        for uuid in &pif_uuids {
+            let pif_ref: String = self
+                .request("PIF.get_by_uuid", json!([self.session, uuid]))
+                .await?;
+            let pif: Value = self
+                .request("PIF.get_record", json!([self.session, pif_ref]))
+                .await?;
+            if pif["uuid"].as_str() != Some(uuid.as_str()) || !sriov_pif_eligible(&pif) {
+                return Err(ApiError::Xen(
+                    "SR-IOV can only be enabled on attached physical interfaces that are not management, VLAN or bond interfaces."
+                        .into(),
+                ));
+            }
+            members.push(pif_ref);
+        }
+        let network_ref: String = self
+            .request(
+                "network.create",
+                json!([self.session, {
+                    "name_label": name.trim(),
+                    "name_description": description,
+                    "MTU": mtu,
+                    "other_config": {"autoplug": autoplug.to_string()},
+                    "tags": [],
+                    "bridge": "",
+                    "managed": true
+                }]),
+            )
+            .await?;
+        let mut created = Vec::new();
+        for pif_ref in &members {
+            match self
+                .async_task(
+                    "Async.Network_sriov.create",
+                    json!([self.session, pif_ref, network_ref]),
+                )
+                .await
+            {
+                Ok(()) => created.push(pif_ref.clone()),
+                Err(error) => {
+                    for pif in created {
+                        let _ = self.destroy_sriov_for_pif(&pif).await;
+                    }
+                    let _ = self
+                        .request::<Value>("network.destroy", json!([self.session, network_ref]))
+                        .await;
+                    return Err(error);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Create a cross-host internal network (CHIN) over management PIFs.
+    pub async fn create_chin_network(
+        &self,
+        name: &str,
+        description: &str,
+        mtu: u64,
+        autoplug: bool,
+        protocol: &str,
+        pif_uuids: Vec<String>,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        validate_chin_network(name, description, mtu, protocol, &pif_uuids)?;
+        let mut members = Vec::new();
+        for uuid in &pif_uuids {
+            let pif_ref: String = self
+                .request("PIF.get_by_uuid", json!([self.session, uuid]))
+                .await?;
+            let pif: Value = self
+                .request("PIF.get_record", json!([self.session, pif_ref]))
+                .await?;
+            if pif["uuid"].as_str() != Some(uuid.as_str()) || !chin_pif_eligible(&pif) {
+                return Err(ApiError::Xen(
+                    "Cross-host networks can only use attached management interfaces.".into(),
+                ));
+            }
+            members.push(pif_ref);
+        }
+        let network_ref: String = self
+            .request(
+                "network.create",
+                json!([self.session, {
+                    "name_label": name.trim(),
+                    "name_description": description,
+                    "MTU": mtu,
+                    "other_config": {"autoplug": autoplug.to_string()},
+                    "tags": [],
+                    "bridge": "",
+                    "managed": true
+                }]),
+            )
+            .await?;
+        for pif_ref in &members {
+            if let Err(error) = self
+                .request::<String>(
+                    "Async.Tunnel.create",
+                    json!([self.session, pif_ref, network_ref, protocol]),
+                )
+                .await
+            {
+                let _ = self
+                    .request::<Value>("network.destroy", json!([self.session, network_ref]))
+                    .await;
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
+    async fn destroy_sriov_for_pif(&self, pif_ref: &str) -> Result<(), ApiError> {
+        let pif: Value = self
+            .request("PIF.get_record", json!([self.session, pif_ref]))
+            .await?;
+        if let Some(refs) = pif["sriov_physical_PIF_of"].as_array() {
+            for reference in refs.iter().filter_map(Value::as_str) {
+                self.async_task(
+                    "Async.Network_sriov.destroy",
+                    json!([self.session, reference]),
+                )
+                .await?;
+            }
+        }
+        Ok(())
     }
 
     pub async fn create_bond(
@@ -306,6 +465,82 @@ fn number_i64(record: &Value, key: &str) -> i64 {
         .unwrap_or(-1)
 }
 
+pub fn validate_sriov_network(
+    name: &str,
+    description: &str,
+    mtu: u64,
+    pif_uuids: &[String],
+) -> Result<(), ApiError> {
+    validate_network_common(name, description, mtu, pif_uuids, "SR-IOV")
+}
+
+pub fn validate_chin_network(
+    name: &str,
+    description: &str,
+    mtu: u64,
+    protocol: &str,
+    pif_uuids: &[String],
+) -> Result<(), ApiError> {
+    if !matches!(protocol, "gre" | "vxlan") {
+        return Err(ApiError::Xen(
+            "Tunnel protocol must be GRE or VXLAN.".into(),
+        ));
+    }
+    validate_network_common(name, description, mtu, pif_uuids, "cross-host")
+}
+
+fn validate_network_common(
+    name: &str,
+    description: &str,
+    mtu: u64,
+    pif_uuids: &[String],
+    label: &str,
+) -> Result<(), ApiError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 255 {
+        return Err(ApiError::Xen(format!(
+            "Enter a {label} network name between 1 and 255 characters."
+        )));
+    }
+    if description.chars().count() > 1024 {
+        return Err(ApiError::Xen(
+            "The description must be 1024 characters or fewer.".into(),
+        ));
+    }
+    validate_mtu(mtu)?;
+    if pif_uuids.is_empty() {
+        return Err(ApiError::Xen(
+            "Select at least one physical interface.".into(),
+        ));
+    }
+    let mut unique = std::collections::HashSet::new();
+    for uuid in pif_uuids {
+        if !unique.insert(uuid) {
+            return Err(ApiError::Xen(
+                "Each interface can only be selected once.".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub fn sriov_pif_eligible(pif: &Value) -> bool {
+    pif["physical"].as_bool() == Some(true)
+        && pif["management"].as_bool() != Some(true)
+        && pif["currently_attached"].as_bool() == Some(true)
+        && number_i64(pif, "VLAN") == -1
+        && pif["bond_master_of"].as_array().is_none_or(Vec::is_empty)
+        && pif["sriov_physical_PIF_of"]
+            .as_array()
+            .is_none_or(Vec::is_empty)
+}
+
+pub fn chin_pif_eligible(pif: &Value) -> bool {
+    pif["management"].as_bool() == Some(true)
+        && pif["currently_attached"].as_bool() == Some(true)
+        && number_i64(pif, "VLAN") == -1
+}
+
 fn validate_bond_fields(
     name: &str,
     members: &[String],
@@ -402,6 +637,46 @@ mod tests {
         assert!(validate_vlan_fields("vlan100", "", 0, 1500).is_err());
         assert!(validate_vlan_fields("vlan100", "", 4095, 1500).is_err());
         assert!(validate_vlan_fields("vlan100", &"x".repeat(1025), 100, 1500).is_err());
+    }
+
+    #[test]
+    fn sriov_and_chin_fields_are_validated() {
+        assert!(validate_sriov_network("sriov", "", 1500, &["pif".into()]).is_ok());
+        assert!(validate_sriov_network("", "", 1500, &["pif".into()]).is_err());
+        assert!(validate_sriov_network("sriov", "", 1499, &["pif".into()]).is_err());
+        assert!(validate_sriov_network("sriov", "", 1500, &[]).is_err());
+        assert!(validate_sriov_network("sriov", "", 1500, &["a".into(), "a".into()]).is_err());
+        assert!(validate_chin_network("chin", "", 1500, "gre", &["pif".into()]).is_ok());
+        assert!(validate_chin_network("chin", "", 1500, "vxlan", &["pif".into()]).is_ok());
+        assert!(validate_chin_network("chin", "", 1500, "ipip", &["pif".into()]).is_err());
+        assert!(validate_chin_network("chin", "", 1500, "gre", &[]).is_err());
+    }
+
+    #[test]
+    fn sriov_and_chin_pif_eligibility_is_enforced() {
+        let physical = json!({
+            "physical": true,
+            "management": false,
+            "currently_attached": true,
+            "VLAN": -1,
+            "bond_master_of": [],
+            "sriov_physical_PIF_of": []
+        });
+        assert!(sriov_pif_eligible(&physical));
+        assert!(!chin_pif_eligible(&physical));
+        let mut management = physical.clone();
+        management["management"] = json!(true);
+        assert!(!sriov_pif_eligible(&management));
+        assert!(chin_pif_eligible(&management));
+        let mut enabled = physical.clone();
+        enabled["sriov_physical_PIF_of"] = json!(["sriov-ref"]);
+        assert!(!sriov_pif_eligible(&enabled));
+        let mut vlan = management.clone();
+        vlan["VLAN"] = json!(100);
+        assert!(!chin_pif_eligible(&vlan));
+        let mut detached = management.clone();
+        detached["currently_attached"] = json!(false);
+        assert!(!chin_pif_eligible(&detached));
     }
 
     #[test]

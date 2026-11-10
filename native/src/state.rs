@@ -978,9 +978,13 @@ pub struct VlanCreateDialog {
 
 pub struct NetworkCreateDialog {
     pub connection_id: String,
+    pub kind: String,
     pub name: String,
     pub description: String,
     pub mtu: String,
+    pub pif_uuid: Option<String>,
+    pub protocol: String,
+    pub autoplug: bool,
     pub submitting: bool,
     pub error: Option<String>,
 }
