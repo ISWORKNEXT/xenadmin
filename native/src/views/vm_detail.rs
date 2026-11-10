@@ -367,17 +367,17 @@ fn action_bar(
             ActionKind::Start
         };
         let can_start = action_allowed(workspace, connection_id, vm, start_kind.operation());
-        if ui
-            .add_enabled(
-                can_start,
-                widgets::primary_button(if vm.power_state == "Suspended" {
-                    "Resume"
-                } else {
-                    "Start"
-                }),
-            )
-            .clicked()
-        {
+        let start_label = if vm.power_state == "Suspended" {
+            "Resume"
+        } else {
+            "Start"
+        };
+        let start_button = if can_start {
+            widgets::primary_button(start_label)
+        } else {
+            egui::Button::new(RichText::new(start_label).size(11.5))
+        };
+        if ui.add_enabled(can_start, start_button).clicked() {
             actions.push(UiAction::Propose(
                 start_kind,
                 vec![(connection_id.to_owned(), vm_uuid.to_owned())],
