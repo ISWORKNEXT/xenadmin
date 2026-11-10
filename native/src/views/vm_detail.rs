@@ -1511,12 +1511,12 @@ fn storage(
             .cell_layout(Layout::left_to_right(Align::Center))
             .column(Column::exact(70.0))
             .column(Column::remainder().at_least(160.0))
-            .column(Column::initial(150.0))
-            .column(Column::exact(95.0))
+            .column(Column::initial(120.0))
+            .column(Column::exact(80.0))
+            .column(Column::exact(55.0))
             .column(Column::exact(65.0))
-            .column(Column::exact(80.0))
-            .column(Column::exact(80.0))
-            .column(Column::exact(250.0))
+            .column(Column::exact(65.0))
+            .column(Column::exact(95.0))
             .header(28.0, |mut header| {
                 for title in [
                     "Device", "VDI", "SR", "Size", "Mode", "Attached", "Bootable", "Actions",
@@ -1613,63 +1613,72 @@ fn storage(
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 4.0;
                             if halted {
-                                let target = if disk.mode == "RO" { "RW" } else { "RO" };
-                                if ui
-                                    .add(
-                                        egui::Button::new(
+                                ui.menu_button(RichText::new("Manage…").size(9.5), |ui| {
+                                    let target = if disk.mode == "RO" { "RW" } else { "RO" };
+                                    if ui
+                                        .button(
                                             RichText::new(if target == "RW" {
-                                                "Make RW"
+                                                "Make read-write"
                                             } else {
-                                                "Make RO"
+                                                "Make read-only"
                                             })
-                                            .size(9.5),
+                                            .size(10.5),
                                         )
-                                        .small(),
-                                    )
-                                    .on_hover_text("Change the VBD mode while the VM is shut down")
-                                    .clicked()
-                                {
-                                    actions.push(UiAction::SetVbdMode {
-                                        vbd_uuid: disk.vbd_uuid.clone(),
-                                        mode: target.into(),
-                                    });
-                                }
-                                if ui
-                                    .add(
-                                        egui::Button::new(RichText::new("Resize").size(9.5))
-                                            .small(),
-                                    )
-                                    .clicked()
-                                {
-                                    actions.push(UiAction::OpenDiskResize {
-                                        vdi_uuid: disk.vdi_uuid.clone(),
-                                        name: if disk.vdi_name.is_empty() {
-                                            format!("Disk {}", disk.device)
-                                        } else {
-                                            disk.vdi_name.clone()
-                                        },
-                                        current_gib: gib,
-                                    });
-                                }
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            RichText::new("Remove").size(9.5).color(red()),
+                                        .clicked()
+                                    {
+                                        actions.push(UiAction::SetVbdMode {
+                                            vbd_uuid: disk.vbd_uuid.clone(),
+                                            mode: target.into(),
+                                        });
+                                        ui.close();
+                                    }
+                                    if ui
+                                        .button(RichText::new("Move to another SR…").size(10.5))
+                                        .clicked()
+                                    {
+                                        actions.push(UiAction::OpenMoveDisk {
+                                            vbd_uuid: disk.vbd_uuid.clone(),
+                                            name: if disk.vdi_name.is_empty() {
+                                                format!("Disk {}", disk.device)
+                                            } else {
+                                                disk.vdi_name.clone()
+                                            },
+                                            size: disk.virtual_size,
+                                            source_sr_uuid: disk.sr_uuid.clone(),
+                                        });
+                                        ui.close();
+                                    }
+                                    if ui.button(RichText::new("Resize…").size(10.5)).clicked() {
+                                        actions.push(UiAction::OpenDiskResize {
+                                            vdi_uuid: disk.vdi_uuid.clone(),
+                                            name: if disk.vdi_name.is_empty() {
+                                                format!("Disk {}", disk.device)
+                                            } else {
+                                                disk.vdi_name.clone()
+                                            },
+                                            current_gib: gib,
+                                        });
+                                        ui.close();
+                                    }
+                                    ui.separator();
+                                    if ui
+                                        .button(
+                                            RichText::new("Remove disk…").size(10.5).color(red()),
                                         )
-                                        .small(),
-                                    )
-                                    .clicked()
-                                {
-                                    actions.push(UiAction::PromptRemoveDisk {
-                                        vbd_uuid: disk.vbd_uuid.clone(),
-                                        name: if disk.vdi_name.is_empty() {
-                                            format!("Disk {}", disk.device)
-                                        } else {
-                                            disk.vdi_name.clone()
-                                        },
-                                        owner: disk.owner,
-                                    });
-                                }
+                                        .clicked()
+                                    {
+                                        actions.push(UiAction::PromptRemoveDisk {
+                                            vbd_uuid: disk.vbd_uuid.clone(),
+                                            name: if disk.vdi_name.is_empty() {
+                                                format!("Disk {}", disk.device)
+                                            } else {
+                                                disk.vdi_name.clone()
+                                            },
+                                            owner: disk.owner,
+                                        });
+                                        ui.close();
+                                    }
+                                });
                             } else if ui
                                 .add(
                                     egui::Button::new(

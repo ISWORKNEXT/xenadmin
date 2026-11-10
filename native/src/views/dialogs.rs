@@ -42,6 +42,9 @@ pub fn show(
     if state.vdi_delete_confirm.is_some() {
         vdi_delete_confirm(ctx, state, actions);
     }
+    if state.move_disk_dialog.is_some() {
+        move_disk_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1260,6 +1263,105 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn move_disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.move_disk_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("move-disk-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(540.0);
+            modal_title(
+                ui,
+                "Move virtual disk",
+                "The disk is copied to the target SR and then re-attached.",
+            );
+            ui.label(
+                RichText::new(format!("{} · {}", dialog.name, crate::format::bytes(dialog.size)))
+                    .size(11.0)
+                    .color(muted_fg()),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Target storage repository");
+            let selected = dialog
+                .selected
+                .as_ref()
+                .and_then(|uuid| dialog.srs.iter().find(|(sr_uuid, _, _)| sr_uuid == uuid))
+                .map(|(_, name, free)| format!("{name} · {} free", crate::format::bytes(*free)))
+                .unwrap_or_else(|| "Select a storage repository".into());
+            ui.add_enabled_ui(!dialog.submitting, |ui| {
+                egui::ComboBox::from_id_salt("move-disk-sr")
+                    .selected_text(RichText::new(selected).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for (uuid, name, free) in &dialog.srs {
+                            let label =
+                                format!("{name} · {} free", crate::format::bytes(*free));
+                            if ui
+                                .selectable_label(
+                                    dialog.selected.as_deref() == Some(uuid.as_str()),
+                                    RichText::new(label).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.selected = Some(uuid.clone());
+                            }
+                        }
+                    });
+            });
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(
+                    "The VM must be shut down. The copy uses the target SR's free space until the source is deleted.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && dialog.selected.is_some(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Moving…"
+                            } else {
+                                "Move disk"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveMoveDisk);
+    }
+    if close {
+        actions.push(UiAction::CloseMoveDisk);
     }
 }
 

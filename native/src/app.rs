@@ -1060,6 +1060,7 @@ impl App {
                         "mode" => "Disk mode updated.",
                         "plug" => "Disk plugged.",
                         "unplug" => "Disk unplugged.",
+                        "move" => "Disk moved.",
                         "resize" => "Virtual disk resized.",
                         "remove" => "Virtual disk removed.",
                         _ => "Virtual disk updated.",
@@ -1082,6 +1083,14 @@ impl App {
                             {
                                 self.state.attach_vdi_dialog = None;
                             }
+                            if self
+                                .state
+                                .move_disk_dialog
+                                .as_ref()
+                                .is_some_and(|dialog| dialog.vm_uuid == vm_uuid)
+                            {
+                                self.state.move_disk_dialog = None;
+                            }
                             self.state
                                 .toasts
                                 .push(Toast::new(message, ToastKind::Success));
@@ -1093,6 +1102,11 @@ impl App {
                             {
                                 disk_dialog_error(dialog, message);
                             } else if let Some(dialog) = self.state.attach_vdi_dialog.as_mut()
+                                && dialog.vm_uuid == vm_uuid
+                            {
+                                dialog.submitting = false;
+                                dialog.error = Some(message);
+                            } else if let Some(dialog) = self.state.move_disk_dialog.as_mut()
                                 && dialog.vm_uuid == vm_uuid
                             {
                                 dialog.submitting = false;
@@ -2220,6 +2234,91 @@ impl App {
                         vm_uuid: dialog.vm_uuid.clone(),
                         vdi_uuid,
                         bootable: dialog.bootable,
+                    });
+                }
+                UiAction::OpenMoveDisk {
+                    vbd_uuid,
+                    name,
+                    size,
+                    source_sr_uuid,
+                } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let srs: Vec<(String, String, u64)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .storage
+                                    .iter()
+                                    .filter(|sr| {
+                                        sr.content_type != "iso"
+                                            && sr.uuid != source_sr_uuid
+                                            && sr.total > sr.used
+                                    })
+                                    .map(|sr| {
+                                        (
+                                            sr.uuid.clone(),
+                                            sr.name.clone(),
+                                            sr.total.saturating_sub(sr.used),
+                                        )
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    if srs.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "No other writable storage repository is available.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    }
+                    self.state.move_disk_dialog = Some(crate::state::MoveDiskDialog {
+                        connection_id,
+                        vm_uuid,
+                        vbd_uuid,
+                        name,
+                        size,
+                        selected: srs.first().map(|(uuid, _, _)| uuid.clone()),
+                        srs,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseMoveDisk => {
+                    if !self
+                        .state
+                        .move_disk_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.move_disk_dialog = None;
+                    }
+                }
+                UiAction::SaveMoveDisk => {
+                    let Some(dialog) = self.state.move_disk_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(sr_uuid) = dialog.selected.clone() else {
+                        dialog.error = Some("Select a target storage repository.".into());
+                        continue;
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::MoveDisk {
+                        connection_id: dialog.connection_id.clone(),
+                        vm_uuid: dialog.vm_uuid.clone(),
+                        vbd_uuid: dialog.vbd_uuid.clone(),
+                        sr_uuid,
                     });
                 }
                 UiAction::SetVbdMode { vbd_uuid, mode } => {

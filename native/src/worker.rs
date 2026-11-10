@@ -146,6 +146,12 @@ pub enum Command {
         vbd_uuid: String,
         mode: String,
     },
+    MoveDisk {
+        connection_id: String,
+        vm_uuid: String,
+        vbd_uuid: String,
+        sr_uuid: String,
+    },
     SetVbdPlugged {
         connection_id: String,
         vm_uuid: String,
@@ -727,6 +733,21 @@ fn dispatch(
                     )
                     .await;
                 let _ = events.send(Event::VmHaUpdated { vm_uuid, result });
+            }
+            Command::MoveDisk {
+                connection_id,
+                vm_uuid,
+                vbd_uuid,
+                sr_uuid,
+            } => {
+                let result = workspace
+                    .move_disk(&connection_id, &vm_uuid, &vbd_uuid, &sr_uuid)
+                    .await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: "move".into(),
+                    result,
+                });
             }
             Command::SetVbdMode {
                 connection_id,

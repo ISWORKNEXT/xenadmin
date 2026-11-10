@@ -751,6 +751,18 @@ pub struct HostActionConfirm {
     pub error: Option<String>,
 }
 
+pub struct MoveDiskDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub vbd_uuid: String,
+    pub name: String,
+    pub size: u64,
+    pub srs: Vec<(String, String, u64)>,
+    pub selected: Option<String>,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct VdiDeleteConfirm {
     pub connection_id: String,
     pub sr_uuid: String,
@@ -907,6 +919,7 @@ pub struct UiState {
     pub sr_vdis_error: Option<String>,
     pub sr_vdis_seq: u64,
     pub vdi_delete_confirm: Option<VdiDeleteConfirm>,
+    pub move_disk_dialog: Option<MoveDiskDialog>,
     pub vdi_catalog_seq: u64,
     pub host_action_confirm: Option<HostActionConfirm>,
     pub snapshot_selection: HashSet<String>,
@@ -982,6 +995,7 @@ impl Default for UiState {
             sr_vdis_error: None,
             sr_vdis_seq: 0,
             vdi_delete_confirm: None,
+            move_disk_dialog: None,
             vdi_catalog_seq: 0,
             host_action_confirm: None,
             snapshot_selection: HashSet::new(),
@@ -1131,6 +1145,14 @@ pub enum UiAction {
         vbd_uuid: String,
         bootable: bool,
     },
+    OpenMoveDisk {
+        vbd_uuid: String,
+        name: String,
+        size: u64,
+        source_sr_uuid: String,
+    },
+    CloseMoveDisk,
+    SaveMoveDisk,
     SetVbdMode {
         vbd_uuid: String,
         mode: String,

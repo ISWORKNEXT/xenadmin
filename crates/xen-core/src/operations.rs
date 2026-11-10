@@ -263,7 +263,7 @@ pub struct RemoteTask {
     pub can_cancel: bool,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SrAction {
     Scan,
@@ -412,6 +412,18 @@ impl Connection {
             .await?;
         if sr["uuid"].as_str() != Some(sr_uuid) {
             return Err(ApiError::Protocol);
+        }
+        if action == SrAction::Destroy {
+            let pbds = self.records("PBD").await?;
+            for (pbd_ref, pbd) in pbds
+                .iter()
+                .filter(|(_, pbd)| pbd["SR"].as_str() == Some(sr_ref.as_str()))
+            {
+                if pbd["currently_attached"].as_bool() == Some(true) {
+                    self.async_task("Async.PBD.unplug", json!([self.session, pbd_ref]))
+                        .await?;
+                }
+            }
         }
         self.async_task(action.method(), json!([self.session, sr_ref]))
             .await
@@ -1202,6 +1214,165 @@ impl Connection {
                 json!([self.session, reference, affinity_ref]),
             )
             .await?;
+        }
+        Ok(())
+    }
+
+    /// Move a data disk to another SR by copying the VDI and swapping the VBD.
+    pub async fn move_disk(
+        &self,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        target_sr_uuid: &str,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["power_state"].as_str() != Some("Halted") {
+            return Err(ApiError::Xen(
+                "Shut down the VM before moving a disk.".into(),
+            ));
+        }
+        let vbd_ref: String = self
+            .request("VBD.get_by_uuid", json!([self.session, vbd_uuid]))
+            .await?;
+        let vbd: Value = self
+            .request("VBD.get_record", json!([self.session, vbd_ref]))
+            .await?;
+        if vbd["uuid"].as_str() != Some(vbd_uuid)
+            || vbd["VM"].as_str() != Some(vm_ref.as_str())
+            || text(&vbd, "type") != "Disk"
+            || vbd["empty"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen(
+                "Only a non-empty data disk attached to this VM can be moved.".into(),
+            ));
+        }
+        let vdi_ref = text(&vbd, "VDI");
+        if vdi_ref.is_empty() || vdi_ref == "OpaqueRef:NULL" {
+            return Err(ApiError::Xen("This disk has no VDI to move.".into()));
+        }
+        let vdi: Value = self
+            .request("VDI.get_record", json!([self.session, vdi_ref]))
+            .await?;
+        if vdi["read_only"].as_bool() == Some(true) {
+            return Err(ApiError::Xen(
+                "Read-only base disks cannot be moved.".into(),
+            ));
+        }
+        if vdi["snapshots"]
+            .as_array()
+            .is_some_and(|snapshots| !snapshots.is_empty())
+            || vdi["is_a_snapshot"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen(
+                "Disks with snapshots cannot be moved; remove the snapshots first.".into(),
+            ));
+        }
+        let source_sr = text(&vdi, "SR");
+        let target_sr_ref: String = self
+            .request("SR.get_by_uuid", json!([self.session, target_sr_uuid]))
+            .await?;
+        if source_sr == target_sr_ref {
+            return Err(ApiError::Xen(
+                "Choose a different storage repository for the disk.".into(),
+            ));
+        }
+        let target_sr: Value = self
+            .request("SR.get_record", json!([self.session, target_sr_ref]))
+            .await?;
+        if target_sr["uuid"].as_str() != Some(target_sr_uuid)
+            || target_sr["content_type"].as_str() == Some("iso")
+        {
+            return Err(ApiError::Xen(
+                "Choose a writable storage repository for the disk.".into(),
+            ));
+        }
+        let free = number(&target_sr, "physical_size")
+            .saturating_sub(number(&target_sr, "physical_utilisation"));
+        if free < number(&vdi, "virtual_size") {
+            return Err(ApiError::Xen(
+                "The target storage repository does not have enough free space.".into(),
+            ));
+        }
+        let task: String = self
+            .request(
+                "Async.VDI.copy",
+                json!([self.session, vdi_ref, target_sr_ref]),
+            )
+            .await?;
+        let result = wait_task_value(self, &task)
+            .await
+            .map_err(|error| context("The disk copy failed", error))?;
+        let new_vdi_ref = decode_ref(&result).ok_or(ApiError::Protocol)?;
+        let vbd_json = |vdi: &str| {
+            json!({
+                "VM": vm_ref,
+                "VDI": vdi,
+                "userdevice": text(&vbd, "userdevice"),
+                "bootable": vbd["bootable"].as_bool().unwrap_or(false),
+                "mode": text(&vbd, "mode"),
+                "type": "Disk",
+                "empty": false,
+                "unpluggable": vbd["unpluggable"].as_bool().unwrap_or(true),
+                "device": text(&vbd, "device"),
+                "other_config": vbd["other_config"].as_object().cloned().unwrap_or_default(),
+                "qos_algorithm_type": text(&vbd, "qos_algorithm_type"),
+                "qos_algorithm_params": vbd["qos_algorithm_params"].as_object().cloned().unwrap_or_default()
+            })
+        };
+        if let Err(error) = self
+            .async_task("Async.VBD.destroy", json!([self.session, vbd_ref]))
+            .await
+        {
+            let _ = self
+                .request::<Value>("VDI.destroy", json!([self.session, new_vdi_ref]))
+                .await;
+            return Err(error);
+        }
+        let new_vbd_ref = match self
+            .request::<String>(
+                "Async.VBD.create",
+                json!([self.session, vbd_json(&new_vdi_ref)]),
+            )
+            .await
+        {
+            Ok(task) => match wait_task_value(self, &task).await {
+                Ok(value) => decode_ref(&value),
+                Err(_) => None,
+            },
+            Err(_) => None,
+        };
+        let Some(_new_vbd_ref) = new_vbd_ref else {
+            // Put the original attachment back so a failed move is not destructive.
+            let _ = self
+                .async_task(
+                    "Async.VBD.create",
+                    json!([self.session, vbd_json(&vdi_ref)]),
+                )
+                .await;
+            let _ = self
+                .request::<Value>("VDI.destroy", json!([self.session, new_vdi_ref]))
+                .await;
+            return Err(ApiError::Xen(
+                "The disk was copied but could not be attached at the new location.".into(),
+            ));
+        };
+        match self
+            .request::<Value>("VDI.destroy", json!([self.session, vdi_ref]))
+            .await
+        {
+            Ok(_) => {}
+            Err(ApiError::XenCode(code, _)) if code == "HANDLE_INVALID" => {}
+            Err(error) => return Err(error),
         }
         Ok(())
     }
