@@ -33,6 +33,7 @@ dependency.
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
 | Host performance | Implemented | Upstream-style CPU (all cores), memory and network graphs with legends; 15 min / 1 h / 24 h, search, remaining metrics and gap handling |
 | VM performance | Implemented | VM RRD with per-vCPU CPU graph, memory/network graphs, remaining metrics and the same ranges |
+| VM console | Implemented | VNC over XenAPI HTTPS CONNECT tunnel; framebuffer, mouse/wheel, keyboard and reconnect |
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
 | Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |
 | Themes | Implemented | Light/white theme by default with a persisted dark toggle |

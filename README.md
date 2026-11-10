@@ -23,7 +23,9 @@ default and a persisted dark-theme toggle.
 - Bulk actions with an explicit target review dialog.
 - XenAPI task progress, failure, success, cancellation and “check again” for
   interrupted tasks without resubmitting the mutation.
-- VM detail tabs: General, Performance (VM RRD), Storage, Network, HA and Snapshots.
+- VM detail tabs: General, Performance (VM RRD), Storage, Network, HA, Snapshots and Console.
+- Embedded VNC console over the host's HTTPS CONNECT tunnel, with live
+  framebuffer updates, mouse, scroll wheel and keyboard input.
 - Host detail page: General, CPU/memory, Performance, Networking, Storage,
   Hardware, Updates, Certificates, Health.
 - Host performance graphs with all CPU cores in one chart, plus memory and

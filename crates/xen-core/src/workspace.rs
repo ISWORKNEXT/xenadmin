@@ -255,6 +255,23 @@ impl Workspace {
             .map_err(|error| error.to_string())
     }
 
+    pub async fn console_tunnel(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+    ) -> Result<crate::console::ConsoleTunnel, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .console_tunnel(vm_uuid)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     pub async fn vm_performance(
         &self,
         connection_id: &str,

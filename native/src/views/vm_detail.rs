@@ -67,13 +67,19 @@ pub fn show(
         actions,
     );
 
-    let mut index = VmTab::ALL
+    let tabs: &[VmTab] = if is_template || is_snapshot {
+        &VmTab::ALL[..6]
+    } else {
+        &VmTab::ALL
+    };
+    let labels: Vec<&str> = tabs.iter().map(|tab| tab.label()).collect();
+    let mut index = tabs
         .iter()
         .position(|tab| *tab == state.vm_subtab)
         .unwrap_or(0);
-    widgets::tab_bar(ui, &VmTab::ALL.map(VmTab::label), &mut index);
+    widgets::tab_bar(ui, &labels, &mut index);
     ui.add_space(4.0);
-    let tab = VmTab::ALL[index];
+    let tab = tabs[index];
     if tab != state.vm_subtab {
         actions.push(UiAction::SetVmTab(tab));
     }
@@ -115,6 +121,7 @@ pub fn show(
             }
         }
         VmTab::Snapshots => snapshots(ui, workspace, connection, vm, read_only, actions),
+        VmTab::Console => console(ui, state, &connection_id, &vm_uuid, vm, actions),
     }
 }
 
@@ -732,6 +739,468 @@ fn performance(ui: &mut Ui, state: &mut UiState, actions: &mut Vec<UiAction>) {
     });
 }
 
+fn console(
+    ui: &mut Ui,
+    state: &mut UiState,
+    connection_id: &str,
+    vm_uuid: &str,
+    vm: &xen_core::xapi::VirtualMachine,
+    actions: &mut Vec<UiAction>,
+) {
+    theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let matching = state.console.as_ref().is_some_and(|console| {
+            console.connection_id == connection_id && console.vm_uuid == vm_uuid
+        });
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Virtual console").size(15.0).strong());
+            widgets::badge(ui, "VNC", accent());
+            if let Some(console) = state.console.as_ref().filter(|_| matching) {
+                let status = match console.status {
+                    crate::state::ConsoleStatus::Connecting => "Connecting".to_owned(),
+                    crate::state::ConsoleStatus::Connected => {
+                        if console.width > 0 {
+                            format!("{}×{}", console.width, console.height)
+                        } else {
+                            "Connected".to_owned()
+                        }
+                    }
+                    crate::state::ConsoleStatus::Closed => "Disconnected".to_owned(),
+                };
+                ui.label(RichText::new(status).size(10.0).color(muted_fg()));
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if matching {
+                    if ui
+                        .add(egui::Button::new(RichText::new("Disconnect").size(11.0)))
+                        .clicked()
+                    {
+                        actions.push(UiAction::CloseConsole);
+                    }
+                } else if ui
+                    .add_enabled(
+                        vm.power_state == "Running",
+                        widgets::primary_button("Open console"),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenConsole(
+                        connection_id.to_owned(),
+                        vm_uuid.to_owned(),
+                    ));
+                }
+            });
+        });
+        ui.label(
+            RichText::new(
+                "The console is a direct VNC tunnel through the host and stays open when you switch tabs.",
+            )
+            .size(10.0)
+            .color(dim_fg()),
+        );
+        ui.add_space(6.0);
+
+        if !matching {
+            if let Some(console) = state.console.as_ref() {
+                ui.label(
+                    RichText::new(format!(
+                        "A console session is already open for another VM ({}).",
+                        console.vm_uuid
+                    ))
+                    .size(10.5)
+                    .color(amber()),
+                );
+            }
+            if vm.power_state == "Running" {
+                ui.label(
+                    RichText::new("Open the console to view and control this VM.")
+                        .size(11.0)
+                        .color(muted_fg()),
+                );
+            } else {
+                ui.label(
+                    RichText::new("Start the VM before opening its console.")
+                        .size(11.0)
+                        .color(dim_fg()),
+                );
+            }
+            return;
+        }
+
+        let Some(console) = state.console.as_mut() else {
+            return;
+        };
+        if console.status == crate::state::ConsoleStatus::Connecting {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(
+                    RichText::new("Connecting to the console…")
+                        .size(11.0)
+                        .color(muted_fg()),
+                );
+            });
+            return;
+        }
+        if let crate::state::ConsoleStatus::Closed = console.status {
+            ui.label(
+                RichText::new(if console.message.is_empty() {
+                    "The console connection closed."
+                } else {
+                    &console.message
+                })
+                .size(11.0)
+                .color(red()),
+            );
+            if ui.button("Reconnect").clicked() {
+                actions.push(UiAction::OpenConsole(
+                    connection_id.to_owned(),
+                    vm_uuid.to_owned(),
+                ));
+            }
+            return;
+        }
+        if console.width == 0 || console.height == 0 || console.pixels.is_empty() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(
+                    RichText::new("Waiting for the first frame…")
+                        .size(11.0)
+                        .color(muted_fg()),
+                );
+            });
+            return;
+        }
+
+        let size = [console.width as usize, console.height as usize];
+        let needs_texture = console
+            .texture
+            .as_ref()
+            .is_none_or(|texture| texture.size() != size);
+        if needs_texture {
+            let image = egui::ColorImage::from_rgba_unmultiplied(size, &console.pixels);
+            console.texture = Some(ui.ctx().load_texture(
+                format!("vm-console-{}", console.console_id),
+                image,
+                egui::TextureOptions::LINEAR,
+            ));
+            console.dirty.clear();
+            console.dirty_full = false;
+        } else if console.dirty_full {
+            let image = egui::ColorImage::from_rgba_unmultiplied(size, &console.pixels);
+            if let Some(texture) = console.texture.as_mut() {
+                texture.set(image, egui::TextureOptions::LINEAR);
+            }
+            console.dirty.clear();
+            console.dirty_full = false;
+        } else if !console.dirty.is_empty() {
+            let dirty = std::mem::take(&mut console.dirty);
+            if let Some(texture) = console.texture.as_mut() {
+                for (x, y, width, height) in dirty {
+                    if width == 0 || height == 0 {
+                        continue;
+                    }
+                    let image = console_region(
+                        &console.pixels,
+                        console.width,
+                        x,
+                        y,
+                        width,
+                        height,
+                    );
+                    texture.set_partial(
+                        [x as usize, y as usize],
+                        image,
+                        egui::TextureOptions::LINEAR,
+                    );
+                }
+            }
+        }
+        let Some(texture) = console.texture.as_ref().map(|texture| texture.id()) else {
+            return;
+        };
+
+        let max_size = Vec2::new(ui.available_width(), 680.0);
+        let scale = (max_size.x / console.width as f32)
+            .min(max_size.y / console.height as f32)
+            .max(0.05);
+        let display = Vec2::new(
+            console.width as f32 * scale,
+            console.height as f32 * scale,
+        );
+        let console_id = console.console_id.clone();
+        let mut input_actions = Vec::new();
+        let mut console_focused = false;
+        ui.vertical_centered(|ui| {
+            let (rect, response) = ui.allocate_exact_size(display, Sense::click_and_drag());
+            ui.painter().rect_filled(rect, 0.0, egui::Color32::BLACK);
+            ui.painter().image(
+                texture,
+                rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+            if response.clicked() {
+                response.request_focus();
+            }
+            let focused = ui.memory(|memory| memory.has_focus(response.id));
+            console_focused = focused;
+            let modifiers = ui.input(|input| input.modifiers);
+            sync_console_modifiers(
+                console,
+                modifiers,
+                focused,
+                &console_id,
+                &mut input_actions,
+            );
+            if focused {
+                let events = ui.input(|input| input.events.clone());
+                for event in events {
+                    if let egui::Event::Key {
+                        key,
+                        pressed,
+                        repeat,
+                        ..
+                    } = event
+                    {
+                        if repeat {
+                            continue;
+                        }
+                        if let Some(keycode) = console_keysym(key) {
+                            input_actions.push(UiAction::ConsoleKey {
+                                console_id: console_id.clone(),
+                                keycode,
+                                down: pressed,
+                            });
+                        }
+                    }
+                }
+            }
+
+            let pointer = ui.input(|input| input.pointer.interact_pos());
+            if let Some(pos) = pointer
+                && (rect.contains(pos) || response.dragged())
+            {
+                let x = (((pos.x - rect.left()) / rect.width()) * console.width as f32)
+                    .clamp(0.0, (console.width.saturating_sub(1)) as f32)
+                    as u16;
+                let y = (((pos.y - rect.top()) / rect.height()) * console.height as f32)
+                    .clamp(0.0, (console.height.saturating_sub(1)) as f32)
+                    as u16;
+                let mut buttons = 0u8;
+                ui.input(|input| {
+                    if input.pointer.button_down(egui::PointerButton::Primary) {
+                        buttons |= 1;
+                    }
+                    if input.pointer.button_down(egui::PointerButton::Middle) {
+                        buttons |= 2;
+                    }
+                    if input.pointer.button_down(egui::PointerButton::Secondary) {
+                        buttons |= 4;
+                    }
+                });
+                if console.last_pointer != Some((x, y, buttons)) {
+                    console.last_pointer = Some((x, y, buttons));
+                    input_actions.push(UiAction::ConsolePointer {
+                        console_id: console_id.clone(),
+                        x,
+                        y,
+                        buttons,
+                    });
+                }
+                let wheel = ui.input(|input| input.smooth_scroll_delta.y);
+                if wheel != 0.0 {
+                    let bit = if wheel > 0.0 { 8 } else { 16 };
+                    input_actions.push(UiAction::ConsolePointer {
+                        console_id: console_id.clone(),
+                        x,
+                        y,
+                        buttons: buttons | bit,
+                    });
+                    input_actions.push(UiAction::ConsolePointer {
+                        console_id: console_id.clone(),
+                        x,
+                        y,
+                        buttons,
+                    });
+                }
+            }
+        });
+        state.console_focus = console_focused;
+        actions.extend(input_actions);
+    });
+}
+
+fn console_region(
+    pixels: &[u8],
+    stride_width: u16,
+    x: u16,
+    y: u16,
+    width: u16,
+    height: u16,
+) -> egui::ColorImage {
+    let row_bytes = width as usize * 4;
+    let stride = stride_width as usize * 4;
+    let mut data = Vec::with_capacity(row_bytes * height as usize);
+    for row in 0..height as usize {
+        let start = (y as usize + row) * stride + x as usize * 4;
+        if start + row_bytes <= pixels.len() {
+            data.extend_from_slice(&pixels[start..start + row_bytes]);
+        } else {
+            data.resize(data.len() + row_bytes, 0);
+        }
+    }
+    egui::ColorImage::from_rgba_unmultiplied([width as usize, height as usize], &data)
+}
+
+fn sync_console_modifiers(
+    console: &mut crate::state::ConsoleState,
+    modifiers: egui::Modifiers,
+    focused: bool,
+    console_id: &str,
+    actions: &mut Vec<UiAction>,
+) {
+    let desired = (
+        focused && modifiers.shift,
+        focused && modifiers.ctrl,
+        focused && modifiers.alt,
+        focused && modifiers.command && !modifiers.ctrl,
+    );
+    let current = console.modifiers;
+    for (index, keycode) in [0xffe1u32, 0xffe3, 0xffe9, 0xffeb].into_iter().enumerate() {
+        let wanted = match index {
+            0 => desired.0,
+            1 => desired.1,
+            2 => desired.2,
+            _ => desired.3,
+        };
+        let was = match index {
+            0 => current.0,
+            1 => current.1,
+            2 => current.2,
+            _ => current.3,
+        };
+        if wanted != was {
+            actions.push(UiAction::ConsoleKey {
+                console_id: console_id.to_owned(),
+                keycode,
+                down: wanted,
+            });
+        }
+    }
+    console.modifiers = desired;
+}
+
+fn console_keysym(key: egui::Key) -> Option<u32> {
+    use egui::Key;
+    Some(match key {
+        Key::ArrowDown => 0xff54,
+        Key::ArrowLeft => 0xff51,
+        Key::ArrowRight => 0xff53,
+        Key::ArrowUp => 0xff52,
+        Key::Escape => 0xff1b,
+        Key::Tab => 0xff09,
+        Key::Backspace => 0xff08,
+        Key::Enter => 0xff0d,
+        Key::Space => 0x20,
+        Key::Insert => 0xff63,
+        Key::Delete => 0xffff,
+        Key::Home => 0xff50,
+        Key::End => 0xff57,
+        Key::PageUp => 0xff55,
+        Key::PageDown => 0xff56,
+        Key::Colon => 0x3a,
+        Key::Comma => 0x2c,
+        Key::Backslash => 0x5c,
+        Key::Slash => 0x2f,
+        Key::Pipe => 0x7c,
+        Key::Questionmark => 0x3f,
+        Key::Exclamationmark => 0x21,
+        Key::OpenBracket => 0x5b,
+        Key::CloseBracket => 0x5d,
+        Key::OpenCurlyBracket => 0x7b,
+        Key::CloseCurlyBracket => 0x7d,
+        Key::Backtick => 0x60,
+        Key::Minus => 0x2d,
+        Key::Period => 0x2e,
+        Key::Plus => 0x2b,
+        Key::Equals => 0x3d,
+        Key::Semicolon => 0x3b,
+        Key::Quote => 0x27,
+        Key::Num0 => 0x30,
+        Key::Num1 => 0x31,
+        Key::Num2 => 0x32,
+        Key::Num3 => 0x33,
+        Key::Num4 => 0x34,
+        Key::Num5 => 0x35,
+        Key::Num6 => 0x36,
+        Key::Num7 => 0x37,
+        Key::Num8 => 0x38,
+        Key::Num9 => 0x39,
+        Key::A => 0x61,
+        Key::B => 0x62,
+        Key::C => 0x63,
+        Key::D => 0x64,
+        Key::E => 0x65,
+        Key::F => 0x66,
+        Key::G => 0x67,
+        Key::H => 0x68,
+        Key::I => 0x69,
+        Key::J => 0x6a,
+        Key::K => 0x6b,
+        Key::L => 0x6c,
+        Key::M => 0x6d,
+        Key::N => 0x6e,
+        Key::O => 0x6f,
+        Key::P => 0x70,
+        Key::Q => 0x71,
+        Key::R => 0x72,
+        Key::S => 0x73,
+        Key::T => 0x74,
+        Key::U => 0x75,
+        Key::V => 0x76,
+        Key::W => 0x77,
+        Key::X => 0x78,
+        Key::Y => 0x79,
+        Key::Z => 0x7a,
+        Key::F1 => 0xffbe,
+        Key::F2 => 0xffbf,
+        Key::F3 => 0xffc0,
+        Key::F4 => 0xffc1,
+        Key::F5 => 0xffc2,
+        Key::F6 => 0xffc3,
+        Key::F7 => 0xffc4,
+        Key::F8 => 0xffc5,
+        Key::F9 => 0xffc6,
+        Key::F10 => 0xffc7,
+        Key::F11 => 0xffc8,
+        Key::F12 => 0xffc9,
+        Key::F13 => 0xffca,
+        Key::F14 => 0xffcb,
+        Key::F15 => 0xffcc,
+        Key::F16 => 0xffcd,
+        Key::F17 => 0xffce,
+        Key::F18 => 0xffcf,
+        Key::F19 => 0xffd0,
+        Key::F20 => 0xffd1,
+        Key::F21 => 0xffd2,
+        Key::F22 => 0xffd3,
+        Key::F23 => 0xffd4,
+        Key::F24 => 0xffd5,
+        Key::F25 => 0xffd6,
+        Key::F26 => 0xffd7,
+        Key::F27 => 0xffd8,
+        Key::F28 => 0xffd9,
+        Key::F29 => 0xffda,
+        Key::F30 => 0xffdb,
+        Key::F31 => 0xffdc,
+        Key::F32 => 0xffdd,
+        Key::F33 => 0xffde,
+        Key::F34 => 0xffdf,
+        Key::F35 => 0xffe0,
+        _ => return None,
+    })
+}
+
 fn storage(ui: &mut Ui, disks: &[VmDisk]) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -1096,4 +1565,18 @@ fn snapshots(
             .color(dim_fg()),
         );
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn console_keysyms_use_x11_values() {
+        assert_eq!(console_keysym(egui::Key::A), Some(0x61));
+        assert_eq!(console_keysym(egui::Key::Enter), Some(0xff0d));
+        assert_eq!(console_keysym(egui::Key::F5), Some(0xffc2));
+        assert_eq!(console_keysym(egui::Key::ArrowLeft), Some(0xff51));
+        assert_eq!(console_keysym(egui::Key::MediaPlayPause), None);
+    }
 }

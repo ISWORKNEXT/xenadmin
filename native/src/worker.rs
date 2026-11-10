@@ -59,6 +59,18 @@ pub enum Command {
         vm_uuid: String,
         range_seconds: u64,
     },
+    OpenConsole {
+        console_id: String,
+        connection_id: String,
+        vm_uuid: String,
+    },
+    ConsoleInput {
+        console_id: String,
+        input: crate::console::ConsoleInput,
+    },
+    CloseConsole {
+        console_id: String,
+    },
     Shutdown,
 }
 
@@ -98,6 +110,37 @@ pub enum Event {
     VmPerformance {
         seq: u64,
         result: Result<Box<HostPerformance>, String>,
+    },
+    ConsoleOpened {
+        console_id: String,
+        vm_uuid: String,
+        console_uuid: String,
+    },
+    ConsoleSize {
+        console_id: String,
+        width: u16,
+        height: u16,
+    },
+    ConsoleFrame {
+        console_id: String,
+        x: u16,
+        y: u16,
+        width: u16,
+        height: u16,
+        pixels: Vec<u8>,
+    },
+    ConsoleCopy {
+        console_id: String,
+        dst: (u16, u16, u16, u16),
+        src: (u16, u16, u16, u16),
+    },
+    ConsoleClipboard {
+        console_id: String,
+        text: String,
+    },
+    ConsoleClosed {
+        console_id: String,
+        message: Option<String>,
     },
     Failed {
         context: String,
@@ -164,6 +207,7 @@ fn run_worker(mut commands: UnboundedReceiver<Command>, events: UnboundedSender<
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
         let workspace = Workspace::with_profiles(profiles);
+        let consoles = crate::console::ConsoleHandles::default();
         let _ = events.send(Event::Workspace(workspace.view().await));
 
         let mut tick = tokio::time::interval(Duration::from_millis(1_000));
@@ -177,7 +221,7 @@ fn run_worker(mut commands: UnboundedReceiver<Command>, events: UnboundedSender<
                         workspace.close().await;
                         break;
                     }
-                    dispatch(&workspace, &events, &path, command);
+                    dispatch(&workspace, &events, &path, &consoles, command);
                 }
                 _ = tick.tick() => {
                     let _ = events.send(Event::Workspace(workspace.view().await));
@@ -191,11 +235,13 @@ fn dispatch(
     workspace: &Arc<Workspace>,
     events: &UnboundedSender<Event>,
     path: &Path,
+    consoles: &crate::console::ConsoleHandles,
     command: Command,
 ) {
     let workspace = workspace.clone();
     let events = events.clone();
     let path = path.to_path_buf();
+    let consoles = consoles.clone();
 
     tokio::spawn(async move {
         match command {
@@ -307,6 +353,33 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::VmPerformance { seq, result });
+            }
+            Command::OpenConsole {
+                console_id,
+                connection_id,
+                vm_uuid,
+            } => {
+                if let Err(message) = crate::console::open(
+                    workspace.clone(),
+                    events.clone(),
+                    consoles,
+                    console_id.clone(),
+                    connection_id,
+                    vm_uuid,
+                )
+                .await
+                {
+                    let _ = events.send(Event::ConsoleClosed {
+                        console_id,
+                        message: Some(message),
+                    });
+                }
+            }
+            Command::ConsoleInput { console_id, input } => {
+                crate::console::send_input(&consoles, &console_id, input);
+            }
+            Command::CloseConsole { console_id } => {
+                crate::console::close(&consoles, &console_id);
             }
             Command::Shutdown => {}
         }

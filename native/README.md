@@ -13,6 +13,7 @@ native/
     app.rs           eframe app, event draining, actions, shortcuts
     config.rs        connection profile and theme preference paths
     worker.rs        Tokio workspace thread and profile persistence
+    console.rs       VNC console session over the XenAPI HTTPS tunnel
     state.rs         UI state, scopes, action gating and workspace helpers
     theme.rs         light/dark palettes, frames and egui visuals
     widgets.rs       badges, cards, resource bars, info groups, toasts
@@ -24,7 +25,7 @@ native/
       pool_page.rs   pool summary, hosts, storage, networks, VMs
       inventory.rs   VM/template tables, host cards, storage, networks
       tasks.rs       XenAPI task list
-      vm_detail.rs   VM tabs: General, Performance, Storage, Network, HA, Snapshots
+      vm_detail.rs   VM tabs: General, Performance, Storage, Network, HA, Snapshots, Console
       host_details.rs host detail tabs and RRD charts
       dialogs.rs     connect, action review, help, record details
 ```
@@ -35,9 +36,11 @@ native/
 runtime in `worker.rs` owns the `Arc<Workspace>` and exposes two channels:
 
 - `Command`: connect, refresh, disconnect, remove, VM action, task check/cancel,
-  host details, host performance, shutdown.
+  host details, host performance, VM details/perf, console open/input/close,
+  shutdown.
 - `Event`: workspace snapshot, connect result, action queued, refresh result,
-  task result, host detail/perf result and errors.
+  task result, host detail/perf/VM detail/perf result, console state/frames and
+  errors.
 
 The worker polls `Workspace::view()` every second, so inventory and task state
 arrive without blocking the renderer. The UI requests a repaint every 200 ms

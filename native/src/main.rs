@@ -2,6 +2,7 @@
 
 mod app;
 mod config;
+mod console;
 mod format;
 mod state;
 mod theme;

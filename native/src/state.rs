@@ -188,16 +188,18 @@ pub enum VmTab {
     Network,
     Ha,
     Snapshots,
+    Console,
 }
 
 impl VmTab {
-    pub const ALL: [VmTab; 6] = [
+    pub const ALL: [VmTab; 7] = [
         VmTab::General,
         VmTab::Performance,
         VmTab::Storage,
         VmTab::Network,
         VmTab::Ha,
         VmTab::Snapshots,
+        VmTab::Console,
     ];
 
     pub fn label(self) -> &'static str {
@@ -208,6 +210,7 @@ impl VmTab {
             VmTab::Network => "Network",
             VmTab::Ha => "HA",
             VmTab::Snapshots => "Snapshots",
+            VmTab::Console => "Console",
         }
     }
 
@@ -219,6 +222,7 @@ impl VmTab {
             "network" | "networking" => Some(VmTab::Network),
             "ha" => Some(VmTab::Ha),
             "snapshots" | "snapshot" => Some(VmTab::Snapshots),
+            "console" | "vnc" => Some(VmTab::Console),
             _ => None,
         }
     }
@@ -559,6 +563,112 @@ pub struct RecordDialog {
     pub groups: Vec<InfoGroup>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ConsoleStatus {
+    Connecting,
+    Connected,
+    Closed,
+}
+
+pub struct ConsoleState {
+    pub console_id: String,
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub console_uuid: String,
+    pub status: ConsoleStatus,
+    pub message: String,
+    pub width: u16,
+    pub height: u16,
+    pub pixels: Vec<u8>,
+    pub version: u64,
+    pub dirty: Vec<(u16, u16, u16, u16)>,
+    pub dirty_full: bool,
+    pub texture: Option<egui::TextureHandle>,
+    pub clipboard: String,
+    pub last_pointer: Option<(u16, u16, u8)>,
+    pub modifiers: (bool, bool, bool, bool),
+}
+
+impl ConsoleState {
+    fn in_bounds(&self, x: u16, y: u16, width: u16, height: u16) -> bool {
+        let right = x as u32 + width as u32;
+        let bottom = y as u32 + height as u32;
+        width > 0 && height > 0 && right <= self.width as u32 && bottom <= self.height as u32
+    }
+
+    pub fn blit(&mut self, x: u16, y: u16, width: u16, height: u16, pixels: &[u8]) {
+        if !self.in_bounds(x, y, width, height)
+            || pixels.len() < width as usize * height as usize * 4
+        {
+            return;
+        }
+        let stride = self.width as usize * 4;
+        let row_bytes = width as usize * 4;
+        for row in 0..height as usize {
+            let dst = (y as usize + row) * stride + x as usize * 4;
+            let src = row * row_bytes;
+            let row = &mut self.pixels[dst..dst + row_bytes];
+            row.copy_from_slice(&pixels[src..src + row_bytes]);
+            // RFB returns an unused alpha byte; make every pixel opaque.
+            for pixel in row.chunks_exact_mut(4) {
+                pixel[3] = 255;
+            }
+        }
+        if self.dirty.len() < 64 {
+            self.dirty.push((x, y, width, height));
+        } else {
+            self.dirty_full = true;
+        }
+        self.version = self.version.wrapping_add(1);
+    }
+
+    pub fn copy_rect(&mut self, dst: (u16, u16, u16, u16), src: (u16, u16, u16, u16)) {
+        let (dx, dy, width, height) = dst;
+        let (sx, sy, src_width, src_height) = src;
+        if width == 0
+            || height == 0
+            || width > src_width
+            || height > src_height
+            || !self.in_bounds(dx, dy, width, height)
+            || !self.in_bounds(sx, sy, src_width, src_height)
+        {
+            return;
+        }
+        let stride = self.width as usize * 4;
+        let row_bytes = width as usize * 4;
+        let mut row = vec![0u8; row_bytes];
+        self.dirty_full = true;
+        for offset in 0..height as usize {
+            let source = (sy as usize + offset) * stride + sx as usize * 4;
+            row.copy_from_slice(&self.pixels[source..source + row_bytes]);
+            let target = (dy as usize + offset) * stride + dx as usize * 4;
+            self.pixels[target..target + row_bytes].copy_from_slice(&row);
+        }
+        self.version = self.version.wrapping_add(1);
+    }
+
+    pub fn connecting(console_id: String, connection_id: String, vm_uuid: String) -> Self {
+        Self {
+            console_id,
+            connection_id,
+            vm_uuid,
+            console_uuid: String::new(),
+            status: ConsoleStatus::Connecting,
+            message: String::new(),
+            width: 0,
+            height: 0,
+            pixels: Vec::new(),
+            version: 0,
+            dirty: Vec::new(),
+            dirty_full: false,
+            texture: None,
+            clipboard: String::new(),
+            last_pointer: None,
+            modifiers: (false, false, false, false),
+        }
+    }
+}
+
 pub struct UiState {
     pub view: View,
     pub scope: Scope,
@@ -573,6 +683,9 @@ pub struct UiState {
     pub vm_perf_state: LoadState<HostPerformance>,
     pub vm_perf_seq: u64,
     pub vm_perf_range: u64,
+    pub console: Option<ConsoleState>,
+    pub console_seq: u64,
+    pub console_focus: bool,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -622,6 +735,9 @@ impl Default for UiState {
             vm_perf_state: LoadState::Idle,
             vm_perf_seq: 0,
             vm_perf_range: 900,
+            console: None,
+            console_seq: 0,
+            console_focus: false,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -696,6 +812,19 @@ pub enum UiAction {
     ReloadVmDetails,
     LoadVmPerformance,
     SetVmPerfRange(u64),
+    OpenConsole(String, String),
+    CloseConsole,
+    ConsoleKey {
+        console_id: String,
+        keycode: u32,
+        down: bool,
+    },
+    ConsolePointer {
+        console_id: String,
+        x: u16,
+        y: u16,
+        buttons: u8,
+    },
     DismissToast(usize),
     ConfirmRemove(String),
     CancelRemove,
@@ -937,5 +1066,35 @@ pub fn section_columns(section: &DataSection) -> Vec<String> {
     match section {
         DataSection::Ready { columns, .. } => columns.clone(),
         _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn console(width: u16, height: u16, pixels: Vec<u8>) -> ConsoleState {
+        let mut console = ConsoleState::connecting("c".into(), "conn".into(), "vm".into());
+        console.width = width;
+        console.height = height;
+        console.pixels = pixels;
+        console
+    }
+
+    #[test]
+    fn console_blit_forces_opaque_alpha_and_ignores_out_of_bounds() {
+        let mut console = console(2, 1, vec![0; 2 * 4]);
+        console.blit(0, 0, 1, 1, &[10, 20, 30, 0]);
+        assert_eq!(&console.pixels[0..4], &[10, 20, 30, 255]);
+        console.blit(2, 0, 1, 1, &[1, 2, 3, 4]);
+        assert_eq!(&console.pixels[4..8], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn console_copy_rect_supports_overlapping_regions() {
+        let mut console = console(3, 1, vec![1, 0, 0, 255, 2, 0, 0, 255, 3, 0, 0, 255]);
+        console.copy_rect((0, 0, 2, 1), (1, 0, 2, 1));
+        assert_eq!(&console.pixels[0..4], &[2, 0, 0, 255]);
+        assert_eq!(&console.pixels[4..8], &[3, 0, 0, 255]);
     }
 }

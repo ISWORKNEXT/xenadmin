@@ -4,10 +4,11 @@ use chrono::Local;
 use eframe::egui;
 use xen_core::workspace::WorkspaceView;
 
+use crate::console::ConsoleInput;
 use crate::state::{
-    ActionKind, ConnectState, Intent, ListKind, LoadState, ObjectKey, ObjectTab, Scope, Toast,
-    ToastKind, UiAction, UiState, View, connection_id, find_connection, find_vm,
-    visible_connections,
+    ActionKind, ConnectState, ConsoleState, ConsoleStatus, Intent, ListKind, LoadState, ObjectKey,
+    ObjectTab, Scope, Toast, ToastKind, UiAction, UiState, View, connection_id, find_connection,
+    find_vm, visible_connections,
 };
 use crate::theme;
 use crate::views;
@@ -364,6 +365,20 @@ impl App {
         for index in missing.into_iter().rev() {
             self.close_tab(index);
         }
+        let stale_console = self.state.console.as_ref().and_then(|console| {
+            let inventory = find_connection(&self.workspace, &console.connection_id)
+                .and_then(crate::state::connection_inventory)?;
+            (!inventory
+                .vms
+                .iter()
+                .chain(&inventory.templates)
+                .chain(&inventory.snapshots)
+                .any(|vm| vm.uuid == console.vm_uuid))
+            .then(|| console.console_id.clone())
+        });
+        if stale_console.is_some() {
+            self.close_console();
+        }
     }
 
     fn close_tab(&mut self, index: usize) {
@@ -546,6 +561,14 @@ impl App {
                     result,
                 } => {
                     self.state.busy.remove(&connection_id);
+                    if self
+                        .state
+                        .console
+                        .as_ref()
+                        .is_some_and(|console| console.connection_id == connection_id)
+                    {
+                        self.close_console();
+                    }
                     match result {
                         Ok(()) => self.state.toasts.push(Toast::new(
                             "Connection closed and session logged out.",
@@ -561,6 +584,14 @@ impl App {
                     connection_id,
                     result,
                 } => {
+                    if self
+                        .state
+                        .console
+                        .as_ref()
+                        .is_some_and(|console| console.connection_id == connection_id)
+                    {
+                        self.close_console();
+                    }
                     if let Err(message) = result {
                         self.state
                             .toasts
@@ -607,6 +638,81 @@ impl App {
                         };
                     }
                 }
+                Event::ConsoleOpened {
+                    console_id,
+                    vm_uuid,
+                    console_uuid,
+                } => {
+                    if let Some(console) = self.state.console.as_mut()
+                        && console.console_id == console_id
+                        && console.vm_uuid == vm_uuid
+                    {
+                        console.status = ConsoleStatus::Connected;
+                        console.console_uuid = console_uuid;
+                        console.message.clear();
+                    }
+                }
+                Event::ConsoleSize {
+                    console_id,
+                    width,
+                    height,
+                } => {
+                    if let Some(console) = self.state.console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.width = width;
+                        console.height = height;
+                        console.pixels = vec![0; width as usize * height as usize * 4];
+                        console.dirty.clear();
+                        console.dirty_full = false;
+                        console.texture = None;
+                        console.version += 1;
+                    }
+                }
+                Event::ConsoleFrame {
+                    console_id,
+                    x,
+                    y,
+                    width,
+                    height,
+                    pixels,
+                } => {
+                    if let Some(console) = self.state.console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.blit(x, y, width, height, &pixels);
+                    }
+                }
+                Event::ConsoleCopy {
+                    console_id,
+                    dst,
+                    src,
+                } => {
+                    if let Some(console) = self.state.console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.copy_rect(dst, src);
+                    }
+                }
+                Event::ConsoleClipboard { console_id, text } => {
+                    if let Some(console) = self.state.console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.clipboard = text;
+                    }
+                }
+                Event::ConsoleClosed {
+                    console_id,
+                    message,
+                } => {
+                    if let Some(console) = self.state.console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.status = ConsoleStatus::Closed;
+                        console.message =
+                            message.unwrap_or_else(|| "Console connection closed.".into());
+                    }
+                }
                 Event::Failed { context, message } => {
                     if context == "connect"
                         && let Some(connect) = self.state.connect.as_mut()
@@ -623,6 +729,9 @@ impl App {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
+        if self.state.console_focus {
+            return;
+        }
         let mut focus_search = false;
         let mut refresh = false;
         let mut close_tab = false;
@@ -875,6 +984,19 @@ impl App {
                     {
                         self.apply(vec![UiAction::LoadVmPerformance]);
                     }
+                    if tab == crate::state::VmTab::Console
+                        && self.state.console.is_none()
+                        && let Some(key) = self
+                            .state
+                            .object_tabs
+                            .get(self.state.active_tab)
+                            .map(|tab| tab.key.clone())
+                        && let Some((connection_id, vm_uuid)) = vm_key(&key)
+                        && find_vm(&self.workspace, &connection_id, &vm_uuid)
+                            .is_some_and(|(_, vm)| vm.kind == "vm" && vm.power_state == "Running")
+                    {
+                        self.apply(vec![UiAction::OpenConsole(connection_id, vm_uuid)]);
+                    }
                 }
                 UiAction::ReloadVmDetails => {
                     if let Some(key) = self
@@ -915,6 +1037,69 @@ impl App {
                     self.state.vm_perf_range = range;
                     self.apply(vec![UiAction::LoadVmPerformance]);
                 }
+                UiAction::OpenConsole(connection_id, vm_uuid) => {
+                    self.release_console_modifiers();
+                    if let Some(console) = self.state.console.take() {
+                        self.worker.send(Command::CloseConsole {
+                            console_id: console.console_id,
+                        });
+                    }
+                    self.state.console_seq += 1;
+                    let console_id = format!("{vm_uuid}-{}", self.state.console_seq);
+                    self.state.console = Some(ConsoleState::connecting(
+                        console_id.clone(),
+                        connection_id.clone(),
+                        vm_uuid.clone(),
+                    ));
+                    self.worker.send(Command::OpenConsole {
+                        console_id,
+                        connection_id,
+                        vm_uuid,
+                    });
+                }
+                UiAction::CloseConsole => {
+                    self.release_console_modifiers();
+                    if let Some(console) = self.state.console.take() {
+                        self.worker.send(Command::CloseConsole {
+                            console_id: console.console_id,
+                        });
+                    }
+                }
+                UiAction::ConsoleKey {
+                    console_id,
+                    keycode,
+                    down,
+                } => {
+                    if self
+                        .state
+                        .console
+                        .as_ref()
+                        .is_some_and(|console| console.console_id == console_id)
+                    {
+                        self.worker.send(Command::ConsoleInput {
+                            console_id,
+                            input: ConsoleInput::Key { keycode, down },
+                        });
+                    }
+                }
+                UiAction::ConsolePointer {
+                    console_id,
+                    x,
+                    y,
+                    buttons,
+                } => {
+                    if self
+                        .state
+                        .console
+                        .as_ref()
+                        .is_some_and(|console| console.console_id == console_id)
+                    {
+                        self.worker.send(Command::ConsoleInput {
+                            console_id,
+                            input: ConsoleInput::Pointer { x, y, buttons },
+                        });
+                    }
+                }
                 UiAction::DismissToast(index) => {
                     if index < self.state.toasts.len() {
                         self.state.toasts.remove(index);
@@ -924,6 +1109,39 @@ impl App {
                 UiAction::CancelRemove => self.state.confirm_remove = None,
             }
         }
+    }
+
+    fn close_console(&mut self) {
+        self.release_console_modifiers();
+        if let Some(console) = self.state.console.take() {
+            self.worker.send(Command::CloseConsole {
+                console_id: console.console_id,
+            });
+        }
+    }
+
+    fn release_console_modifiers(&mut self) {
+        let Some(console) = self.state.console.as_mut() else {
+            return;
+        };
+        for (index, keycode) in [0xffe1u32, 0xffe3, 0xffe9, 0xffeb].into_iter().enumerate() {
+            let pressed = match index {
+                0 => console.modifiers.0,
+                1 => console.modifiers.1,
+                2 => console.modifiers.2,
+                _ => console.modifiers.3,
+            };
+            if pressed {
+                self.worker.send(Command::ConsoleInput {
+                    console_id: console.console_id.clone(),
+                    input: ConsoleInput::Key {
+                        keycode,
+                        down: false,
+                    },
+                });
+            }
+        }
+        console.modifiers = (false, false, false, false);
     }
 
     fn expired_toasts(&mut self) {
@@ -938,7 +1156,9 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.drain_events();
         self.expired_toasts();
+        let console_was_focused = self.state.console_focus;
         self.shortcuts(ui.ctx());
+        self.state.console_focus = false;
 
         let mut actions = Vec::new();
 
@@ -969,6 +1189,9 @@ impl eframe::App for App {
         widgets::toasts(&ctx, &self.state, &mut actions);
 
         self.apply(actions);
+        if console_was_focused && !self.state.console_focus {
+            self.release_console_modifiers();
+        }
 
         let busy = self.state.connect.as_ref().is_some_and(|c| c.submitting)
             || !self.state.busy.is_empty()

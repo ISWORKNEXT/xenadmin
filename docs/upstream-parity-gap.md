@@ -89,9 +89,9 @@
 
 ### 3. Console
 
-- VNC ผ่าน HTTP CONNECT + WebSocket/transport
+- VNC ผ่าน HTTPS CONNECT + framebuffer/keyboard/mouse (มีแล้ว)
 - RDP (เดิมใช้ Windows ActiveX)
-- keyboard/clipboard, reconnect, console authorization
+- clipboard สองทาง, แป้นพิมพ์ layout ที่ไม่ใช่ US, SSH/text console
 
 ### 4. Storage
 
@@ -169,7 +169,7 @@
 3. **VM start semantics**: `start_on`/`resume_on`, `assert_can_boot_here`, broken CD/ISO/SR precheck
 4. **แก้ VM พื้นฐาน**: CPU/memory, ISO/CD, boot order
 5. **Revert ที่คืน power state** และ bulk snapshot selection
-6. **Console VNC**
+6. **Console RDP + clipboard/SSH console**
 
 ### P1 — จัดการโครงสร้างพื้นฐาน
 
