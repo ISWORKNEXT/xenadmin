@@ -46,9 +46,9 @@
 
 | ด้าน | Upstream | ของเรา | ผลกระทบ |
 | --- | --- | --- | --- |
-| Inventory sync | `event.from("*")` + cache + token | `get_all_records` ตอน connect/refresh และ snapshot ทุก 1 วินาที | ข้อมูลจาก client อื่นไม่ขึ้นจนกว่าจะกด Refresh; โหลด host มากกว่า |
-| Connection lifecycle | heartbeat ทุก 15 วินาที, reconnect, coordinator failover | ไม่มี heartbeat/reconnect; session หมดอายุแล้ว request ถัดไป error | connection อาจ stale โดยไม่รู้ตัว |
-| Coordinator | handle `HOST_IS_SLAVE` และสลับไป master | แจ้งให้ผู้ใช้ไปต่อ coordinator เอง | ต้อง reconnect ด้วยมือ |
+| Inventory sync | `event.from("*")` + cache + token | `event.register`/`event.next` + raw-record cache; rebuild inventory จาก cache และ refresh fallback | ได้ข้อมูลสดจาก client อื่น; ยังไม่เห็น task ของ client อื่น |
+| Connection lifecycle | heartbeat ทุก 15 วินาที, reconnect, coordinator failover | heartbeat 15 วินาที, reconnect ด้วย password ใน memory, mark stale หลังพลาด 2 ครั้ง | ไม่มี dialog ขอ credential ใหม่; ถ้า password เปลี่ยนจะ reconnect ไม่ได้ |
+| Coordinator | handle `HOST_IS_SLAVE` และสลับไป master | redirect ไป master อัตโนมัติ ระหว่าง login/reconnect | ต้องมี network ไปถึง master |
 | VM start | `start_on` / `resume_on`, `assert_can_boot_here`, ตรวจ CD/ISO/SR ที่ broken, HA | `VM.start` / `VM.resume` แบบไม่ระบุ host | start อาจล้มเหลวเพราะ CD/SR โดยไม่แจ้งล่วงหน้า; เลือก host ไม่ได้ |
 | Snapshot revert | คืน power state และ start/resume บน host เดิม | revert อย่างเดียว ไม่คืน power state | ต้อง start เองหลัง revert |
 | Snapshot delete | เลือก snapshots และลบ VBD/VDI ที่เป็นเจ้าของ | ลบ snapshot เดี่ยว หรือลบ snapshots ทั้งหมดพร้อม VM; ยังเลือกบาง snapshot ไม่ได้ | ถ้าต้องการเก็บ snapshot บางรายการต้องลบเองก่อน |
@@ -165,12 +165,12 @@
 
 ### P0 — ทำให้ใช้งานประจำวันได้
 
-1. **Event stream + cache generation** (`event.from("*")`, token, resync) แทน polling; ลด load และได้ข้อมูลสด
-2. **Heartbeat/reconnect/coordinator failover** (heartbeat 15s, duplicate session, `HOST_IS_SLAVE`)
-3. **VM start semantics**: `start_on`/`resume_on`, `assert_can_boot_here`, broken CD/ISO/SR precheck
-4. **แก้ VM พื้นฐาน**: ISO/CD, boot order, dynamic memory target
-5. **Revert ที่คืน power state** และ bulk snapshot selection
-6. **Console RDP + clipboard/SSH console**
+1. **VM start semantics**: `start_on`/`resume_on`, `assert_can_boot_here`, broken CD/ISO/SR precheck
+2. **แก้ VM พื้นฐาน**: ISO/CD, boot order, dynamic memory target, disk/VIF editing
+3. **Revert ที่คืน power state** และ bulk snapshot selection
+4. **Console RDP + clipboard/SSH console**
+5. **External tasks**: แสดง task จาก client อื่นผ่าน event stream
+6. **Alerts + diagnostics + health check**, host maintenance
 
 ### P1 — จัดการโครงสร้างพื้นฐาน
 

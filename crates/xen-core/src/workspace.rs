@@ -1,6 +1,9 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -11,8 +14,10 @@ use uuid::Uuid;
 use crate::{
     operations::{TaskStatus, VmAction},
     vm::VmDetails,
-    xapi::{Connection, ConnectionSettings, Inventory},
+    xapi::{ApiError, Connection, ConnectionSettings, Inventory, RawInventory},
 };
+
+const EVENT_CLASSES: &[&str] = &["VM", "host", "host_metrics", "SR", "network", "pool"];
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Profile {
@@ -22,10 +27,13 @@ pub struct Profile {
 
 struct ActiveConnection {
     connection: Connection,
+    raw: RwLock<RawInventory>,
     snapshot: RwLock<Inventory>,
     error: RwLock<Option<String>>,
     lifecycle: Arc<RwLock<()>>,
     busy_vms: Mutex<BTreeSet<String>>,
+    password: String,
+    heartbeat_failed: AtomicBool,
 }
 
 struct Entry {
@@ -116,10 +124,13 @@ impl Workspace {
     }
 
     pub async fn add_connected(
-        &self,
+        self: &Arc<Self>,
         mut connection: Connection,
+        raw: RawInventory,
         mut snapshot: Inventory,
+        password: String,
         replace_id: Option<String>,
+        events_registered: bool,
     ) -> Result<String, String> {
         // A pool may contain many hosts. Connecting to another member must not duplicate its objects.
         if snapshot.hosts.iter().any(|h| h.address == "10.100.1.11") {
@@ -145,24 +156,42 @@ impl Workspace {
             id: id.clone(),
             settings: connection.settings.clone(),
         };
+        let active = Arc::new(ActiveConnection {
+            connection,
+            raw: RwLock::new(raw),
+            snapshot: RwLock::new(snapshot),
+            error: RwLock::new(None),
+            lifecycle: Arc::new(RwLock::new(())),
+            busy_vms: Mutex::new(BTreeSet::new()),
+            password,
+            heartbeat_failed: AtomicBool::new(false),
+        });
         entries.insert(
             id.clone(),
             Entry {
                 profile,
-                active: Some(Arc::new(ActiveConnection {
-                    connection,
-                    snapshot: RwLock::new(snapshot),
-                    error: RwLock::new(None),
-                    lifecycle: Arc::new(RwLock::new(())),
-                    busy_vms: Mutex::new(BTreeSet::new()),
-                })),
+                active: Some(active.clone()),
             },
         );
+        drop(entries);
+        if events_registered {
+            let workspace = self.clone();
+            let active = active.clone();
+            let event_id = id.clone();
+            tokio::spawn(async move {
+                workspace.event_loop(event_id, active).await;
+            });
+        }
+        let workspace = self.clone();
+        let heartbeat_id = id.clone();
+        tokio::spawn(async move {
+            workspace.heartbeat_loop(heartbeat_id).await;
+        });
         Ok(id)
     }
 
     pub async fn connect(
-        &self,
+        self: &Arc<Self>,
         settings: ConnectionSettings,
         password: &str,
         profile_id: Option<String>,
@@ -170,14 +199,30 @@ impl Workspace {
         let connection = Connection::login(settings, password)
             .await
             .map_err(|e| e.to_string())?;
-        let snapshot = match connection.inventory().await {
+        let events_registered = connection.event_register(EVENT_CLASSES).await.is_ok();
+        let raw = match connection.raw_inventory().await {
+            Ok(raw) => raw,
+            Err(error) => {
+                let _ = connection.logout().await;
+                return Err(error.to_string());
+            }
+        };
+        let snapshot = match raw.into_inventory(connection.settings.clone()) {
             Ok(snapshot) => snapshot,
             Err(error) => {
                 let _ = connection.logout().await;
                 return Err(error.to_string());
             }
         };
-        self.add_connected(connection, snapshot, profile_id).await
+        self.add_connected(
+            connection,
+            raw,
+            snapshot,
+            password.to_owned(),
+            profile_id,
+            events_registered,
+        )
+        .await
     }
 
     async fn active(&self, id: &str) -> Result<Arc<ActiveConnection>, String> {
@@ -283,12 +328,8 @@ impl Workspace {
             )
             .await
             .map_err(|error| error.to_string())?;
-        match active.connection.inventory().await {
-            Ok(snapshot) => {
-                *active.snapshot.write().await = snapshot;
-                *active.error.write().await = None;
-                Ok(())
-            }
+        match refresh_inventory_cache(&active).await {
+            Ok(()) => Ok(()),
             Err(error) => Err(format!(
                 "The VM was updated, but the inventory refresh failed: {error}"
             )),
@@ -374,18 +415,208 @@ impl Workspace {
     pub async fn refresh(&self, id: &str) -> Result<(), String> {
         let active = self.active(id).await?;
         let _lease = active.lifecycle.read().await;
-        match active.connection.inventory().await {
-            Ok(snapshot) => {
-                *active.snapshot.write().await = snapshot;
-                *active.error.write().await = None;
-                Ok(())
+        refresh_inventory_cache(&active).await
+    }
+
+    async fn current_active(&self, id: &str) -> Option<Arc<ActiveConnection>> {
+        self.entries
+            .read()
+            .await
+            .get(id)
+            .and_then(|entry| entry.active.clone())
+    }
+
+    async fn is_current(&self, id: &str, active: &Arc<ActiveConnection>) -> bool {
+        self.entries
+            .read()
+            .await
+            .get(id)
+            .and_then(|entry| entry.active.as_ref())
+            .is_some_and(|current| Arc::ptr_eq(current, active))
+    }
+
+    async fn event_loop(self: Arc<Self>, id: String, active: Arc<ActiveConnection>) {
+        loop {
+            if !self.is_current(&id, &active).await {
+                return;
             }
-            Err(error) => {
-                let message = error.to_string();
-                *active.error.write().await = Some(message.clone());
-                Err(message)
+            let next =
+                tokio::time::timeout(Duration::from_secs(120), active.connection.event_next())
+                    .await;
+            match next {
+                Ok(Ok(events)) => {
+                    if !self.is_current(&id, &active).await {
+                        return;
+                    }
+                    let _lease = active.lifecycle.read().await;
+                    let changed = active.raw.write().await.apply_events(&events);
+                    if changed {
+                        let snapshot = {
+                            let raw = active.raw.read().await;
+                            raw.into_inventory(active.connection.settings.clone())
+                        };
+                        match snapshot {
+                            Ok(snapshot) => {
+                                *active.snapshot.write().await = snapshot;
+                                *active.error.write().await = None;
+                                active.heartbeat_failed.store(false, Ordering::Relaxed);
+                            }
+                            Err(error) => {
+                                *active.error.write().await =
+                                    Some(format!("Cannot rebuild the inventory cache: {error}"));
+                            }
+                        }
+                    }
+                }
+                Ok(Err(ApiError::Unsupported)) => return,
+                Ok(Err(ApiError::XenCode(code, _))) if code == "MESSAGE_METHOD_UNKNOWN" => {
+                    return;
+                }
+                Ok(Err(error)) => {
+                    let transport = matches!(
+                        error,
+                        ApiError::Connection
+                            | ApiError::Http(_)
+                            | ApiError::Protocol
+                            | ApiError::HostIsSlave(_)
+                    );
+                    if transport
+                        || matches!(&error, ApiError::XenCode(code, _) if code == "SESSION_INVALID")
+                    {
+                        *active.error.write().await =
+                            Some(format!("Live updates stopped: {error}"));
+                    }
+                    return;
+                }
+                Err(_) => {}
             }
         }
+    }
+
+    async fn heartbeat_loop(self: Arc<Self>, id: String) {
+        let mut failures = 0u32;
+        loop {
+            tokio::time::sleep(Duration::from_secs(15)).await;
+            let Some(active) = self.current_active(&id).await else {
+                return;
+            };
+            let result =
+                tokio::time::timeout(Duration::from_secs(10), active.connection.heartbeat()).await;
+            match result {
+                Ok(Ok(())) => {
+                    failures = 0;
+                    if active.heartbeat_failed.swap(false, Ordering::Relaxed) {
+                        *active.error.write().await = None;
+                    }
+                }
+                Ok(Err(ApiError::Unsupported)) => return,
+                Ok(Err(ApiError::XenCode(code, _))) if code == "MESSAGE_METHOD_UNKNOWN" => {
+                    return;
+                }
+                Ok(Err(error))
+                    if matches!(
+                        error,
+                        ApiError::Connection
+                            | ApiError::Http(_)
+                            | ApiError::Protocol
+                            | ApiError::HostIsSlave(_)
+                    ) =>
+                {
+                    failures += 1;
+                    active.heartbeat_failed.store(true, Ordering::Relaxed);
+                    *active.error.write().await =
+                        Some(format!("Connection heartbeat failed: {error}"));
+                    if failures >= 2 {
+                        failures = 0;
+                        if let Err(error) = self.reconnect(&id, &active).await {
+                            *active.error.write().await =
+                                Some(format!("Connection lost; reconnect failed: {error}"));
+                            tokio::time::sleep(Duration::from_secs(30)).await;
+                        }
+                    }
+                }
+                Ok(Err(_)) => failures = 0,
+                Err(_) => {
+                    failures += 1;
+                    active.heartbeat_failed.store(true, Ordering::Relaxed);
+                    *active.error.write().await = Some("Connection heartbeat timed out.".into());
+                    if failures >= 2 {
+                        failures = 0;
+                        if let Err(error) = self.reconnect(&id, &active).await {
+                            *active.error.write().await =
+                                Some(format!("Connection lost; reconnect failed: {error}"));
+                            tokio::time::sleep(Duration::from_secs(30)).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async fn reconnect(
+        self: &Arc<Self>,
+        id: &str,
+        old: &Arc<ActiveConnection>,
+    ) -> Result<(), String> {
+        let _write = old.lifecycle.write().await;
+        if !self.is_current(id, old).await {
+            return Err("The connection changed before it could be re-established.".into());
+        }
+        let connection = Connection::login(old.connection.settings.clone(), &old.password)
+            .await
+            .map_err(|error| error.to_string())?;
+        let events_registered = connection.event_register(EVENT_CLASSES).await.is_ok();
+        let raw = connection
+            .raw_inventory()
+            .await
+            .map_err(|error| error.to_string())?;
+        let snapshot = raw
+            .into_inventory(connection.settings.clone())
+            .map_err(|error| error.to_string())?;
+        let new_active = Arc::new(ActiveConnection {
+            connection,
+            raw: RwLock::new(raw),
+            snapshot: RwLock::new(snapshot),
+            error: RwLock::new(None),
+            lifecycle: Arc::new(RwLock::new(())),
+            busy_vms: Mutex::new(BTreeSet::new()),
+            password: old.password.clone(),
+            heartbeat_failed: AtomicBool::new(false),
+        });
+        let mut entries = self.entries.write().await;
+        let Some(entry) = entries.get_mut(id) else {
+            drop(entries);
+            let _ =
+                tokio::time::timeout(Duration::from_secs(3), new_active.connection.logout()).await;
+            return Err("The saved connection no longer exists.".into());
+        };
+        if !entry
+            .active
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, old))
+        {
+            drop(entries);
+            let _ =
+                tokio::time::timeout(Duration::from_secs(3), new_active.connection.logout()).await;
+            return Err("The connection changed while it was reconnecting.".into());
+        }
+        entry.profile.settings = new_active.connection.settings.clone();
+        entry.active = Some(new_active.clone());
+        drop(entries);
+
+        if events_registered {
+            let workspace = self.clone();
+            let active = new_active.clone();
+            let event_id = id.to_owned();
+            tokio::spawn(async move {
+                workspace.event_loop(event_id, active).await;
+            });
+        }
+        let stale = old.clone();
+        tokio::spawn(async move {
+            let _ = tokio::time::timeout(Duration::from_secs(3), stale.connection.logout()).await;
+        });
+        Ok(())
     }
 
     pub async fn disconnect(&self, id: &str) -> Result<(), String> {
@@ -564,12 +795,8 @@ impl Workspace {
         tokio::spawn(async move {
             let result = active_for_task.connection.clone_vm(&vm_uuid, &name).await;
             let result = match result {
-                Ok(new_uuid) => match active_for_task.connection.inventory().await {
-                    Ok(snapshot) => {
-                        *active_for_task.snapshot.write().await = snapshot;
-                        *active_for_task.error.write().await = None;
-                        Ok(format!("Created VM {name} ({new_uuid})."))
-                    }
+                Ok(new_uuid) => match refresh_inventory_cache(&active_for_task).await {
+                    Ok(()) => Ok(format!("Created VM {name} ({new_uuid}).")),
                     Err(error) => Err(format!(
                         "Clone succeeded, but the inventory refresh failed: {error}"
                     )),
@@ -659,12 +886,8 @@ impl Workspace {
                 .destroy_vm(&vm_uuid, delete_disks, delete_snapshots)
                 .await;
             let result = match result {
-                Ok(()) => match active_for_task.connection.inventory().await {
-                    Ok(snapshot) => {
-                        *active_for_task.snapshot.write().await = snapshot;
-                        *active_for_task.error.write().await = None;
-                        Ok(())
-                    }
+                Ok(()) => match refresh_inventory_cache(&active_for_task).await {
+                    Ok(()) => Ok(()),
                     Err(error) => Err(format!(
                         "Deleted, but the inventory refresh failed: {error}"
                     )),
@@ -696,15 +919,7 @@ impl Workspace {
                 Ok(remote) => {
                     let terminal = remote.status.terminal();
                     if terminal {
-                        match active.connection.inventory().await {
-                            Ok(snapshot) => {
-                                *active.snapshot.write().await = snapshot;
-                                *active.error.write().await = None;
-                            }
-                            Err(error) => {
-                                *active.error.write().await = Some(error.to_string());
-                            }
-                        }
+                        let _ = refresh_inventory_cache(active).await;
                         active.connection.destroy_task(reference).await;
                     }
                     if let Some(task) = self.tasks.lock().await.get_mut(id) {
@@ -799,13 +1014,35 @@ impl Workspace {
     pub async fn close(&self) {
         let connections: Vec<_> = self
             .entries
-            .read()
+            .write()
             .await
-            .values()
-            .filter_map(|e| e.active.clone())
+            .values_mut()
+            .filter_map(|entry| entry.active.take())
             .collect();
         for active in connections {
             let _ = tokio::time::timeout(Duration::from_secs(3), active.connection.logout()).await;
+        }
+    }
+}
+
+/// Refresh the raw cache and derived inventory. Callers must hold the
+/// connection's lifecycle read lease.
+async fn refresh_inventory_cache(active: &ActiveConnection) -> Result<(), String> {
+    match active.connection.raw_inventory().await {
+        Ok(raw) => {
+            let snapshot = raw
+                .into_inventory(active.connection.settings.clone())
+                .map_err(|error| error.to_string())?;
+            *active.raw.write().await = raw;
+            *active.snapshot.write().await = snapshot;
+            *active.error.write().await = None;
+            active.heartbeat_failed.store(false, Ordering::Relaxed);
+            Ok(())
+        }
+        Err(error) => {
+            let message = error.to_string();
+            *active.error.write().await = Some(message.clone());
+            Err(message)
         }
     }
 }

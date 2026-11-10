@@ -33,7 +33,10 @@ native/
 ## Threading model
 
 `App` runs on the UI thread and never blocks on HTTP. A dedicated Tokio
-runtime in `worker.rs` owns the `Arc<Workspace>` and exposes two channels:
+runtime in `worker.rs` owns the `Arc<Workspace>` and exposes two channels.
+The workspace also runs one event-stream listener per connection, applying
+XenAPI events to a raw-record cache, plus a 15-second heartbeat that reconnects
+with the in-memory password and follows `HOST_IS_SLAVE` to the coordinator:
 
 - `Command`: connect, refresh, disconnect, remove, VM action, task check/cancel,
   host details, host performance, VM details/perf/edit, console

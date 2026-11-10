@@ -23,6 +23,10 @@ default and a persisted dark-theme toggle.
 - Edit a VM's name and description at any time; change vCPUs and the static
   memory maximum while the VM is halted.
 - Bulk actions with an explicit target review dialog.
+- Live inventory updates from the XenAPI event stream with a local raw-record
+  cache; manual refresh remains available as a fallback.
+- A 15-second heartbeat with automatic session reconnect (password kept only in
+  process memory) and automatic `HOST_IS_SLAVE` coordinator redirects.
 - XenAPI task progress, failure, success, cancellation and “check again” for
   interrupted tasks without resubmitting the mutation.
 - VM detail tabs: General, Performance (VM RRD), Storage, Network, HA, Snapshots and Console.

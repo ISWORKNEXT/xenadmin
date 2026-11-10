@@ -25,6 +25,8 @@ pub enum ApiError {
     Xen(String),
     #[error("{1}")]
     XenCode(String, String),
+    #[error("This host is a pool member. Reconnect to the coordinator at {0}.")]
+    HostIsSlave(String),
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -58,6 +60,8 @@ struct RpcResponse {
 #[derive(Deserialize)]
 struct RpcError {
     message: String,
+    #[serde(default)]
+    data: Vec<Value>,
 }
 
 pub struct Connection {
@@ -69,33 +73,45 @@ pub struct Connection {
 
 impl Connection {
     pub async fn login(mut settings: ConnectionSettings, password: &str) -> Result<Self, ApiError> {
-        let address = if settings.host.contains("://") {
-            settings.host.clone()
-        } else {
-            format!("https://{}", settings.host)
-        };
-        let origin = Url::parse(&address).map_err(|_| ApiError::InvalidHost)?;
-        settings.enforce_host_policy(&origin);
-        let transport =
-            HostTransport::new(origin, settings.tls).map_err(|_| ApiError::InvalidHost)?;
-        let mut connection = Self {
-            transport,
-            session: String::new(),
-            next_id: AtomicU64::new(1),
-            settings,
-        };
-        connection.session = connection
-            .request(
-                "session.login_with_password",
-                json!([
-                    connection.settings.username,
-                    password,
-                    "1.0",
-                    "Xen Desktop/0.1"
-                ]),
-            )
-            .await?;
-        Ok(connection)
+        for attempt in 0..2 {
+            let address = if settings.host.contains("://") {
+                settings.host.clone()
+            } else {
+                format!("https://{}", settings.host)
+            };
+            let origin = Url::parse(&address).map_err(|_| ApiError::InvalidHost)?;
+            settings.enforce_host_policy(&origin);
+            let transport =
+                HostTransport::new(origin, settings.tls).map_err(|_| ApiError::InvalidHost)?;
+            let mut connection = Self {
+                transport,
+                session: String::new(),
+                next_id: AtomicU64::new(1),
+                settings: settings.clone(),
+            };
+            match connection
+                .request(
+                    "session.login_with_password",
+                    json!([
+                        connection.settings.username,
+                        password,
+                        "1.0",
+                        "Xen Desktop/0.1"
+                    ]),
+                )
+                .await
+            {
+                Ok(session) => {
+                    connection.session = session;
+                    return Ok(connection);
+                }
+                Err(ApiError::HostIsSlave(master)) if attempt == 0 && !master.is_empty() => {
+                    settings.host = master;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(ApiError::InvalidHost)
     }
 
     pub(crate) async fn request<T: DeserializeOwned>(
@@ -121,6 +137,15 @@ impl Connection {
         if let Some(error) = response.error {
             if error.message == "MESSAGE_METHOD_UNKNOWN" {
                 return Err(ApiError::Unsupported);
+            }
+            if error.message == "HOST_IS_SLAVE" {
+                let master = error
+                    .data
+                    .first()
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+                return Err(ApiError::HostIsSlave(master));
             }
             let message = match error.message.as_str() {
                 "SESSION_AUTHENTICATION_FAILED" => {
@@ -159,6 +184,28 @@ impl Connection {
             .await
     }
 
+    /// Lightweight liveness check: read the pool record, then ask the
+    /// coordinator for its clock. Both requests are cheap and exercise the
+    /// same session used by normal operations.
+    pub async fn heartbeat(&self) -> Result<(), ApiError> {
+        let pools = self.records("pool").await?;
+        let master = pools
+            .values()
+            .next()
+            .and_then(|pool| pool["master"].as_str())
+            .filter(|master| !master.is_empty() && *master != "OpaqueRef:NULL");
+        match master {
+            Some(master) => self
+                .request::<Value>("host.get_servertime", json!([self.session, master]))
+                .await
+                .map(|_| ()),
+            None => self
+                .request::<Value>("pool.get_all", json!([self.session]))
+                .await
+                .map(|_| ()),
+        }
+    }
+
     pub async fn logout(&self) -> Result<(), ApiError> {
         self.request::<Value>("session.logout", json!([self.session]))
             .await
@@ -166,24 +213,103 @@ impl Connection {
     }
 
     pub async fn inventory(&self) -> Result<Inventory, ApiError> {
-        let pools = self.records("pool").await?;
-        let hosts = self.records("host").await?;
-        let metrics = self.records("host_metrics").await?;
-        let vms = self.records("VM").await?;
-        let storage = self.records("SR").await?;
-        let networks = self.records("network").await?;
-        let mut hosts: Vec<_> = hosts
-            .into_iter()
+        let raw = self.raw_inventory().await?;
+        raw.into_inventory(self.settings.clone())
+    }
+
+    pub async fn raw_inventory(&self) -> Result<RawInventory, ApiError> {
+        let (pools, hosts, metrics, vms, storage, networks) = tokio::join!(
+            self.records("pool"),
+            self.records("host"),
+            self.records("host_metrics"),
+            self.records("VM"),
+            self.records("SR"),
+            self.records("network")
+        );
+        Ok(RawInventory {
+            pools: pools?,
+            hosts: hosts?,
+            host_metrics: metrics?,
+            vms: vms?,
+            storage: storage?,
+            networks: networks?,
+        })
+    }
+
+    pub async fn event_register(&self, classes: &[&str]) -> Result<(), ApiError> {
+        self.request::<Value>("event.register", json!([self.session, classes]))
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn event_next(&self) -> Result<Vec<Value>, ApiError> {
+        self.request("event.next", json!([self.session])).await
+    }
+
+    pub async fn event_unregister(&self, classes: &[&str]) -> Result<(), ApiError> {
+        self.request::<Value>("event.unregister", json!([self.session, classes]))
+            .await
+            .map(|_| ())
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct RawInventory {
+    pub(crate) pools: HashMap<String, Value>,
+    pub(crate) hosts: HashMap<String, Value>,
+    pub(crate) host_metrics: HashMap<String, Value>,
+    pub(crate) vms: HashMap<String, Value>,
+    pub(crate) storage: HashMap<String, Value>,
+    pub(crate) networks: HashMap<String, Value>,
+}
+
+impl RawInventory {
+    /// Apply a batch of XenAPI events and report whether any inventory class changed.
+    pub fn apply_events(&mut self, events: &[Value]) -> bool {
+        let mut changed = false;
+        for event in events {
+            let class = event["class"].as_str().unwrap_or_default();
+            let reference = event["ref"].as_str().unwrap_or_default();
+            let operation = event["operation"].as_str().unwrap_or_default();
+            // XAPI emits lower-case class names in events (`vm`, `sr`) even
+            // though the API class names are mixed case.
+            let target = match class.to_ascii_lowercase().as_str() {
+                "pool" => &mut self.pools,
+                "host" => &mut self.hosts,
+                "host_metrics" => &mut self.host_metrics,
+                "vm" => &mut self.vms,
+                "sr" => &mut self.storage,
+                "network" => &mut self.networks,
+                _ => continue,
+            };
+            if operation == "del" {
+                target.remove(reference);
+                changed = true;
+            } else if let Some(snapshot) = event.get("snapshot").filter(|value| value.is_object()) {
+                target.insert(reference.to_owned(), snapshot.clone());
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    pub fn into_inventory(&self, settings: ConnectionSettings) -> Result<Inventory, ApiError> {
+        let mut hosts: Vec<_> = self
+            .hosts
+            .iter()
             .map(|(reference, r)| {
-                let metric = metrics.get(&text(&r, "metrics")).unwrap_or(&Value::Null);
+                let metric = self
+                    .host_metrics
+                    .get(&text(r, "metrics"))
+                    .unwrap_or(&Value::Null);
                 Host {
-                    reference,
-                    uuid: text(&r, "uuid"),
-                    name: text(&r, "name_label"),
-                    address: text(&r, "address"),
+                    reference: reference.clone(),
+                    uuid: text(r, "uuid"),
+                    name: text(r, "name_label"),
+                    address: text(r, "address"),
                     version: text(&r["software_version"], "product_version"),
                     brand: text(&r["software_version"], "product_brand"),
-                    enabled: boolean(&r, "enabled"),
+                    enabled: boolean(r, "enabled"),
                     cpu_count: r["host_CPUs"].as_array().map_or(0, Vec::len),
                     memory_total: number(metric, "memory_total"),
                     memory_free: number(metric, "memory_free"),
@@ -195,10 +321,11 @@ impl Connection {
             .iter()
             .map(|h| (h.reference.clone(), h.name.clone()))
             .collect();
-        let all_vms: Vec<_> = vms
-            .into_iter()
+        let all_vms: Vec<_> = self
+            .vms
+            .iter()
             .filter(|(_, r)| !boolean(r, "is_control_domain"))
-            .map(|(reference, r)| vm_record(reference, &r, &host_names))
+            .map(|(reference, r)| vm_record(reference.clone(), r, &host_names))
             .collect();
         let mut vms: Vec<_> = all_vms.iter().filter(|r| r.kind == "vm").cloned().collect();
         let mut templates: Vec<_> = all_vms
@@ -213,33 +340,36 @@ impl Connection {
         vms.sort_by(|a, b| a.name.cmp(&b.name));
         templates.sort_by(|a, b| a.name.cmp(&b.name));
         snapshots.sort_by(|a, b| b.snapshot_time.cmp(&a.snapshot_time));
-        let mut storage: Vec<_> = storage
-            .into_values()
+        let mut storage: Vec<_> = self
+            .storage
+            .values()
             .map(|r| Storage {
-                uuid: text(&r, "uuid"),
-                name: text(&r, "name_label"),
-                storage_type: text(&r, "type"),
-                description: text(&r, "name_description"),
-                total: number(&r, "physical_size"),
-                used: number(&r, "physical_utilisation"),
-                shared: boolean(&r, "shared"),
+                uuid: text(r, "uuid"),
+                name: text(r, "name_label"),
+                storage_type: text(r, "type"),
+                description: text(r, "name_description"),
+                total: number(r, "physical_size"),
+                used: number(r, "physical_utilisation"),
+                shared: boolean(r, "shared"),
             })
             .collect();
         storage.sort_by(|a, b| a.name.cmp(&b.name));
-        let mut networks: Vec<_> = networks
-            .into_values()
+        let mut networks: Vec<_> = self
+            .networks
+            .values()
             .map(|r| Network {
-                uuid: text(&r, "uuid"),
-                name: text(&r, "name_label"),
-                description: text(&r, "name_description"),
-                bridge: text(&r, "bridge"),
-                mtu: number(&r, "MTU"),
+                uuid: text(r, "uuid"),
+                name: text(r, "name_label"),
+                description: text(r, "name_description"),
+                bridge: text(r, "bridge"),
+                mtu: number(r, "MTU"),
                 interface_count: r["PIFs"].as_array().map_or(0, Vec::len),
                 virtual_interface_count: r["VIFs"].as_array().map_or(0, Vec::len),
             })
             .collect();
         networks.sort_by(|a, b| a.name.cmp(&b.name));
-        let pool_name = pools
+        let pool_name = self
+            .pools
             .values()
             .next()
             .map(|r| text(r, "name_label"))
@@ -249,7 +379,8 @@ impl Connection {
                     .first()
                     .map_or("Pool".into(), |h| format!("{} pool", h.name))
             });
-        let pool_id = pools
+        let pool_id = self
+            .pools
             .values()
             .next()
             .map(|r| text(r, "uuid"))
@@ -259,7 +390,7 @@ impl Connection {
             pool_id,
             templates,
             snapshots,
-            settings: self.settings.clone(),
+            settings,
             pool_name,
             hosts,
             vms,
