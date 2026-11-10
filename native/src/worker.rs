@@ -145,6 +145,29 @@ pub enum Command {
         seq: u64,
         connection_id: String,
     },
+    EnableHa {
+        connection_id: String,
+        heartbeat_sr_uuids: Vec<String>,
+        failures_to_tolerate: u64,
+    },
+    DisableHa {
+        connection_id: String,
+    },
+    ConfigureWlb {
+        connection_id: String,
+        wlb_url: String,
+        wlb_username: String,
+        wlb_password: String,
+        xenserver_username: String,
+        xenserver_password: String,
+    },
+    SetWlbEnabled {
+        connection_id: String,
+        enabled: bool,
+    },
+    DeconfigureWlb {
+        connection_id: String,
+    },
     SetSubjectRoles {
         connection_id: String,
         subject_uuid: String,
@@ -545,6 +568,10 @@ pub enum Event {
         console_id: String,
         message: Option<String>,
     },
+    PoolActionFinished {
+        action: String,
+        result: Result<(), String>,
+    },
     Failed {
         context: String,
         message: String,
@@ -803,6 +830,66 @@ fn dispatch(
                     .await;
                 let _ = events.send(Event::SubjectRolesUpdated {
                     subject_uuid,
+                    result,
+                });
+            }
+            Command::EnableHa {
+                connection_id,
+                heartbeat_sr_uuids,
+                failures_to_tolerate,
+            } => {
+                let result = workspace
+                    .enable_ha(&connection_id, heartbeat_sr_uuids, failures_to_tolerate)
+                    .await;
+                let _ = events.send(Event::PoolActionFinished {
+                    action: "ha_enable".into(),
+                    result,
+                });
+            }
+            Command::DisableHa { connection_id } => {
+                let result = workspace.disable_ha(&connection_id).await;
+                let _ = events.send(Event::PoolActionFinished {
+                    action: "ha_disable".into(),
+                    result,
+                });
+            }
+            Command::ConfigureWlb {
+                connection_id,
+                wlb_url,
+                wlb_username,
+                wlb_password,
+                xenserver_username,
+                xenserver_password,
+            } => {
+                let result = workspace
+                    .configure_wlb(
+                        &connection_id,
+                        wlb_url,
+                        wlb_username,
+                        wlb_password,
+                        xenserver_username,
+                        xenserver_password,
+                    )
+                    .await;
+                let _ = events.send(Event::PoolActionFinished {
+                    action: "wlb_configure".into(),
+                    result,
+                });
+            }
+            Command::SetWlbEnabled {
+                connection_id,
+                enabled,
+            } => {
+                let result = workspace.set_wlb_enabled(&connection_id, enabled).await;
+                let _ = events.send(Event::PoolActionFinished {
+                    action: if enabled { "wlb_enable" } else { "wlb_disable" }.into(),
+                    result,
+                });
+            }
+            Command::DeconfigureWlb { connection_id } => {
+                let result = workspace.deconfigure_wlb(&connection_id).await;
+                let _ = events.send(Event::PoolActionFinished {
+                    action: "wlb_deconfigure".into(),
                     result,
                 });
             }

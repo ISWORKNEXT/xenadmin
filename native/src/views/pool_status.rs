@@ -3,7 +3,9 @@ use egui_extras::{Column, TableBuilder};
 use xen_core::pool_status::{PoolConfigEntry, PoolStatus};
 use xen_core::workspace::WorkspaceView;
 
-use crate::state::{LoadState, ObjectKey, UiAction, UiState, connection_name, find_connection};
+use crate::state::{
+    LoadState, ObjectKey, UiAction, UiState, connection_name, find_connection, is_read_only,
+};
 use crate::theme;
 use crate::theme::*;
 use crate::widgets;
@@ -75,16 +77,16 @@ pub fn show(
                 ui.label(RichText::new(message).size(10.0).color(red()));
             });
         }
-        LoadState::Ready(status) => render(ui, status),
+        LoadState::Ready(status) => render(ui, status, actions, is_read_only(connection)),
     }
 }
 
-fn render(ui: &mut Ui, status: &PoolStatus) {
+fn render(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_only: bool) {
     summary(ui, status);
     ui.add_space(8.0);
     ui.columns(2, |columns| {
-        ha_card(&mut columns[0], status);
-        wlb_card(&mut columns[1], status);
+        ha_card(&mut columns[0], status, actions, read_only);
+        wlb_card(&mut columns[1], status, actions, read_only);
     });
     ui.add_space(8.0);
     pvs_card(ui, status);
@@ -134,10 +136,33 @@ fn summary(ui: &mut Ui, status: &PoolStatus) {
     });
 }
 
-fn ha_card(ui: &mut Ui, status: &PoolStatus) {
+fn ha_card(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_only: bool) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        widgets::section_title(ui, "High availability", None);
+        ui.horizontal(|ui| {
+            widgets::section_title(ui, "High availability", None);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if status.ha.enabled {
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Disable HA…").size(10.5)),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::PromptHaDisable);
+                    }
+                } else if ui
+                    .add_enabled(
+                        !read_only,
+                        egui::Button::new(RichText::new("Enable HA…").size(10.5)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenHaEnable);
+                }
+            });
+        });
         ui.add_space(4.0);
         widgets::kv(
             ui,
@@ -232,10 +257,45 @@ fn ha_card(ui: &mut Ui, status: &PoolStatus) {
     });
 }
 
-fn wlb_card(ui: &mut Ui, status: &PoolStatus) {
+fn wlb_card(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_only: bool) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        widgets::section_title(ui, "Workload balancing", None);
+        ui.horizontal(|ui| {
+            widgets::section_title(ui, "Workload balancing", None);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.add_enabled_ui(!read_only, |ui| {
+                    ui.menu_button(RichText::new("Manage WLB…").size(10.5), |ui| {
+                        if ui
+                            .button(RichText::new("Configure WLB server…").size(10.5))
+                            .clicked()
+                        {
+                            actions.push(UiAction::OpenWlbConfig);
+                            ui.close();
+                        }
+                        if status.wlb.enabled {
+                            if ui
+                                .button(RichText::new("Disable WLB…").size(10.5))
+                                .clicked()
+                            {
+                                actions.push(UiAction::PromptWlbToggle(false));
+                                ui.close();
+                            }
+                        } else if ui.button(RichText::new("Enable WLB…").size(10.5)).clicked() {
+                            actions.push(UiAction::PromptWlbToggle(true));
+                            ui.close();
+                        }
+                        ui.separator();
+                        if ui
+                            .button(RichText::new("Deconfigure WLB…").size(10.5).color(amber()))
+                            .clicked()
+                        {
+                            actions.push(UiAction::PromptWlbDeconfigure);
+                            ui.close();
+                        }
+                    });
+                });
+            });
+        });
         ui.add_space(4.0);
         widgets::kv(
             ui,

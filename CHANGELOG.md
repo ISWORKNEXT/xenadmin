@@ -57,6 +57,8 @@
 - Add a read-only Authentication & RBAC page with redacted external-auth config, subjects and public roles.
 - Add SR introduce/forget for file-backed storage with UUID/type/content/shared validation.
 - Add a read-only Pool status page for HA, WLB, PVS, VMSS snapshot schedules and DR tasks.
+- Add HA enable/disable with shared-heartbeat and failure-tolerance validation.
+- Add WLB configure/enable/disable/deconfigure with URL and credential validation.
 - Add directory subject role assignment (add/remove) with internal-role/unknown-role guards and local-root protection.
 - Add AD authentication enable/disable with domain/service-account validation and confirmation guards.
 - Add live VDI migration for running VMs using VDI.pool_migrate, alongside the existing offline copy/swap move.

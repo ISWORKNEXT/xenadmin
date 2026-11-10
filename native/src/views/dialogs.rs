@@ -78,6 +78,15 @@ pub fn show(
     if state.rdp_credentials.is_some() {
         rdp_credentials_dialog(ctx, state, actions);
     }
+    if state.ha_enable_dialog.is_some() {
+        ha_enable_dialog(ctx, state, actions);
+    }
+    if state.wlb_config_dialog.is_some() {
+        wlb_config_dialog(ctx, state, actions);
+    }
+    if state.pool_confirm.is_some() {
+        pool_confirm_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -995,6 +1004,315 @@ fn network_destroy(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<U
     }
     if close {
         actions.push(UiAction::CancelNetworkDestroy);
+    }
+}
+
+fn ha_enable_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.ha_enable_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("ha-enable-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(580.0);
+            modal_title(
+                ui,
+                "Enable high availability",
+                "HA restarts protected VMs when a host fails. It needs shared heartbeat storage.",
+            );
+            widgets::field_label(ui, "Heartbeat SRs (up to three)");
+            egui::ScrollArea::vertical()
+                .max_height(160.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for (uuid, name) in &dialog.srs {
+                        let mut checked = dialog.selected.contains(uuid);
+                        if ui
+                            .add_enabled(
+                                !dialog.submitting,
+                                egui::Checkbox::new(
+                                    &mut checked,
+                                    RichText::new(format!("{name} · {uuid}")).size(10.5),
+                                ),
+                            )
+                            .changed()
+                        {
+                            if checked {
+                                dialog.selected.insert(uuid.clone());
+                            } else {
+                                dialog.selected.remove(uuid);
+                            }
+                        }
+                    }
+                });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Host failures to tolerate");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.failures)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(3)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.label(
+                RichText::new(
+                    "Must be lower than the number of enabled hosts. The HA plan and VM restart priorities decide which guests restart.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            ui.add_space(6.0);
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.acknowledged,
+                    RichText::new("I understand HA reserves capacity and restarts VMs").size(10.0),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && dialog.acknowledged
+                                && !dialog.selected.is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Enabling…"
+                            } else {
+                                "Enable HA"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveHaEnable);
+    }
+    if close {
+        actions.push(UiAction::CloseHaEnable);
+    }
+}
+
+fn wlb_config_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.wlb_config_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("wlb-config-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(600.0);
+            modal_title(
+                ui,
+                "Configure workload balancing",
+                "Registers this pool with a Workload Balancing server.",
+            );
+            widgets::field_label(ui, "WLB server URL");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.url)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("https://wlb.example.com:443")
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "WLB user name");
+                columns[0].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.wlb_username)
+                        .char_limit(255)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                widgets::field_label(&mut columns[1], "WLB password");
+                columns[1].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.wlb_password)
+                        .password(true)
+                        .char_limit(255)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+            });
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "XenServer user name");
+                columns[0].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.xenserver_username)
+                        .char_limit(255)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                widgets::field_label(&mut columns[1], "XenServer password");
+                columns[1].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.xenserver_password)
+                        .password(true)
+                        .char_limit(255)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+            });
+            ui.label(
+                RichText::new(
+                    "Passwords are sent only to the pool initialization call and are never saved by the app.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            ui.add_space(6.0);
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.acknowledged,
+                    RichText::new("I understand workload balancing will contact this server")
+                        .size(10.0),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && dialog.acknowledged
+                                && !dialog.url.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Configuring…"
+                            } else {
+                                "Configure WLB"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveWlbConfig);
+    }
+    if close {
+        actions.push(UiAction::CloseWlbConfig);
+    }
+}
+
+fn pool_confirm_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut confirm = false;
+    let Some(dialog) = state.pool_confirm.as_mut() else {
+        return;
+    };
+    let (title, detail) = match dialog.action {
+        crate::state::PoolConfirmAction::DisableHa => (
+            "Disable high availability",
+            "VMs will no longer be restarted after a host failure. The HA plan is discarded.",
+        ),
+        crate::state::PoolConfirmAction::EnableWlb => (
+            "Enable workload balancing",
+            "The pool will start sending recommendations and optimizations to the configured WLB server.",
+        ),
+        crate::state::PoolConfirmAction::DisableWlb => (
+            "Disable workload balancing",
+            "Monitoring stops. The WLB configuration is kept so it can be enabled again.",
+        ),
+        crate::state::PoolConfirmAction::DeconfigureWlb => (
+            "Deconfigure workload balancing",
+            "Disables WLB and removes the stored WLB server credentials from the pool.",
+        ),
+    };
+    let response = egui::Modal::new(egui::Id::unique("pool-confirm-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(520.0);
+            modal_title(ui, title, detail);
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.acknowledged,
+                    RichText::new("I understand this pool-wide change").size(10.0),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && dialog.acknowledged,
+                            widgets::primary_button(if dialog.submitting {
+                                "Applying…"
+                            } else {
+                                "Confirm"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        confirm = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if confirm {
+        actions.push(UiAction::ConfirmPoolConfirm);
+    }
+    if close {
+        actions.push(UiAction::CancelPoolConfirm);
     }
 }
 

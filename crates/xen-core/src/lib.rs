@@ -5,6 +5,7 @@ pub mod host;
 pub mod network;
 pub mod operations;
 pub mod performance;
+pub mod pool_actions;
 pub mod pool_status;
 pub mod storage;
 pub mod transport;

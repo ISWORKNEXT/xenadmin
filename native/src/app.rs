@@ -813,6 +813,57 @@ impl App {
                         }
                     }
                 },
+                Event::PoolActionFinished { action, result } => match result {
+                    Ok(()) => {
+                        self.state.ha_enable_dialog = None;
+                        self.state.wlb_config_dialog = None;
+                        self.state.pool_confirm = None;
+                        self.state.pool_status_state = LoadState::Idle;
+                        let message = match action.as_str() {
+                            "ha_enable" => "High availability enabled.",
+                            "ha_disable" => "High availability disabled.",
+                            "wlb_configure" => "Workload balancing configured.",
+                            "wlb_enable" => "Workload balancing enabled.",
+                            "wlb_disable" => "Workload balancing disabled.",
+                            _ => "Workload balancing deconfigured.",
+                        };
+                        self.state
+                            .toasts
+                            .push(Toast::new(message, ToastKind::Success));
+                        if matches!(
+                            self.state
+                                .object_tabs
+                                .get(self.state.active_tab)
+                                .map(|tab| &tab.key),
+                            Some(ObjectKey::PoolStatus { .. })
+                        ) {
+                            self.apply(vec![UiAction::LoadPoolStatus]);
+                        }
+                    }
+                    Err(message) => {
+                        let mut handled = false;
+                        if let Some(dialog) = self.state.ha_enable_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(dialog) = self.state.wlb_config_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(dialog) = self.state.pool_confirm.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if !handled {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::RdpOpened {
                     console_id,
                     host,
@@ -2180,6 +2231,253 @@ impl App {
                         connection_id,
                         vm_uuid,
                     });
+                }
+                UiAction::OpenHaEnable => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let srs: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .storage
+                                    .iter()
+                                    .filter(|sr| sr.shared && sr.content_type == "user")
+                                    .map(|sr| (sr.uuid.clone(), sr.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    if srs.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "HA needs at least one shared user SR for heartbeats.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    }
+                    self.state.ha_enable_dialog = Some(crate::state::HaEnableDialog {
+                        connection_id,
+                        srs,
+                        selected: HashSet::new(),
+                        failures: "0".into(),
+                        acknowledged: false,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseHaEnable => {
+                    if !self
+                        .state
+                        .ha_enable_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.ha_enable_dialog = None;
+                    }
+                }
+                UiAction::SaveHaEnable => {
+                    let Some(dialog) = self.state.ha_enable_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(failures) = dialog.failures.trim().parse::<u64>().ok() else {
+                        dialog.error = Some("Enter a whole-number failure tolerance.".into());
+                        continue;
+                    };
+                    if dialog.selected.is_empty() {
+                        dialog.error = Some("Select at least one heartbeat SR.".into());
+                        continue;
+                    }
+                    if !dialog.acknowledged {
+                        dialog.error = Some("Confirm that you understand this change.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::EnableHa {
+                        connection_id: dialog.connection_id.clone(),
+                        heartbeat_sr_uuids: dialog.selected.iter().cloned().collect(),
+                        failures_to_tolerate: failures,
+                    });
+                }
+                UiAction::PromptHaDisable => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.pool_confirm = Some(crate::state::PoolConfirm {
+                        connection_id,
+                        action: crate::state::PoolConfirmAction::DisableHa,
+                        acknowledged: false,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::OpenWlbConfig => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.wlb_config_dialog = Some(crate::state::WlbConfigDialog {
+                        connection_id,
+                        url: String::new(),
+                        wlb_username: String::new(),
+                        wlb_password: String::new(),
+                        xenserver_username: String::new(),
+                        xenserver_password: String::new(),
+                        acknowledged: false,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseWlbConfig => {
+                    if !self
+                        .state
+                        .wlb_config_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.wlb_config_dialog = None;
+                    }
+                }
+                UiAction::SaveWlbConfig => {
+                    let Some(dialog) = self.state.wlb_config_dialog.as_mut() else {
+                        continue;
+                    };
+                    if !dialog.acknowledged {
+                        dialog.error = Some("Confirm that you understand this change.".into());
+                        continue;
+                    }
+                    if dialog.url.trim().is_empty()
+                        || dialog.wlb_username.trim().is_empty()
+                        || dialog.wlb_password.is_empty()
+                        || dialog.xenserver_username.trim().is_empty()
+                        || dialog.xenserver_password.is_empty()
+                    {
+                        dialog.error =
+                            Some("Fill in all WLB and XenServer credential fields.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::ConfigureWlb {
+                        connection_id: dialog.connection_id.clone(),
+                        wlb_url: dialog.url.trim().to_owned(),
+                        wlb_username: dialog.wlb_username.trim().to_owned(),
+                        wlb_password: dialog.wlb_password.clone(),
+                        xenserver_username: dialog.xenserver_username.trim().to_owned(),
+                        xenserver_password: dialog.xenserver_password.clone(),
+                    });
+                }
+                UiAction::PromptWlbToggle(enabled) => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    if enabled
+                        && let LoadState::Ready(status) = &self.state.pool_status_state
+                        && status.wlb.url.is_empty()
+                    {
+                        self.state.toasts.push(Toast::new(
+                            "Configure the WLB server before enabling workload balancing.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    }
+                    self.state.pool_confirm = Some(crate::state::PoolConfirm {
+                        connection_id,
+                        action: if enabled {
+                            crate::state::PoolConfirmAction::EnableWlb
+                        } else {
+                            crate::state::PoolConfirmAction::DisableWlb
+                        },
+                        acknowledged: false,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::PromptWlbDeconfigure => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.pool_confirm = Some(crate::state::PoolConfirm {
+                        connection_id,
+                        action: crate::state::PoolConfirmAction::DeconfigureWlb,
+                        acknowledged: false,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CancelPoolConfirm => {
+                    if !self
+                        .state
+                        .pool_confirm
+                        .as_ref()
+                        .is_some_and(|confirm| confirm.submitting)
+                    {
+                        self.state.pool_confirm = None;
+                    }
+                }
+                UiAction::ConfirmPoolConfirm => {
+                    let Some(confirm) = self.state.pool_confirm.as_mut() else {
+                        continue;
+                    };
+                    if !confirm.acknowledged {
+                        confirm.error = Some("Confirm that you understand this change.".into());
+                        continue;
+                    }
+                    confirm.submitting = true;
+                    confirm.error = None;
+                    match confirm.action {
+                        crate::state::PoolConfirmAction::DisableHa => {
+                            self.worker.send(Command::DisableHa {
+                                connection_id: confirm.connection_id.clone(),
+                            });
+                        }
+                        crate::state::PoolConfirmAction::EnableWlb => {
+                            self.worker.send(Command::SetWlbEnabled {
+                                connection_id: confirm.connection_id.clone(),
+                                enabled: true,
+                            });
+                        }
+                        crate::state::PoolConfirmAction::DisableWlb => {
+                            self.worker.send(Command::SetWlbEnabled {
+                                connection_id: confirm.connection_id.clone(),
+                                enabled: false,
+                            });
+                        }
+                        crate::state::PoolConfirmAction::DeconfigureWlb => {
+                            self.worker.send(Command::DeconfigureWlb {
+                                connection_id: confirm.connection_id.clone(),
+                            });
+                        }
+                    }
                 }
                 UiAction::OpenRdpDialog => {
                     let Some(key) = self

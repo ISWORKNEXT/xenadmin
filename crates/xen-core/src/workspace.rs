@@ -391,6 +391,81 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn enable_ha(
+        &self,
+        connection_id: &str,
+        heartbeat_sr_uuids: Vec<String>,
+        failures_to_tolerate: u64,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .enable_ha(heartbeat_sr_uuids, failures_to_tolerate)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn disable_ha(&self, connection_id: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .disable_ha()
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn configure_wlb(
+        &self,
+        connection_id: &str,
+        wlb_url: String,
+        wlb_username: String,
+        wlb_password: String,
+        xenserver_username: String,
+        xenserver_password: String,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .configure_wlb(
+                &wlb_url,
+                &wlb_username,
+                &wlb_password,
+                &xenserver_username,
+                &xenserver_password,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn set_wlb_enabled(&self, connection_id: &str, enabled: bool) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .set_wlb_enabled(enabled)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn deconfigure_wlb(&self, connection_id: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .deconfigure_wlb()
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn pool_status(
         &self,
         connection_id: &str,

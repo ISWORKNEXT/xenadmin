@@ -768,6 +768,44 @@ pub struct SshCredentialDialog {
     pub error: Option<String>,
 }
 
+pub struct HaEnableDialog {
+    pub connection_id: String,
+    pub srs: Vec<(String, String)>,
+    pub selected: HashSet<String>,
+    pub failures: String,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PoolConfirmAction {
+    DisableHa,
+    EnableWlb,
+    DisableWlb,
+    DeconfigureWlb,
+}
+
+pub struct PoolConfirm {
+    pub connection_id: String,
+    pub action: PoolConfirmAction,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct WlbConfigDialog {
+    pub connection_id: String,
+    pub url: String,
+    pub wlb_username: String,
+    pub wlb_password: String,
+    pub xenserver_username: String,
+    pub xenserver_password: String,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct AdEnableDialog {
     pub connection_id: String,
     pub domain: String,
@@ -1117,6 +1155,9 @@ pub struct UiState {
     pub rdp_console: Option<RdpConsoleState>,
     pub rdp_credentials: Option<RdpCredentialDialog>,
     pub rdp_seq: u64,
+    pub ha_enable_dialog: Option<HaEnableDialog>,
+    pub pool_confirm: Option<PoolConfirm>,
+    pub wlb_config_dialog: Option<WlbConfigDialog>,
     pub ad_disable_dialog: Option<AdDisableDialog>,
     pub sr_probe_seq: u64,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
@@ -1223,6 +1264,9 @@ impl Default for UiState {
             rdp_console: None,
             rdp_credentials: None,
             rdp_seq: 0,
+            ha_enable_dialog: None,
+            pool_confirm: None,
+            wlb_config_dialog: None,
             ad_disable_dialog: None,
             sr_probe_seq: 0,
             network_destroy_confirm: None,
@@ -1360,6 +1404,17 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenHaEnable,
+    CloseHaEnable,
+    SaveHaEnable,
+    PromptHaDisable,
+    OpenWlbConfig,
+    CloseWlbConfig,
+    SaveWlbConfig,
+    PromptWlbToggle(bool),
+    PromptWlbDeconfigure,
+    CancelPoolConfirm,
+    ConfirmPoolConfirm,
     OpenRdpDialog,
     CloseRdpDialog,
     ConnectRdp,
