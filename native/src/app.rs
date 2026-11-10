@@ -916,6 +916,24 @@ impl App {
                         name,
                         delete_disks: true,
                         delete_snapshots: false,
+                        host: None,
+                    });
+                }
+                UiAction::ProposeOnHost(kind, targets, host_ref, host_name) => {
+                    let first_name = targets
+                        .first()
+                        .and_then(|(connection_id, vm_uuid)| {
+                            find_vm(&self.workspace, connection_id, vm_uuid)
+                        })
+                        .map(|(_, vm)| vm.name.clone())
+                        .unwrap_or_else(|| "VM".into());
+                    self.state.intent = Some(Intent {
+                        kind,
+                        targets,
+                        name: first_name,
+                        delete_disks: true,
+                        delete_snapshots: false,
+                        host: Some((host_ref, host_name)),
                     });
                 }
                 UiAction::SubmitIntent => {
@@ -926,6 +944,10 @@ impl App {
                         &intent.name,
                         intent.delete_disks,
                         intent.delete_snapshots,
+                        intent
+                            .host
+                            .as_ref()
+                            .map(|(reference, _)| reference.as_str()),
                     );
                     let count = intent.targets.len();
                     for (connection_id, vm_uuid) in intent.targets {

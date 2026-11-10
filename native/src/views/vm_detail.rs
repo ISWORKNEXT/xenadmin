@@ -10,7 +10,7 @@ use super::host_details::{chart, is_cpu_core, is_memory_metric, is_network_metri
 use crate::format;
 use crate::state::{
     ActionKind, LoadState, ObjectKey, UiAction, UiState, VmTab, action_allowed, connection_id,
-    connection_inventory, connection_name, find_vm, is_read_only, running_task,
+    connection_inventory, connection_name, find_connection, find_vm, is_read_only, running_task,
 };
 use crate::theme;
 use crate::theme::*;
@@ -341,6 +341,54 @@ fn action_bar(
                 vec![(connection_id.to_owned(), vm_uuid.to_owned())],
             ));
         }
+        let host_operation = if vm.power_state == "Suspended" {
+            "resume_on"
+        } else {
+            "start_on"
+        };
+        ui.menu_button(
+            RichText::new(if vm.power_state == "Suspended" {
+                "Resume on…"
+            } else {
+                "Start on…"
+            })
+            .size(11.0)
+            .color(muted_fg()),
+            |ui| {
+                let hosts = find_connection(workspace, connection_id)
+                    .and_then(connection_inventory)
+                    .map(|inventory| inventory.hosts.as_slice())
+                    .unwrap_or_default();
+                if hosts.is_empty() {
+                    ui.label(
+                        RichText::new("No hosts available")
+                            .size(10.0)
+                            .color(dim_fg()),
+                    );
+                }
+                for host in hosts {
+                    let allowed = action_allowed(workspace, connection_id, vm, host_operation)
+                        && host.enabled;
+                    if ui
+                        .add_enabled(
+                            allowed,
+                            egui::Button::new(RichText::new(&host.name).size(11.0).color(fg()))
+                                .frame(false),
+                        )
+                        .on_hover_text(&host.address)
+                        .clicked()
+                    {
+                        actions.push(UiAction::ProposeOnHost(
+                            start_kind,
+                            vec![(connection_id.to_owned(), vm_uuid.to_owned())],
+                            host.reference.clone(),
+                            host.name.clone(),
+                        ));
+                        ui.close();
+                    }
+                }
+            },
+        );
         let can_shutdown = action_allowed(
             workspace,
             connection_id,

@@ -238,9 +238,14 @@ fn intent(
         .frame(theme::modal_frame())
         .show(ctx, |ui| {
             ui.set_width(520.0);
+            let title = intent
+                .host
+                .as_ref()
+                .map(|(_, host)| format!("{} on {}", intent.kind.label(), host))
+                .unwrap_or_else(|| intent.kind.label().to_owned());
             modal_title(
                 ui,
-                intent.kind.label(),
+                &title,
                 "Review the exact targets before submitting to XenAPI.",
             );
             theme::inset_frame().show(ui, |ui| {
@@ -260,6 +265,14 @@ fn intent(
                     });
                 }
             });
+            if let Some((_, host)) = &intent.host {
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new(format!("Target host: {host}"))
+                        .size(10.0)
+                        .color(accent()),
+                );
+            }
             if intent.kind.needs_name() {
                 ui.add_space(8.0);
                 widgets::field_label(

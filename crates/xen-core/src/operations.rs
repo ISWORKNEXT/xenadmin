@@ -9,6 +9,9 @@ use crate::xapi::{ApiError, Connection};
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum VmAction {
     Start,
+    StartOn {
+        host_ref: String,
+    },
     Shutdown,
     Reboot,
     ForceShutdown,
@@ -17,6 +20,9 @@ pub enum VmAction {
     Unpause,
     Suspend,
     Resume,
+    ResumeOn {
+        host_ref: String,
+    },
     Clone {
         name: String,
     },
@@ -34,6 +40,7 @@ impl VmAction {
     pub fn allowed_operation(&self) -> &'static str {
         match self {
             Self::Start => "start",
+            Self::StartOn { .. } => "start_on",
             Self::Shutdown => "clean_shutdown",
             Self::Reboot => "clean_reboot",
             Self::ForceShutdown => "hard_shutdown",
@@ -42,6 +49,7 @@ impl VmAction {
             Self::Unpause => "unpause",
             Self::Suspend => "suspend",
             Self::Resume => "resume",
+            Self::ResumeOn { .. } => "resume_on",
             Self::Clone { .. } => "clone",
             Self::Snapshot { .. } => "snapshot",
             Self::Revert => "revert",
@@ -52,6 +60,7 @@ impl VmAction {
     pub fn title(&self) -> &'static str {
         match self {
             Self::Start => "Start",
+            Self::StartOn { .. } => "Start on host",
             Self::Shutdown => "Shut down",
             Self::Reboot => "Reboot",
             Self::ForceShutdown => "Force shut down",
@@ -60,6 +69,7 @@ impl VmAction {
             Self::Unpause => "Unpause",
             Self::Suspend => "Suspend",
             Self::Resume => "Resume",
+            Self::ResumeOn { .. } => "Resume on host",
             Self::Clone { .. } => "Clone",
             Self::Snapshot { .. } => "Take snapshot",
             Self::Revert => "Revert snapshot",
@@ -70,6 +80,9 @@ impl VmAction {
     fn params(&self, session: &str, reference: &str) -> Result<Value, ApiError> {
         Ok(match self {
             Self::Start | Self::Resume => json!([session, reference, false, false]),
+            Self::StartOn { host_ref } | Self::ResumeOn { host_ref } => {
+                json!([session, reference, host_ref, false, false])
+            }
             Self::Clone { name } | Self::Snapshot { name } => {
                 if name.trim().is_empty() || name.chars().count() > 255 {
                     return Err(ApiError::Xen(
@@ -123,6 +136,42 @@ impl Connection {
                 "The host does not currently allow this operation. Refresh and check the VM state."
                     .into(),
             ));
+        }
+        if matches!(
+            action,
+            VmAction::Start
+                | VmAction::StartOn { .. }
+                | VmAction::Resume
+                | VmAction::ResumeOn { .. }
+        ) {
+            let host_ref = match action {
+                VmAction::StartOn { host_ref } | VmAction::ResumeOn { host_ref } => {
+                    Some(host_ref.clone())
+                }
+                _ => {
+                    let resident = record["resident_on"].as_str().unwrap_or_default();
+                    let affinity = record["affinity"].as_str().unwrap_or_default();
+                    [resident, affinity]
+                        .into_iter()
+                        .find(|value| !value.is_empty() && *value != "OpaqueRef:NULL")
+                        .map(str::to_owned)
+                }
+            };
+            if let Some(host_ref) = host_ref {
+                match self
+                    .request::<Value>(
+                        "VM.assert_can_boot_here",
+                        json!([self.session, reference, host_ref]),
+                    )
+                    .await
+                {
+                    Ok(_) | Err(ApiError::Unsupported) => {}
+                    Err(ApiError::XenCode(code, _)) if code == "MESSAGE_METHOD_UNKNOWN" => {}
+                    Err(error) => {
+                        return Err(context("The VM cannot boot on this host", error));
+                    }
+                }
+            }
         }
         let method = format!("Async.VM.{}", action.allowed_operation());
         self.request(&method, action.params(&self.session, &reference)?)
@@ -670,6 +719,21 @@ mod tests {
         assert_eq!(
             VmAction::Resume.params("s", "v").unwrap(),
             json!(["s", "v", false, false])
+        );
+        assert_eq!(
+            VmAction::StartOn {
+                host_ref: "h".into()
+            }
+            .params("s", "v")
+            .unwrap(),
+            json!(["s", "v", "h", false, false])
+        );
+        assert_eq!(
+            VmAction::ResumeOn {
+                host_ref: "h".into()
+            }
+            .allowed_operation(),
+            "resume_on"
         );
     }
     #[test]

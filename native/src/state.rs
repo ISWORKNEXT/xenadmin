@@ -318,9 +318,20 @@ impl ActionKind {
         matches!(self, ActionKind::Clone | ActionKind::Snapshot)
     }
 
-    pub fn to_action(self, name: &str, delete_disks: bool, delete_snapshots: bool) -> VmAction {
+    pub fn to_action(
+        self,
+        name: &str,
+        delete_disks: bool,
+        delete_snapshots: bool,
+        host_ref: Option<&str>,
+    ) -> VmAction {
         match self {
-            ActionKind::Start => VmAction::Start,
+            ActionKind::Start => match host_ref {
+                Some(host_ref) => VmAction::StartOn {
+                    host_ref: host_ref.to_owned(),
+                },
+                None => VmAction::Start,
+            },
             ActionKind::Shutdown => VmAction::Shutdown,
             ActionKind::Reboot => VmAction::Reboot,
             ActionKind::ForceShutdown => VmAction::ForceShutdown,
@@ -328,7 +339,12 @@ impl ActionKind {
             ActionKind::Pause => VmAction::Pause,
             ActionKind::Unpause => VmAction::Unpause,
             ActionKind::Suspend => VmAction::Suspend,
-            ActionKind::Resume => VmAction::Resume,
+            ActionKind::Resume => match host_ref {
+                Some(host_ref) => VmAction::ResumeOn {
+                    host_ref: host_ref.to_owned(),
+                },
+                None => VmAction::Resume,
+            },
             ActionKind::Clone => VmAction::Clone {
                 name: name.trim().to_owned(),
             },
@@ -389,6 +405,7 @@ pub struct Intent {
     pub name: String,
     pub delete_disks: bool,
     pub delete_snapshots: bool,
+    pub host: Option<(String, String)>,
 }
 
 #[derive(Clone)]
@@ -805,6 +822,7 @@ pub enum UiAction {
     Remove(String),
     OpenVm(String, String),
     Propose(ActionKind, Vec<(String, String)>),
+    ProposeOnHost(ActionKind, Vec<(String, String)>, String, String),
     SubmitIntent,
     CloseIntent,
     CheckTask(String),

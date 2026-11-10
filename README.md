@@ -15,9 +15,10 @@ default and a persisted dark-theme toggle.
   connection/host scopes.
 - Infrastructure tree with search, context menus and object tabs.
 - Pool overview page with hosts, storage, networks and VM summary.
-- VM lifecycle: start, clean shutdown/reboot, force shutdown/reboot, pause,
-  unpause, suspend, resume, clone, disk snapshot, snapshot revert/delete and
-  delete VM with owned-disk and optional snapshot cleanup.
+- VM lifecycle: start (including start/resume on a chosen host), clean
+  shutdown/reboot, force shutdown/reboot, pause, unpause, suspend, resume,
+  clone, disk snapshot, snapshot revert/delete and delete VM with owned-disk
+  and optional snapshot cleanup.
 - Create a VM from a template: clone, provision declared disks, refresh the
   inventory and track progress in Activity & tasks.
 - Edit a VM's name and description at any time; change vCPUs and the static

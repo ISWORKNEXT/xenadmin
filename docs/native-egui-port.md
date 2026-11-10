@@ -36,6 +36,7 @@ dependency.
 | VM performance | Implemented | VM RRD with per-vCPU CPU graph, memory/network graphs, remaining metrics and the same ranges |
 | VM console | Implemented | VNC over XenAPI HTTPS CONNECT tunnel; framebuffer, mouse/wheel, keyboard and reconnect |
 | VM editing | Implemented | Name/description anytime; vCPUs and static memory maximum while halted |
+| VM start on host | Implemented | Start/resume on a chosen host with `assert_can_boot_here` precheck |
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
 | Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |
 | Themes | Implemented | Light/white theme by default with a persisted dark toggle |
