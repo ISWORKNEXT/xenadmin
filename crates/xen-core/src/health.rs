@@ -73,6 +73,7 @@ pub(crate) fn evaluate(raw: &RawInventory) -> HealthReport {
         hosts(raw),
         overcommit(raw),
         storage(raw),
+        storage_types(raw),
         network(raw),
         duplicate_macs(raw),
         pool_hosts(raw),
@@ -81,7 +82,27 @@ pub(crate) fn evaluate(raw: &RawInventory) -> HealthReport {
         vm_disks(raw),
         vbd_consistency(raw),
         boot_config(raw),
-        certificate_updates(raw),
+        health_check_service(raw),
+        update_sync(raw),
+        redo_log(raw),
+        time_sync(raw),
+        suspend_sr(raw),
+        wlb(raw),
+        legacy_ssl(raw),
+        tls_verification(raw),
+        pv_guests(raw),
+        duplicate_names(raw),
+        orphaned_vdis(raw),
+        tools_iso(raw),
+        vif_references(raw),
+        vbd_ownership(raw),
+        pbd_map(raw),
+        pif_map(raw),
+        host_updates(raw),
+        host_version(raw),
+        certificate_expiry(raw),
+        pool_license(raw),
+        crash_dump_sr(raw),
     ];
     HealthReport {
         checks,
@@ -314,6 +335,40 @@ fn duplicate_macs(raw: &RawInventory) -> DiagnosticCheck {
             "No duplicate VIF MAC addresses were found.".into()
         } else {
             format!("{} duplicate MAC address(es).", details.len())
+        },
+        details,
+    )
+}
+
+fn storage_types(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for sr in raw.storage.values() {
+        let name = text(sr, "name_label");
+        match text(sr, "type").as_str() {
+            "lvmofcoe" => {
+                details.push(format!("{name}: LVM over FCoE is deprecated"));
+                severity = max_severity(severity, Severity::Warning);
+            }
+            "gfs2" => {
+                details.push(format!("{name}: GFS2 requires cluster membership"));
+                severity = max_severity(severity, Severity::Info);
+            }
+            _ => {}
+        }
+        if text(sr, "content_type") == "iso" && sr["shared"].as_bool() == Some(false) {
+            details.push(format!("{name}: ISO storage is local to one host"));
+            severity = max_severity(severity, Severity::Info);
+        }
+    }
+    check(
+        "storage-types",
+        "Storage types",
+        severity,
+        if details.is_empty() {
+            "Storage repository types are supported and shared where expected.".into()
+        } else {
+            format!("{} storage type note(s).", details.len())
         },
         details,
     )
@@ -857,32 +912,15 @@ fn boot_config(raw: &RawInventory) -> DiagnosticCheck {
     )
 }
 
-fn certificate_updates(raw: &RawInventory) -> DiagnosticCheck {
+fn certificate_expiry(raw: &RawInventory) -> DiagnosticCheck {
     let mut details = Vec::new();
     let mut severity = Severity::Ok;
-    let mut versions = std::collections::HashSet::new();
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
     for (host_ref, host) in &raw.hosts {
         let name = text(host, "name_label");
-        let version = format!(
-            "{} {}",
-            text(&host["software_version"], "product_version"),
-            text(&host["software_version"], "build_number")
-        );
-        let version = version.trim().to_owned();
-        if !version.is_empty() {
-            versions.insert(version);
-        }
-        let updates = host["updates_requiring_reboot"]
-            .as_array()
-            .map_or(0, Vec::len);
-        if updates > 0 {
-            details.push(format!("{name}: {updates} update(s) require a host reboot"));
-            severity = max_severity(severity, Severity::Warning);
-        }
         let certificates: Vec<&Value> = raw
             .certificates
             .values()
@@ -914,18 +952,700 @@ fn certificate_updates(raw: &RawInventory) -> DiagnosticCheck {
             }
         }
     }
+    check(
+        "certificate-expiry",
+        "Certificate expiry",
+        severity,
+        if details.is_empty() {
+            "Host certificates are current.".into()
+        } else {
+            format!("{} certificate note(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn host_updates(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for host in raw.hosts.values() {
+        let name = text(host, "name_label");
+        let updates = host["updates_requiring_reboot"]
+            .as_array()
+            .map_or(0, Vec::len);
+        if updates > 0 {
+            details.push(format!("{name}: {updates} update(s) require a host reboot"));
+            severity = max_severity(severity, Severity::Warning);
+        }
+        let guidances = host["pending_guidances_recommended"]
+            .as_array()
+            .map_or(0, Vec::len)
+            + host["pending_guidances_full"]
+                .as_array()
+                .map_or(0, Vec::len);
+        if guidances > 0 {
+            details.push(format!(
+                "{name}: {guidances} pending update guidance item(s)"
+            ));
+            severity = max_severity(severity, Severity::Info);
+        }
+    }
+    check(
+        "host-updates",
+        "Host updates",
+        severity,
+        if details.is_empty() {
+            "No host updates are waiting for a reboot.".into()
+        } else {
+            format!("{} host update note(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn host_version(raw: &RawInventory) -> DiagnosticCheck {
+    let versions: std::collections::HashSet<String> = raw
+        .hosts
+        .values()
+        .map(|host| {
+            format!(
+                "{} {}",
+                text(&host["software_version"], "product_version"),
+                text(&host["software_version"], "build_number")
+            )
+            .trim()
+            .to_owned()
+        })
+        .filter(|version| !version.is_empty())
+        .collect();
     if versions.len() > 1 {
-        details.push("Pool hosts report different software versions.".into());
+        let mut versions: Vec<&str> = versions.iter().map(String::as_str).collect();
+        versions.sort_unstable();
+        check(
+            "host-version",
+            "Host software version",
+            Severity::Warning,
+            "Pool hosts report different software versions.",
+            vec![versions.join(", ")],
+        )
+    } else {
+        check(
+            "host-version",
+            "Host software version",
+            Severity::Ok,
+            "Pool hosts report a consistent software version.",
+            Vec::new(),
+        )
+    }
+}
+
+fn pool_license(raw: &RawInventory) -> DiagnosticCheck {
+    let Some(pool) = raw.pools.values().next() else {
+        return check(
+            "pool-license",
+            "Licensing",
+            Severity::Info,
+            "No pool record is available.",
+            Vec::new(),
+        );
+    };
+    let server = text(pool, "license_server");
+    if server.is_empty() {
+        check(
+            "pool-license",
+            "Licensing",
+            Severity::Ok,
+            "No license server is configured (XCP-ng does not require one).",
+            Vec::new(),
+        )
+    } else {
+        check(
+            "pool-license",
+            "Licensing",
+            Severity::Ok,
+            format!("Pool uses license server {server}."),
+            Vec::new(),
+        )
+    }
+}
+
+fn crash_dump_sr(raw: &RawInventory) -> DiagnosticCheck {
+    let Some(pool) = raw.pools.values().next() else {
+        return check(
+            "crash-dump-sr",
+            "Crash dump SR",
+            Severity::Info,
+            "No pool record is available.",
+            Vec::new(),
+        );
+    };
+    let reference = text(pool, "crash_dump_SR");
+    if reference.is_empty() || reference == "OpaqueRef:NULL" {
+        check(
+            "crash-dump-sr",
+            "Crash dump SR",
+            Severity::Info,
+            "No dedicated crash dump SR; dumps fall back to the default SR.",
+            Vec::new(),
+        )
+    } else if !raw.storage.contains_key(&reference) {
+        check(
+            "crash-dump-sr",
+            "Crash dump SR",
+            Severity::Warning,
+            "The configured crash dump SR is unavailable.",
+            vec![reference],
+        )
+    } else {
+        check(
+            "crash-dump-sr",
+            "Crash dump SR",
+            Severity::Ok,
+            "A dedicated crash dump SR is configured.",
+            Vec::new(),
+        )
+    }
+}
+
+fn health_check_service(raw: &RawInventory) -> DiagnosticCheck {
+    let Some(pool) = raw.pools.values().next() else {
+        return check(
+            "health-check-service",
+            "Health check service",
+            Severity::Info,
+            "No pool record is available.",
+            Vec::new(),
+        );
+    };
+    let entries = pool["health_check_config"]
+        .as_object()
+        .map_or(0, |config| config.len());
+    if entries == 0 {
+        check(
+            "health-check-service",
+            "Health check service",
+            Severity::Info,
+            "The XAPI health check upload service is not configured.",
+            Vec::new(),
+        )
+    } else {
+        check(
+            "health-check-service",
+            "Health check service",
+            Severity::Ok,
+            format!("Health check upload service has {entries} setting(s)."),
+            Vec::new(),
+        )
+    }
+}
+
+fn update_sync(raw: &RawInventory) -> DiagnosticCheck {
+    let Some(pool) = raw.pools.values().next() else {
+        return check(
+            "update-sync",
+            "Update sync",
+            Severity::Info,
+            "No pool record is available.",
+            Vec::new(),
+        );
+    };
+    let enabled = pool["update_sync_enabled"].as_bool().unwrap_or(false);
+    let last = xapi_timestamp(&text(pool, "last_update_sync"));
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    if !enabled {
+        details.push("Automatic update sync is disabled.".into());
+        severity = Severity::Info;
+    }
+    if last == 0 {
+        details.push("Updates have never been synced.".into());
+        severity = Severity::Info;
+    } else if enabled && now.saturating_sub(last) > 30 * 24 * 60 * 60 {
+        details.push(format!(
+            "Updates were last synced at {}.",
+            text(pool, "last_update_sync")
+        ));
         severity = max_severity(severity, Severity::Warning);
     }
     check(
-        "certificate-updates",
-        "Certificates / updates",
+        "update-sync",
+        "Update sync",
         severity,
         if details.is_empty() {
-            "Host certificates and update state are clean.".into()
+            "Update metadata is in sync.".into()
         } else {
-            format!("{} certificate/update note(s).", details.len())
+            format!("{} update sync note(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn redo_log(raw: &RawInventory) -> DiagnosticCheck {
+    let Some(pool) = raw.pools.values().next() else {
+        return check(
+            "redo-log",
+            "HA redo log",
+            Severity::Info,
+            "No pool record is available.",
+            Vec::new(),
+        );
+    };
+    let ha = pool["ha_enabled"].as_bool().unwrap_or(false);
+    let enabled = pool["redo_log_enabled"].as_bool().unwrap_or(false);
+    let vdi = text(pool, "redo_log_vdi");
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    if ha && !enabled {
+        details.push("HA is enabled but the redo log is disabled.".into());
+        severity = Severity::Critical;
+    }
+    if enabled && (vdi.is_empty() || vdi == "OpaqueRef:NULL") {
+        details.push("Redo log is enabled without a redo log VDI.".into());
+        severity = Severity::Critical;
+    }
+    if !enabled {
+        details.push("Redo log is disabled.".into());
+        severity = max_severity(severity, Severity::Info);
+    }
+    check(
+        "redo-log",
+        "HA redo log",
+        severity,
+        if details.is_empty() {
+            "Redo log configuration is consistent.".to_owned()
+        } else {
+            "Redo log requires attention.".to_owned()
+        },
+        details,
+    )
+}
+
+fn time_sync(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for host in raw.hosts.values() {
+        let mode = text(host, "ntp_mode");
+        if mode.is_empty() || mode.eq_ignore_ascii_case("none") {
+            details.push(format!(
+                "{}: no NTP configuration",
+                text(host, "name_label")
+            ));
+            severity = max_severity(severity, Severity::Warning);
+        }
+    }
+    check(
+        "time-sync",
+        "Time synchronization",
+        severity,
+        if details.is_empty() {
+            "Hosts use an NTP time source.".into()
+        } else {
+            format!("{} host time issue(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn suspend_sr(raw: &RawInventory) -> DiagnosticCheck {
+    let suspended: Vec<&Value> = raw
+        .vms
+        .values()
+        .filter(|vm| {
+            vm["power_state"].as_str() == Some("Suspended")
+                && vm["is_a_template"].as_bool() != Some(true)
+                && vm["is_a_snapshot"].as_bool() != Some(true)
+                && vm["is_control_domain"].as_bool() != Some(true)
+        })
+        .collect();
+    let configured = raw.pools.values().next().is_some_and(|pool| {
+        let sr = text(pool, "suspend_image_SR");
+        !sr.is_empty() && sr != "OpaqueRef:NULL" && raw.storage.contains_key(&sr)
+    });
+    if suspended.is_empty() {
+        check(
+            "suspend-sr",
+            "Suspend image SR",
+            Severity::Ok,
+            "No suspended VMs require a suspend image SR.",
+            Vec::new(),
+        )
+    } else if configured {
+        check(
+            "suspend-sr",
+            "Suspend image SR",
+            Severity::Ok,
+            "Suspended VMs have a configured suspend image SR.",
+            Vec::new(),
+        )
+    } else {
+        check(
+            "suspend-sr",
+            "Suspend image SR",
+            Severity::Critical,
+            "Suspended VMs exist but no usable suspend image SR is configured.",
+            suspended.iter().map(|vm| text(vm, "name_label")).collect(),
+        )
+    }
+}
+
+fn wlb(raw: &RawInventory) -> DiagnosticCheck {
+    let Some(pool) = raw.pools.values().next() else {
+        return check(
+            "wlb",
+            "Workload balancing",
+            Severity::Info,
+            "No pool record is available.",
+            Vec::new(),
+        );
+    };
+    let enabled = pool["wlb_enabled"].as_bool().unwrap_or(false);
+    let url = text(pool, "wlb_url");
+    if !enabled {
+        check(
+            "wlb",
+            "Workload balancing",
+            Severity::Info,
+            "Workload balancing is disabled.",
+            Vec::new(),
+        )
+    } else if url.is_empty() {
+        check(
+            "wlb",
+            "Workload balancing",
+            Severity::Critical,
+            "Workload balancing is enabled without a WLB server URL.",
+            Vec::new(),
+        )
+    } else {
+        check(
+            "wlb",
+            "Workload balancing",
+            Severity::Ok,
+            format!("Workload balancing uses {url}."),
+            Vec::new(),
+        )
+    }
+}
+
+fn legacy_ssl(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    for host in raw.hosts.values() {
+        if host["ssl_legacy"].as_bool() == Some(true) {
+            details.push(format!(
+                "{}: legacy SSL is enabled",
+                text(host, "name_label")
+            ));
+        }
+    }
+    check(
+        "legacy-ssl",
+        "Legacy SSL",
+        if details.is_empty() {
+            Severity::Ok
+        } else {
+            Severity::Warning
+        },
+        if details.is_empty() {
+            "Legacy SSL is disabled on all hosts.".into()
+        } else {
+            format!("{} host(s) allow legacy SSL.", details.len())
+        },
+        details,
+    )
+}
+
+fn tls_verification(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    for host in raw.hosts.values() {
+        if host["tls_verification_enabled"].as_bool() == Some(false) {
+            details.push(format!(
+                "{}: TLS certificate verification is disabled",
+                text(host, "name_label")
+            ));
+        }
+    }
+    check(
+        "tls-verification",
+        "TLS verification",
+        if details.is_empty() {
+            Severity::Ok
+        } else {
+            Severity::Warning
+        },
+        if details.is_empty() {
+            "Hosts verify TLS certificates.".into()
+        } else {
+            format!("{} host(s) disable TLS verification.", details.len())
+        },
+        details,
+    )
+}
+
+fn pv_guests(raw: &RawInventory) -> DiagnosticCheck {
+    let guests: Vec<String> = raw
+        .vms
+        .values()
+        .filter(|vm| {
+            vm["is_control_domain"].as_bool() != Some(true)
+                && vm["is_a_template"].as_bool() != Some(true)
+                && vm["is_a_snapshot"].as_bool() != Some(true)
+                && text(vm, "HVM_boot_policy").is_empty()
+                && (!text(vm, "PV_bootloader").is_empty() || !text(vm, "PV_kernel").is_empty())
+        })
+        .map(|vm| text(vm, "name_label"))
+        .collect();
+    check(
+        "pv-guests",
+        "PV guests",
+        if guests.is_empty() {
+            Severity::Ok
+        } else {
+            Severity::Info
+        },
+        if guests.is_empty() {
+            "No PV guests are present.".into()
+        } else {
+            format!("{} PV guest(s) are present.", guests.len())
+        },
+        guests,
+    )
+}
+
+fn duplicate_names(raw: &RawInventory) -> DiagnosticCheck {
+    let mut buckets: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for vm in raw.vms.values().filter(|vm| {
+        vm["is_control_domain"].as_bool() != Some(true)
+            && vm["is_a_template"].as_bool() != Some(true)
+            && vm["is_a_snapshot"].as_bool() != Some(true)
+    }) {
+        *buckets
+            .entry(Box::leak(text(vm, "name_label").into_boxed_str()))
+            .or_insert(0) += 1;
+    }
+    let mut details: Vec<String> = buckets
+        .into_iter()
+        .filter(|(_, count)| *count > 1)
+        .map(|(name, count)| format!("{name}: {count} VMs share this name"))
+        .collect();
+    details.sort();
+    check(
+        "duplicate-names",
+        "Duplicate VM names",
+        if details.is_empty() {
+            Severity::Ok
+        } else {
+            Severity::Info
+        },
+        if details.is_empty() {
+            "VM names are unique.".into()
+        } else {
+            format!("{} duplicate VM name(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn orphaned_vdis(raw: &RawInventory) -> DiagnosticCheck {
+    let attached: std::collections::HashSet<&str> = raw
+        .vbds
+        .values()
+        .filter_map(|vbd| vbd["VDI"].as_str())
+        .collect();
+    let mut orphans: Vec<String> = raw
+        .vdis
+        .iter()
+        .filter(|(reference, vdi)| {
+            text(vdi, "type") == "user"
+                && vdi["missing"].as_bool() != Some(true)
+                && vdi["is_a_snapshot"].as_bool() != Some(true)
+                && !attached.contains(reference.as_str())
+        })
+        .map(|(_, vdi)| text(vdi, "name_label"))
+        .collect();
+    orphans.sort();
+    let count = orphans.len();
+    orphans.truncate(10);
+    check(
+        "orphaned-vdis",
+        "Unattached disks",
+        if count == 0 {
+            Severity::Ok
+        } else {
+            Severity::Info
+        },
+        if count == 0 {
+            "Every user VDI is attached to a VBD.".into()
+        } else {
+            format!("{count} user VDI(s) are not attached to any VM.")
+        },
+        orphans,
+    )
+}
+
+fn tools_iso(raw: &RawInventory) -> DiagnosticCheck {
+    let iso_srs: std::collections::HashSet<&str> = raw
+        .storage
+        .iter()
+        .filter(|(_, sr)| text(sr, "content_type") == "iso")
+        .map(|(reference, _)| reference.as_str())
+        .collect();
+    if iso_srs.is_empty() {
+        return check(
+            "tools-iso",
+            "Guest tools ISO",
+            Severity::Info,
+            "No ISO storage repository is configured.",
+            Vec::new(),
+        );
+    }
+    let tools = raw.vdis.values().any(|vdi| {
+        iso_srs.contains(text(vdi, "SR").as_str())
+            && vdi["missing"].as_bool() != Some(true)
+            && text(vdi, "name_label").starts_with("guest-tools.iso")
+    });
+    check(
+        "tools-iso",
+        "Guest tools ISO",
+        if tools { Severity::Ok } else { Severity::Info },
+        if tools {
+            "Xen guest tools ISO is available.".to_owned()
+        } else {
+            "guest-tools.iso was not found in an ISO SR.".to_owned()
+        },
+        Vec::new(),
+    )
+}
+
+fn vif_references(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for vif in raw.vifs.values() {
+        let vm = text(vif, "VM");
+        let network = text(vif, "network");
+        if !raw.vms.contains_key(&vm) {
+            details.push(format!("VIF {} references a missing VM", text(vif, "uuid")));
+            severity = Severity::Critical;
+        }
+        if !raw.networks.contains_key(&network) {
+            details.push(format!(
+                "VIF {} references a missing network",
+                text(vif, "uuid")
+            ));
+            severity = Severity::Critical;
+        }
+        if text(vif, "MAC").is_empty() {
+            details.push(format!("VIF {} has no MAC address", text(vif, "uuid")));
+            severity = max_severity(severity, Severity::Warning);
+        }
+    }
+    check(
+        "vif-references",
+        "VIF references",
+        severity,
+        if details.is_empty() {
+            "VIF VM, network and MAC references are valid.".into()
+        } else {
+            format!("{} VIF reference issue(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn vbd_ownership(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for vbd in raw.vbds.values() {
+        let vm = text(vbd, "VM");
+        if !raw.vms.contains_key(&vm) {
+            details.push(format!("VBD {} references a missing VM", text(vbd, "uuid")));
+            severity = Severity::Critical;
+            continue;
+        }
+        if vbd["empty"].as_bool() == Some(true) {
+            continue;
+        }
+        let vdi = text(vbd, "VDI");
+        if vdi.is_empty() || vdi == "OpaqueRef:NULL" || !raw.vdis.contains_key(&vdi) {
+            details.push(format!(
+                "VBD {} references a missing VDI",
+                text(vbd, "uuid")
+            ));
+            severity = Severity::Critical;
+        }
+    }
+    check(
+        "vbd-ownership",
+        "VBD ownership",
+        severity,
+        if details.is_empty() {
+            "VBD VM and VDI references are valid.".into()
+        } else {
+            format!("{} VBD reference issue(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn pbd_map(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for pbd in raw.pbds.values() {
+        if !raw.storage.contains_key(&text(pbd, "SR")) {
+            details.push(format!("PBD {} references a missing SR", text(pbd, "uuid")));
+            severity = Severity::Critical;
+        }
+        if !raw.hosts.contains_key(&text(pbd, "host")) {
+            details.push(format!(
+                "PBD {} references a missing host",
+                text(pbd, "uuid")
+            ));
+            severity = Severity::Critical;
+        }
+    }
+    check(
+        "pbd-map",
+        "PBD map",
+        severity,
+        if details.is_empty() {
+            "PBD host and SR references are valid.".into()
+        } else {
+            format!("{} PBD reference issue(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn pif_map(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for pif in raw.pifs.values() {
+        if !raw.networks.contains_key(&text(pif, "network")) {
+            details.push(format!(
+                "PIF {} references a missing network",
+                text(pif, "uuid")
+            ));
+            severity = Severity::Critical;
+        }
+        if !raw.hosts.contains_key(&text(pif, "host")) {
+            details.push(format!(
+                "PIF {} references a missing host",
+                text(pif, "uuid")
+            ));
+            severity = Severity::Critical;
+        }
+    }
+    check(
+        "pif-map",
+        "PIF map",
+        severity,
+        if details.is_empty() {
+            "PIF host and network references are valid.".into()
+        } else {
+            format!("{} PIF reference issue(s).", details.len())
         },
         details,
     )
@@ -968,15 +1688,15 @@ mod tests {
         let mut raw = RawInventory::default();
         raw.hosts.insert(
             "h1".into(),
-            json!({"name_label":"h1","enabled":true,"power_on":true}),
+            json!({"name_label":"h1","enabled":true,"power_on":true,"ntp_mode":"DHCP"}),
         );
         raw.hosts.insert(
             "h2".into(),
-            json!({"name_label":"h2","enabled":true,"power_on":true}),
+            json!({"name_label":"h2","enabled":true,"power_on":true,"ntp_mode":"DHCP"}),
         );
         raw.pools.insert(
             "p".into(),
-            json!({"ha_enabled":true,"ha_statefiles":["vdi"],"default_SR":"sr","ha_host_failures_to_tolerate":0,"ha_overcommitted":false}),
+            json!({"ha_enabled":true,"ha_statefiles":["vdi"],"default_SR":"sr","ha_host_failures_to_tolerate":0,"ha_overcommitted":false,"redo_log_enabled":true,"redo_log_vdi":"vdi"}),
         );
         raw.storage.insert(
             "sr".into(),
@@ -984,7 +1704,7 @@ mod tests {
         );
         raw.pbds.insert(
             "pbd".into(),
-            json!({"SR":"sr","device":"0","currently_attached":true}),
+            json!({"SR":"sr","host":"h1","device":"0","currently_attached":true}),
         );
         raw.vms.insert(
             "vm".into(),
@@ -1151,36 +1871,157 @@ mod tests {
         raw.hosts.get_mut("h1").unwrap()["software_version"] = json!({"product_version":"8.3"});
         raw.hosts.get_mut("h2").unwrap()["software_version"] = json!({"product_version":"8.4"});
         let report = evaluate(&raw);
-        let check = report
+        let certificates = report
             .checks
             .iter()
-            .find(|check| check.id == "certificate-updates")
+            .find(|check| check.id == "certificate-expiry")
             .unwrap();
-        assert_eq!(check.severity, Severity::Critical);
+        assert_eq!(certificates.severity, Severity::Critical);
         assert!(
-            check
+            certificates
                 .details
                 .iter()
                 .any(|detail| detail.contains("expired"))
         );
         assert!(
-            check
+            certificates
                 .details
                 .iter()
                 .any(|detail| detail.contains("expires"))
         );
+        let updates = report
+            .checks
+            .iter()
+            .find(|check| check.id == "host-updates")
+            .unwrap();
+        assert_eq!(updates.severity, Severity::Warning);
         assert!(
-            check
+            updates
                 .details
                 .iter()
                 .any(|detail| detail.contains("host reboot"))
         );
+        let versions = report
+            .checks
+            .iter()
+            .find(|check| check.id == "host-version")
+            .unwrap();
+        assert_eq!(versions.severity, Severity::Warning);
+        assert!(versions.details[0].contains("8.3"));
+        assert!(versions.details[0].contains("8.4"));
+    }
+
+    #[test]
+    fn reports_security_and_configuration_posture() {
+        let mut raw = base();
+        raw.pools.get_mut("p").unwrap()["health_check_config"] = json!({"interval": "60"});
+        raw.pools.get_mut("p").unwrap()["update_sync_enabled"] = json!(true);
+        raw.pools.get_mut("p").unwrap()["last_update_sync"] = json!("20200101T00:00:00Z");
+        raw.pools.get_mut("p").unwrap()["wlb_enabled"] = json!(true);
+        raw.pools.get_mut("p").unwrap()["wlb_url"] = json!("");
+        raw.hosts.get_mut("h1").unwrap()["ssl_legacy"] = json!(true);
+        raw.hosts.get_mut("h1").unwrap()["tls_verification_enabled"] = json!(false);
+        raw.hosts.get_mut("h2").unwrap()["ntp_mode"] = json!("None");
+        let report = evaluate(&raw);
+        let by_id = |id: &str| report.checks.iter().find(|check| check.id == id).unwrap();
+        assert_eq!(by_id("health-check-service").severity, Severity::Ok);
+        assert_eq!(by_id("update-sync").severity, Severity::Warning);
+        assert_eq!(by_id("wlb").severity, Severity::Critical);
+        assert_eq!(by_id("legacy-ssl").severity, Severity::Warning);
+        assert_eq!(by_id("tls-verification").severity, Severity::Warning);
+        assert_eq!(by_id("time-sync").severity, Severity::Warning);
+    }
+
+    #[test]
+    fn reports_reference_and_naming_integrity_issues() {
+        let mut raw = base();
+        raw.vms.insert(
+            "vm2".into(),
+            json!({"name_label":"vm","power_state":"Halted","is_control_domain":false,"is_a_template":false,"is_a_snapshot":false}),
+        );
+        raw.vifs.insert(
+            "vif".into(),
+            json!({"uuid":"vif-uuid","VM":"missing-vm","network":"missing-net","MAC":""}),
+        );
+        raw.vbds.insert(
+            "vbd2".into(),
+            json!({"uuid":"vbd-uuid","VM":"vm","VDI":"missing-vdi","device":"xvdb","type":"Disk","empty":false}),
+        );
+        raw.pbds.insert(
+            "pbd2".into(),
+            json!({"uuid":"pbd-uuid","SR":"missing-sr","host":"h1","currently_attached":false}),
+        );
+        raw.pifs.insert(
+            "pif".into(),
+            json!({"uuid":"pif-uuid","host":"h1","network":"missing-net","management":false,"currently_attached":true}),
+        );
+        raw.vdis.insert(
+            "orphan".into(),
+            json!({"name_label":"orphan","type":"user","SR":"sr","missing":false}),
+        );
+        let report = evaluate(&raw);
+        let by_id = |id: &str| report.checks.iter().find(|check| check.id == id).unwrap();
+        assert_eq!(by_id("duplicate-names").severity, Severity::Info);
+        assert_eq!(by_id("orphaned-vdis").severity, Severity::Info);
+        assert_eq!(by_id("vif-references").severity, Severity::Critical);
+        assert_eq!(by_id("vbd-ownership").severity, Severity::Critical);
+        assert_eq!(by_id("pbd-map").severity, Severity::Critical);
+        assert_eq!(by_id("pif-map").severity, Severity::Critical);
+    }
+
+    #[test]
+    fn flags_deprecated_and_local_storage_types() {
+        let mut raw = base();
+        raw.storage.insert(
+            "fcoe".into(),
+            json!({"name_label":"fcoe","type":"lvmofcoe","content_type":"user","shared":true,"PBDs":["pbd"]}),
+        );
+        raw.storage.insert(
+            "local-iso".into(),
+            json!({"name_label":"local iso","type":"iso","content_type":"iso","shared":false,"PBDs":["pbd"]}),
+        );
+        let report = evaluate(&raw);
+        let check = report
+            .checks
+            .iter()
+            .find(|check| check.id == "storage-types")
+            .unwrap();
+        assert_eq!(check.severity, Severity::Warning);
         assert!(
             check
                 .details
                 .iter()
-                .any(|detail| detail.contains("different software versions"))
+                .any(|detail| detail.contains("deprecated"))
         );
+        assert!(check.details.iter().any(|detail| detail.contains("local")));
+    }
+
+    #[test]
+    fn detects_missing_suspend_sr_and_reports_tools_iso_and_pv_guests() {
+        let mut raw = base();
+        raw.vms.insert(
+            "suspended".into(),
+            json!({"name_label":"suspended","power_state":"Suspended","is_control_domain":false,"is_a_template":false,"is_a_snapshot":false}),
+        );
+        raw.vms.insert(
+            "pv".into(),
+            json!({"name_label":"pv","power_state":"Halted","HVM_boot_policy":"","PV_bootloader":"pygrub","is_control_domain":false,"is_a_template":false,"is_a_snapshot":false}),
+        );
+        raw.storage.insert(
+            "iso-sr".into(),
+            json!({"name_label":"tools","content_type":"iso","type":"iso","PBDs":["pbd2"]}),
+        );
+        raw.vdis.insert(
+            "tools".into(),
+            json!({"name_label":"guest-tools.iso","type":"user","SR":"iso-sr","missing":false}),
+        );
+        let report = evaluate(&raw);
+        let by_id = |id: &str| report.checks.iter().find(|check| check.id == id).unwrap();
+        assert_eq!(by_id("suspend-sr").severity, Severity::Critical);
+        assert_eq!(by_id("tools-iso").severity, Severity::Ok);
+        assert_eq!(by_id("pv-guests").severity, Severity::Info);
+        assert_eq!(by_id("pool-license").severity, Severity::Ok);
+        assert_eq!(by_id("crash-dump-sr").severity, Severity::Info);
     }
 
     #[test]

@@ -56,7 +56,7 @@
 | Template provisioning | New VM wizard: เลือก CPU/RAM/disk/SR/network, fast clone | clone + provision disks ตาม template, ใช้ค่าเดิมของ template | ยังไม่มี wizard ปรับ CPU/RAM/disk/network ตอนสร้าง |
 | Host details | General/NIC/Network/Storage/GPU/USB/Performance/Alerts/HA เต็ม | read-only subset + warnings | ข้อมูลไม่ครบ, แก้ไขไม่ได้ |
 | Performance | host + VM RRD, ช่วง 5s/1m/1h/1d, custom graphs, server-time offset | host + VM RRD, 15m/1h/24h, graph คงที่ | จัดกราฟเองไม่ได้, ช่วงเวลาไม่ครบ |
-| Alerts | typed alerts + diagnostics checks | priority 1–4 messages + dismiss; health page 13 checks | ยังไม่มี 34 diagnostic checks/health check service |
+| Alerts | typed alerts + diagnostics checks | priority 1–4 messages + dismiss; health page 34 checks | ชุด checks ต่างจาก upstream และยังไม่มี health check upload service |
 | Tasks | task ของ host + AsyncAction หลายสถานะ | task ที่เราส่ง + host tasks จาก event stream (read-only); task ของเราเก็บใน memory | เห็น task จาก client อื่นแล้ว แต่ยัง cancel/check งานของ client อื่นไม่ได้ |
 | Errors | 774 friendly errors + RBAC errors | 5 mapped messages + generic | ข้อความ error ไม่ละเอียด |
 | Search | XenSearch query/group/saved search | fields + comparators, AND/OR/NOT + parentheses, grouping, editable saved searches | ยังไม่มีทุก field/saved groups เชิงลึก |
@@ -139,7 +139,7 @@
 ### 8. Monitoring และบริการ
 
 - Typed alerts + AlertSummary actions
-- Health diagnostics 13 checks incl. overcommit, duplicate MACs, boot config, certificates/updates (34 checks เต็มยังไม่มี)
+- Health diagnostics 34 read-only checks (ชุดตรวจต่างจาก upstream ที่เน้น upgrade checks และบางส่วนยังไม่ตรง 1:1)
 - Performance alerts (Perfmon)
 - VM RRD, graph customization, event overlays
 - Status reports (client/server), logs
@@ -169,7 +169,7 @@
 2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, boot options อื่น
 3. **Embedded RDP/SSH console** (revert และ bulk snapshot มีแล้ว)
 4. **Console SSH/text + embedded RDP** (external RDP และ clipboard มีแล้ว)
-5. **Diagnostics เพิ่มเติม** (6 checks หลักมีแล้ว; 34 checks เต็มยังต้องทำ)
+5. **Diagnostics** (มี 34 read-only checks แล้ว; เทียบ semantics กับ upstream เพิ่มเติม)
 
 ### P1 — จัดการโครงสร้างพื้นฐาน
 

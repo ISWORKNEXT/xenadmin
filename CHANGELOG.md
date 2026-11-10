@@ -43,6 +43,7 @@
 - Add XenSearch boolean AND/OR/NOT operators with parentheses, precedence and implicit AND.
 - Expand health checks for HA statefile VDIs, missing guest metrics, default SR and degraded bonds/VLAN PIFs.
 - Add CPU/memory overcommit, duplicate VIF MAC, boot-order/device, certificate expiry and pending-update diagnostics.
+- Expand diagnostics to 34 checks: services (health check/update sync/WLB), security (legacy SSL/TLS), storage/network types, suspend/crash-dump SRs, PV guests, duplicate names, unattached disks, guest-tools ISO, references and licensing.
 - Restore VBD/VDI/PBD/message/VIF/Bond/Certificate event classes so health data stays live.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
