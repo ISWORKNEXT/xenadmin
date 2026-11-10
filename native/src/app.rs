@@ -813,6 +813,48 @@ impl App {
                         }
                     }
                 },
+                Event::AdEnabled { result } => match result {
+                    Ok(()) => {
+                        self.state.ad_enable_dialog = None;
+                        self.state.toasts.push(Toast::new(
+                            "Active Directory authentication enabled.",
+                            ToastKind::Success,
+                        ));
+                        self.state.auth_state = LoadState::Idle;
+                        self.apply(vec![UiAction::LoadAuth]);
+                    }
+                    Err(message) => {
+                        if let Some(dialog) = self.state.ad_enable_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
+                Event::AdDisabled { result } => match result {
+                    Ok(()) => {
+                        self.state.ad_disable_dialog = None;
+                        self.state.toasts.push(Toast::new(
+                            "Active Directory authentication disabled.",
+                            ToastKind::Success,
+                        ));
+                        self.state.auth_state = LoadState::Idle;
+                        self.apply(vec![UiAction::LoadAuth]);
+                    }
+                    Err(message) => {
+                        if let Some(dialog) = self.state.ad_disable_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::SubjectRolesUpdated {
                     subject_uuid,
                     result,
@@ -2065,6 +2107,120 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::OpenAdEnable => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.ad_enable_dialog = Some(crate::state::AdEnableDialog {
+                        connection_id,
+                        domain: String::new(),
+                        user: String::new(),
+                        password: String::new(),
+                        acknowledged: false,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseAdEnable => {
+                    if !self
+                        .state
+                        .ad_enable_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.ad_enable_dialog = None;
+                    }
+                }
+                UiAction::SaveAdEnable => {
+                    let Some(dialog) = self.state.ad_enable_dialog.as_mut() else {
+                        continue;
+                    };
+                    if !dialog.acknowledged {
+                        dialog.error = Some("Confirm that you understand this change.".into());
+                        continue;
+                    }
+                    if dialog.domain.trim().is_empty()
+                        || dialog.user.trim().is_empty()
+                        || dialog.password.is_empty()
+                    {
+                        dialog.error =
+                            Some("Enter the domain, service account user and password.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::EnableAd {
+                        connection_id: dialog.connection_id.clone(),
+                        domain: dialog.domain.trim().to_owned(),
+                        user: dialog.user.trim().to_owned(),
+                        password: dialog.password.clone(),
+                    });
+                }
+                UiAction::OpenAdDisable => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.ad_disable_dialog = Some(crate::state::AdDisableDialog {
+                        connection_id,
+                        user: String::new(),
+                        password: String::new(),
+                        disable_machine_account: false,
+                        acknowledged: false,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseAdDisable => {
+                    if !self
+                        .state
+                        .ad_disable_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.ad_disable_dialog = None;
+                    }
+                }
+                UiAction::SaveAdDisable => {
+                    let Some(dialog) = self.state.ad_disable_dialog.as_mut() else {
+                        continue;
+                    };
+                    if !dialog.acknowledged {
+                        dialog.error = Some("Confirm that you understand this change.".into());
+                        continue;
+                    }
+                    if dialog.disable_machine_account
+                        && (dialog.user.trim().is_empty() || dialog.password.is_empty())
+                    {
+                        dialog.error = Some(
+                            "Enter the service account user and password, or keep the machine account."
+                                .into(),
+                        );
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::DisableAd {
+                        connection_id: dialog.connection_id.clone(),
+                        user: dialog
+                            .disable_machine_account
+                            .then(|| dialog.user.trim().to_owned()),
+                        password: dialog
+                            .disable_machine_account
+                            .then(|| dialog.password.clone()),
                     });
                 }
                 UiAction::OpenUserRoles(subject_uuid) => {

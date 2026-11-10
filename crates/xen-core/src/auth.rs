@@ -54,6 +54,80 @@ impl AuthInfo {
 }
 
 impl Connection {
+    /// Enable AD authentication for the pool. The password is never logged.
+    pub async fn enable_ad(
+        &self,
+        domain: &str,
+        user: &str,
+        password: &str,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let domain = validate_ad_domain(domain)?;
+        let user = validate_ad_user(user)?;
+        validate_ad_password(password)?;
+        let pool = self.pool_record().await?;
+        let (pool_ref, pool) = pool;
+        if pool["external_auth_type"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty())
+        {
+            // XenCenter disables the previous configuration before enabling a
+            // fresh one. Ignore failures so the enable attempt can still report
+            // the authoritative error from the backend.
+            let _ = self
+                .request::<Value>(
+                    "Pool.disable_external_auth",
+                    serde_json::json!([self.session, pool_ref, {}]),
+                )
+                .await;
+        }
+        self.request::<Value>(
+            "Pool.enable_external_auth",
+            serde_json::json!([
+                self.session,
+                pool_ref,
+                {"domain": domain, "user": user, "pass": password},
+                domain,
+                "AD"
+            ]),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Disable AD authentication. Supplying a user disables the machine account.
+    pub async fn disable_ad(
+        &self,
+        user: Option<&str>,
+        password: Option<&str>,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let config = validate_disable_credentials(user, password)?;
+        let (pool_ref, _) = self.pool_record().await?;
+        self.request::<Value>(
+            "Pool.disable_external_auth",
+            serde_json::json!([self.session, pool_ref, config]),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn pool_record(&self) -> Result<(String, Value), ApiError> {
+        let pools = self.records("pool").await?;
+        let Some((reference, pool)) = pools.iter().next() else {
+            return Err(ApiError::Xen("No pool record is available.".into()));
+        };
+        Ok((reference.clone(), pool.clone()))
+    }
+
     pub async fn set_subject_roles(
         &self,
         subject_uuid: &str,
@@ -201,6 +275,64 @@ impl Connection {
             local_auth_max_threads,
             ext_auth_cache_enabled,
         })
+    }
+}
+
+fn validate_ad_domain(domain: &str) -> Result<String, ApiError> {
+    let domain = domain.trim();
+    if domain.is_empty()
+        || domain.chars().count() > 255
+        || domain.chars().any(char::is_control)
+        || domain.chars().any(char::is_whitespace)
+    {
+        return Err(ApiError::Xen(
+            "Enter an AD domain name such as example.com.".into(),
+        ));
+    }
+    Ok(domain.to_owned())
+}
+
+fn validate_ad_user(user: &str) -> Result<String, ApiError> {
+    let user = user.trim();
+    if user.is_empty() || user.chars().count() > 255 || user.chars().any(char::is_control) {
+        return Err(ApiError::Xen(
+            "Enter the AD service account user name.".into(),
+        ));
+    }
+    Ok(user.to_owned())
+}
+
+fn validate_ad_password(password: &str) -> Result<(), ApiError> {
+    if password.is_empty() || password.chars().count() > 1024 || password.contains('\0') {
+        return Err(ApiError::Xen(
+            "Enter a non-empty AD service account password.".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_disable_credentials(
+    user: Option<&str>,
+    password: Option<&str>,
+) -> Result<serde_json::Map<String, Value>, ApiError> {
+    let user = user.map(str::trim).filter(|user| !user.is_empty());
+    let password = password.unwrap_or_default();
+    match (user, password.is_empty()) {
+        (None, true) => Ok(serde_json::Map::new()),
+        (None, false) => Err(ApiError::Xen(
+            "Enter the AD service account user when supplying a password.".into(),
+        )),
+        (Some(user), false) => {
+            let user = validate_ad_user(user)?;
+            validate_ad_password(password)?;
+            let mut config = serde_json::Map::new();
+            config.insert("user".into(), Value::String(user));
+            config.insert("pass".into(), Value::String(password.to_owned()));
+            Ok(config)
+        }
+        (Some(_), true) => Err(ApiError::Xen(
+            "Enter the service account password, or leave both fields empty to keep the machine account.".into(),
+        )),
     }
 }
 
@@ -363,6 +495,29 @@ mod tests {
         assert_eq!(users[0].email, "alice@example.test");
         assert_eq!(users[0].roles, vec!["vm-operator"]);
         assert!(!users[0].local_root);
+    }
+
+    #[test]
+    fn ad_enable_fields_are_validated() {
+        assert!(validate_ad_domain("example.com").is_ok());
+        assert!(validate_ad_domain("").is_err());
+        assert!(validate_ad_domain("bad domain").is_err());
+        assert!(validate_ad_domain("bad\ndomain").is_err());
+        assert!(validate_ad_user("svc-xen").is_ok());
+        assert!(validate_ad_user("").is_err());
+        assert!(validate_ad_password("secret").is_ok());
+        assert!(validate_ad_password("").is_err());
+    }
+
+    #[test]
+    fn ad_disable_credentials_are_paired() {
+        let empty = validate_disable_credentials(None, None).unwrap();
+        assert!(empty.is_empty());
+        assert!(validate_disable_credentials(None, Some("password")).is_err());
+        assert!(validate_disable_credentials(Some("svc"), Some("")).is_err());
+        let config = validate_disable_credentials(Some("svc"), Some("password")).unwrap();
+        assert_eq!(config.get("user").and_then(Value::as_str), Some("svc"));
+        assert_eq!(config.get("pass").and_then(Value::as_str), Some("password"));
     }
 
     #[test]

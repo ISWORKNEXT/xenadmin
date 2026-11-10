@@ -706,6 +706,26 @@ impl ConsoleState {
     }
 }
 
+pub struct AdEnableDialog {
+    pub connection_id: String,
+    pub domain: String,
+    pub user: String,
+    pub password: String,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct AdDisableDialog {
+    pub connection_id: String,
+    pub user: String,
+    pub password: String,
+    pub disable_machine_account: bool,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct UserRoleDialog {
     pub connection_id: String,
     pub subject_uuid: String,
@@ -1027,6 +1047,8 @@ pub struct UiState {
     pub pbd_catalog_seq: u64,
     pub sr_probe_dialog: Option<SrProbeDialog>,
     pub user_role_dialog: Option<UserRoleDialog>,
+    pub ad_enable_dialog: Option<AdEnableDialog>,
+    pub ad_disable_dialog: Option<AdDisableDialog>,
     pub sr_probe_seq: u64,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
     pub query: String,
@@ -1125,6 +1147,8 @@ impl Default for UiState {
             pbd_catalog_seq: 0,
             sr_probe_dialog: None,
             user_role_dialog: None,
+            ad_enable_dialog: None,
+            ad_disable_dialog: None,
             sr_probe_seq: 0,
             network_destroy_confirm: None,
             query: String::new(),
@@ -1261,6 +1285,12 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenAdEnable,
+    CloseAdEnable,
+    SaveAdEnable,
+    OpenAdDisable,
+    CloseAdDisable,
+    SaveAdDisable,
     OpenUserRoles(String),
     CloseUserRoles,
     SaveUserRoles,

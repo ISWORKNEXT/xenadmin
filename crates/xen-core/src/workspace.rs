@@ -404,6 +404,39 @@ impl Workspace {
             .map_err(|error| error.to_string())
     }
 
+    pub async fn enable_ad(
+        &self,
+        connection_id: &str,
+        domain: String,
+        user: String,
+        password: String,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .enable_ad(&domain, &user, &password)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn disable_ad(
+        &self,
+        connection_id: &str,
+        user: Option<String>,
+        password: Option<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .disable_ad(user.as_deref(), password.as_deref())
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn set_subject_roles(
         &self,
         connection_id: &str,

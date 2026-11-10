@@ -66,6 +66,12 @@ pub fn show(
     if state.user_role_dialog.is_some() {
         user_roles_dialog(ctx, state, actions);
     }
+    if state.ad_enable_dialog.is_some() {
+        ad_enable_dialog(ctx, state, actions);
+    }
+    if state.ad_disable_dialog.is_some() {
+        ad_disable_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1292,6 +1298,203 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn ad_enable_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.ad_enable_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("ad-enable-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(560.0);
+            modal_title(
+                ui,
+                "Enable Active Directory authentication",
+                "Pool users will authenticate against the configured domain.",
+            );
+            widgets::field_label(ui, "Domain");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.domain)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("example.com")
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Service account user");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.user)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("svc-xen or DOMAIN\\svc-xen")
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Service account password");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.password)
+                    .desired_width(f32::INFINITY)
+                    .password(true)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(
+                    "The password is sent only to the pool enable call and is never saved in this app.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.acknowledged,
+                    RichText::new("I understand users will authenticate through AD").size(10.0),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && dialog.acknowledged
+                                && !dialog.domain.trim().is_empty()
+                                && !dialog.user.trim().is_empty()
+                                && !dialog.password.is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Enabling…"
+                            } else {
+                                "Enable AD"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveAdEnable);
+    }
+    if close {
+        actions.push(UiAction::CloseAdEnable);
+    }
+}
+
+fn ad_disable_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.ad_disable_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("ad-disable-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(560.0);
+            modal_title(
+                ui,
+                "Disable Active Directory authentication",
+                "The pool returns to local authentication. Local root remains available.",
+            );
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.disable_machine_account,
+                    RichText::new("Also disable the machine account in AD").size(10.5),
+                ),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Service account user");
+            ui.add_enabled(
+                !dialog.submitting && dialog.disable_machine_account,
+                egui::TextEdit::singleline(&mut dialog.user)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Service account password");
+            ui.add_enabled(
+                !dialog.submitting && dialog.disable_machine_account,
+                egui::TextEdit::singleline(&mut dialog.password)
+                    .desired_width(f32::INFINITY)
+                    .password(true)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.acknowledged,
+                    RichText::new("I understand authentication will switch to local").size(10.0),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && dialog.acknowledged,
+                            widgets::primary_button(if dialog.submitting {
+                                "Disabling…"
+                            } else {
+                                "Disable AD"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveAdDisable);
+    }
+    if close {
+        actions.push(UiAction::CloseAdDisable);
     }
 }
 

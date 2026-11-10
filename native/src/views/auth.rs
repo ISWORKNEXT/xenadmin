@@ -86,6 +86,35 @@ pub fn show(
             });
         }
         LoadState::Ready(info) => {
+            ui.horizontal(|ui| {
+                if info.auth_type == "AD" {
+                    if ui
+                        .add_enabled(
+                            !is_read_only(connection),
+                            egui::Button::new(RichText::new("Disable AD…").size(10.5)),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::OpenAdDisable);
+                    }
+                } else if ui
+                    .add_enabled(
+                        !is_read_only(connection),
+                        widgets::primary_button("Enable AD"),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenAdEnable);
+                }
+                if is_read_only(connection) {
+                    ui.label(
+                        RichText::new("Authentication changes require a writable connection.")
+                            .size(9.0)
+                            .color(dim_fg()),
+                    );
+                }
+            });
+            ui.add_space(8.0);
             summary(ui, info);
             ui.add_space(8.0);
             config_card(ui, info);

@@ -150,6 +150,17 @@ pub enum Command {
         subject_uuid: String,
         roles: Vec<String>,
     },
+    EnableAd {
+        connection_id: String,
+        domain: String,
+        user: String,
+        password: String,
+    },
+    DisableAd {
+        connection_id: String,
+        user: Option<String>,
+        password: Option<String>,
+    },
     DeleteSnapshots {
         connection_id: String,
         vm_uuid: String,
@@ -394,6 +405,12 @@ pub enum Event {
     },
     SubjectRolesUpdated {
         subject_uuid: String,
+        result: Result<(), String>,
+    },
+    AdEnabled {
+        result: Result<(), String>,
+    },
+    AdDisabled {
         result: Result<(), String>,
     },
     VmDetails {
@@ -691,6 +708,25 @@ fn dispatch(
                     action,
                     result,
                 });
+            }
+            Command::EnableAd {
+                connection_id,
+                domain,
+                user,
+                password,
+            } => {
+                let result = workspace
+                    .enable_ad(&connection_id, domain, user, password)
+                    .await;
+                let _ = events.send(Event::AdEnabled { result });
+            }
+            Command::DisableAd {
+                connection_id,
+                user,
+                password,
+            } => {
+                let result = workspace.disable_ad(&connection_id, user, password).await;
+                let _ = events.send(Event::AdDisabled { result });
             }
             Command::SetSubjectRoles {
                 connection_id,
