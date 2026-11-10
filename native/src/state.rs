@@ -686,6 +686,23 @@ impl ConsoleState {
     }
 }
 
+pub struct VifDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub networks: Vec<(String, String)>,
+    pub network_uuid: Option<String>,
+    pub mac: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct VifConfirm {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub vif_uuid: String,
+    pub mac: String,
+}
+
 pub struct IsoDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -734,6 +751,8 @@ pub struct UiState {
     pub console_focus: bool,
     pub vm_edit: Option<VmEditState>,
     pub iso_dialog: Option<IsoDialog>,
+    pub vif_dialog: Option<VifDialog>,
+    pub vif_confirm: Option<VifConfirm>,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -788,6 +807,8 @@ impl Default for UiState {
             console_focus: false,
             vm_edit: None,
             iso_dialog: None,
+            vif_dialog: None,
+            vif_confirm: None,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -872,6 +893,19 @@ pub enum UiAction {
     },
     CloseIsoDialog,
     SaveIso,
+    OpenVifDialog,
+    CloseVifDialog,
+    SaveVif,
+    PromptRemoveVif {
+        vif_uuid: String,
+        mac: String,
+    },
+    CancelRemoveVif,
+    RemoveVif,
+    SetVifPlugged {
+        vif_uuid: String,
+        plugged: bool,
+    },
     OpenConsole(String, String),
     CloseConsole,
     ConsoleKey {

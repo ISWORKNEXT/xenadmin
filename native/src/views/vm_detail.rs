@@ -112,7 +112,8 @@ pub fn show(
         }
         VmTab::Network => {
             if let Some(details) = details_state(ui, state, actions) {
-                network(ui, &details.interfaces);
+                let editable = !read_only && !is_template && !is_snapshot;
+                network(ui, &details.interfaces, editable, actions);
             }
         }
         VmTab::Ha => {
@@ -1476,7 +1477,7 @@ fn storage(
     });
 }
 
-fn network(ui: &mut Ui, interfaces: &[VmInterface]) {
+fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mut Vec<UiAction>) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
@@ -1486,6 +1487,14 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface]) {
                     .strong(),
             );
             widgets::badge(ui, interfaces.len().to_string(), muted_fg());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(editable, widgets::primary_button("Add interface"))
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenVifDialog);
+                }
+            });
         });
         ui.add_space(6.0);
         if interfaces.is_empty() {
@@ -1500,21 +1509,24 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface]) {
             .id_salt("vm-vifs")
             .striped(true)
             .cell_layout(Layout::left_to_right(Align::Center))
-            .column(Column::exact(65.0))
-            .column(Column::remainder().at_least(140.0))
+            .column(Column::exact(60.0))
+            .column(Column::remainder().at_least(130.0))
+            .column(Column::initial(120.0))
             .column(Column::initial(110.0))
-            .column(Column::initial(130.0))
-            .column(Column::initial(130.0))
-            .column(Column::exact(80.0))
+            .column(Column::initial(110.0))
+            .column(Column::exact(70.0))
+            .column(Column::exact(140.0))
             .header(28.0, |mut header| {
-                for title in ["Device", "Network", "MAC", "IPv4", "IPv6", "Attached"] {
+                for title in [
+                    "Device", "Network", "MAC", "IPv4", "IPv6", "Attached", "Actions",
+                ] {
                     header.col(|ui| {
                         ui.label(RichText::new(title).size(10.0).color(muted_fg()));
                     });
                 }
             })
             .body(|body| {
-                body.rows(30.0, interfaces.len(), |mut row| {
+                body.rows(32.0, interfaces.len(), |mut row| {
                     let interface = &interfaces[row.index()];
                     row.col(|ui| {
                         ui.label(
@@ -1534,25 +1546,34 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface]) {
                         );
                     });
                     row.col(|ui| {
-                        ui.label(
-                            RichText::new(&interface.mac)
-                                .monospace()
-                                .size(9.5)
-                                .color(muted_fg()),
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&interface.mac)
+                                    .monospace()
+                                    .size(9.0)
+                                    .color(muted_fg()),
+                            )
+                            .truncate(),
                         );
                     });
                     row.col(|ui| {
-                        ui.label(
-                            RichText::new(interface.ipv4.join(", "))
-                                .size(9.5)
-                                .color(muted_fg()),
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(interface.ipv4.join(", "))
+                                    .size(9.0)
+                                    .color(muted_fg()),
+                            )
+                            .truncate(),
                         );
                     });
                     row.col(|ui| {
-                        ui.label(
-                            RichText::new(interface.ipv6.join(", "))
-                                .size(9.5)
-                                .color(dim_fg()),
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(interface.ipv6.join(", "))
+                                    .size(9.0)
+                                    .color(dim_fg()),
+                            )
+                            .truncate(),
                         );
                     });
                     row.col(|ui| {
@@ -1565,6 +1586,48 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface]) {
                                     dim_fg()
                                 }),
                         );
+                    });
+                    row.col(|ui| {
+                        if !editable {
+                            ui.label(RichText::new("—").size(10.0).color(dim_fg()));
+                            return;
+                        }
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 4.0;
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new(if interface.attached {
+                                            "Unplug"
+                                        } else {
+                                            "Plug"
+                                        })
+                                        .size(9.5),
+                                    )
+                                    .small(),
+                                )
+                                .clicked()
+                            {
+                                actions.push(UiAction::SetVifPlugged {
+                                    vif_uuid: interface.uuid.clone(),
+                                    plugged: !interface.attached,
+                                });
+                            }
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new("Remove").size(9.5).color(red()),
+                                    )
+                                    .small(),
+                                )
+                                .clicked()
+                            {
+                                actions.push(UiAction::PromptRemoveVif {
+                                    vif_uuid: interface.uuid.clone(),
+                                    mac: interface.mac.clone(),
+                                });
+                            }
+                        });
                     });
                 });
             });

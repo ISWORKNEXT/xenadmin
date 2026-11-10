@@ -73,8 +73,10 @@ pub struct VmIso {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct VmInterface {
+    pub uuid: String,
     pub device: String,
     pub network: String,
+    pub network_uuid: String,
     pub bridge: String,
     pub mac: String,
     pub mtu: u64,
@@ -197,8 +199,10 @@ impl Connection {
                 }
                 let network = related(networks.as_ref(), &text(vif, "network"));
                 interfaces.push(VmInterface {
+                    uuid: text(vif, "uuid"),
                     device: text(vif, "device"),
                     network: text(network, "name_label"),
+                    network_uuid: text(network, "uuid"),
                     bridge: text(network, "bridge"),
                     mac: text(vif, "MAC"),
                     mtu: number(vif, "MTU"),

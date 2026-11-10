@@ -77,6 +77,23 @@ pub enum Command {
         vbd_uuid: String,
         iso_uuid: Option<String>,
     },
+    AddVif {
+        connection_id: String,
+        vm_uuid: String,
+        network_uuid: String,
+        mac: Option<String>,
+    },
+    RemoveVif {
+        connection_id: String,
+        vm_uuid: String,
+        vif_uuid: String,
+    },
+    SetVifPlugged {
+        connection_id: String,
+        vm_uuid: String,
+        vif_uuid: String,
+        plugged: bool,
+    },
     OpenConsole {
         console_id: String,
         connection_id: String,
@@ -135,6 +152,11 @@ pub enum Event {
     },
     CdChanged {
         vm_uuid: String,
+        result: Result<(), String>,
+    },
+    VifChanged {
+        vm_uuid: String,
+        action: String,
         result: Result<(), String>,
     },
     ConsoleOpened {
@@ -418,6 +440,50 @@ fn dispatch(
                     .change_cd(&connection_id, &vm_uuid, &vbd_uuid, iso_uuid)
                     .await;
                 let _ = events.send(Event::CdChanged { vm_uuid, result });
+            }
+            Command::AddVif {
+                connection_id,
+                vm_uuid,
+                network_uuid,
+                mac,
+            } => {
+                let result = workspace
+                    .add_vif(&connection_id, &vm_uuid, &network_uuid, mac)
+                    .await;
+                let _ = events.send(Event::VifChanged {
+                    vm_uuid,
+                    action: "add".into(),
+                    result,
+                });
+            }
+            Command::RemoveVif {
+                connection_id,
+                vm_uuid,
+                vif_uuid,
+            } => {
+                let result = workspace
+                    .remove_vif(&connection_id, &vm_uuid, &vif_uuid)
+                    .await;
+                let _ = events.send(Event::VifChanged {
+                    vm_uuid,
+                    action: "remove".into(),
+                    result,
+                });
+            }
+            Command::SetVifPlugged {
+                connection_id,
+                vm_uuid,
+                vif_uuid,
+                plugged,
+            } => {
+                let result = workspace
+                    .set_vif_plugged(&connection_id, &vm_uuid, &vif_uuid, plugged)
+                    .await;
+                let _ = events.send(Event::VifChanged {
+                    vm_uuid,
+                    action: if plugged { "plug" } else { "unplug" }.into(),
+                    result,
+                });
             }
             Command::OpenConsole {
                 console_id,

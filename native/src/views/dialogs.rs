@@ -30,6 +30,12 @@ pub fn show(
     if state.iso_dialog.is_some() {
         iso_dialog(ctx, state, actions);
     }
+    if state.vif_dialog.is_some() {
+        vif_dialog(ctx, state, actions);
+    }
+    if state.vif_confirm.is_some() {
+        vif_confirm(ctx, state, actions);
+    }
     if state.confirm_remove.is_some() {
         confirm_remove(ctx, state, workspace, actions);
     }
@@ -542,6 +548,162 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
     }
     if close {
         actions.push(UiAction::CloseVmEdit);
+    }
+}
+
+fn vif_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.vif_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("vif-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(520.0);
+            modal_title(
+                ui,
+                "Add network interface",
+                "The interface is created with the next free device slot.",
+            );
+            widgets::field_label(ui, "Network");
+            let selected = dialog
+                .network_uuid
+                .as_ref()
+                .and_then(|uuid| {
+                    dialog
+                        .networks
+                        .iter()
+                        .find(|(network_uuid, _)| network_uuid == uuid)
+                })
+                .map(|(_, name)| name.as_str())
+                .unwrap_or("Select a network");
+            ui.add_enabled_ui(!dialog.submitting, |ui| {
+                egui::ComboBox::from_id_salt("vif-network")
+                    .selected_text(RichText::new(selected).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for (uuid, name) in &dialog.networks {
+                            let checked = dialog.network_uuid.as_deref() == Some(uuid.as_str());
+                            if ui
+                                .selectable_label(checked, RichText::new(name).size(11.0))
+                                .clicked()
+                            {
+                                dialog.network_uuid = Some(uuid.clone());
+                            }
+                        }
+                    });
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "MAC address (optional)");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.mac)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("Leave empty to generate automatically")
+                    .char_limit(17)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && dialog.network_uuid.is_some(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Adding…"
+                            } else {
+                                "Add interface"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveVif);
+    }
+    if close {
+        actions.push(UiAction::CloseVifDialog);
+    }
+}
+
+fn vif_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut remove = false;
+    let Some(confirm) = state.vif_confirm.as_ref() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("vif-confirm-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(460.0);
+            modal_title(
+                ui,
+                "Remove network interface",
+                "This detaches the interface and deletes its MAC configuration.",
+            );
+            ui.label(
+                RichText::new(format!("Interface MAC: {}", confirm.mac))
+                    .size(11.0)
+                    .color(muted_fg()),
+            );
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new("Running VMs can lose connectivity immediately.")
+                    .size(9.5)
+                    .color(red()),
+            );
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add(egui::Button::new(RichText::new("Cancel").size(11.0)))
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new("Remove interface").size(11.0).color(red()),
+                            )
+                            .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120))),
+                        )
+                        .clicked()
+                    {
+                        remove = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() {
+        close = true;
+    }
+    if remove {
+        actions.push(UiAction::RemoveVif);
+    }
+    if close {
+        actions.push(UiAction::CancelRemoveVif);
     }
 }
 

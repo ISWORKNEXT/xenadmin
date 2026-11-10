@@ -108,7 +108,7 @@
 - Create network, bond, VLAN, SR-IOV, CHIN
 - Secondary management purpose
 - PIF rescan/plug/unplug, PIF properties
-- VIF create/edit/delete/plug/unplug, VIF locking
+- VIF edit network/locking mode (create/delete/plug/unplug มีแล้ว)
 - NIC type/address changes (fork feature)
 
 ### 6. Host administration

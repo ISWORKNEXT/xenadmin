@@ -37,6 +37,7 @@ dependency.
 | VM console | Implemented | VNC over XenAPI HTTPS CONNECT tunnel; framebuffer, mouse/wheel, keyboard and reconnect |
 | VM editing | Implemented | Name/description/boot order anytime; vCPUs and static memory while halted; dynamic memory while running when allowed |
 | CD/DVD media | Implemented | List/eject/insert ISO media on existing virtual CD drives from the Storage tab |
+| VM network interfaces | Implemented | Add/remove VIFs, plug/unplug, next-free device slot and optional MAC |
 | VM start on host | Implemented | Start/resume on a chosen host with `assert_can_boot_here` precheck |
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
 | Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |

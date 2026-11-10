@@ -699,6 +699,55 @@ impl App {
                         }
                     }
                 }
+                Event::VifChanged {
+                    vm_uuid,
+                    action,
+                    result,
+                } => {
+                    let message = match action.as_str() {
+                        "add" => "Network interface added.",
+                        "remove" => "Network interface removed.",
+                        "plug" => "Network interface plugged.",
+                        "unplug" => "Network interface unplugged.",
+                        _ => "Network interface updated.",
+                    };
+                    match result {
+                        Ok(()) => {
+                            if self
+                                .state
+                                .vif_dialog
+                                .as_ref()
+                                .is_some_and(|dialog| dialog.vm_uuid == vm_uuid)
+                            {
+                                self.state.vif_dialog = None;
+                            }
+                            if self
+                                .state
+                                .vif_confirm
+                                .as_ref()
+                                .is_some_and(|confirm| confirm.vm_uuid == vm_uuid)
+                            {
+                                self.state.vif_confirm = None;
+                            }
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Success));
+                            self.apply(vec![UiAction::ReloadVmDetails]);
+                        }
+                        Err(message) => {
+                            if let Some(dialog) = self.state.vif_dialog.as_mut()
+                                && dialog.vm_uuid == vm_uuid
+                            {
+                                dialog.submitting = false;
+                                dialog.error = Some(message);
+                            } else {
+                                self.state
+                                    .toasts
+                                    .push(Toast::new(message, ToastKind::Error));
+                            }
+                        }
+                    }
+                }
                 Event::ConsoleOpened {
                     console_id,
                     vm_uuid,
@@ -1309,6 +1358,122 @@ impl App {
                         vm_uuid: dialog.vm_uuid.clone(),
                         vbd_uuid: dialog.vbd_uuid.clone(),
                         iso_uuid: dialog.selected.clone(),
+                    });
+                }
+                UiAction::OpenVifDialog => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let networks: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .networks
+                                    .iter()
+                                    .map(|network| (network.uuid.clone(), network.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    if networks.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "No networks are available in this pool.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    }
+                    self.state.vif_dialog = Some(crate::state::VifDialog {
+                        connection_id,
+                        vm_uuid,
+                        network_uuid: networks.first().map(|(uuid, _)| uuid.clone()),
+                        networks,
+                        mac: String::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseVifDialog => {
+                    if !self
+                        .state
+                        .vif_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.vif_dialog = None;
+                    }
+                }
+                UiAction::SaveVif => {
+                    let Some(dialog) = self.state.vif_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(network_uuid) = dialog.network_uuid.clone() else {
+                        dialog.error = Some("Select a network for the new interface.".into());
+                        continue;
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::AddVif {
+                        connection_id: dialog.connection_id.clone(),
+                        vm_uuid: dialog.vm_uuid.clone(),
+                        network_uuid,
+                        mac: (!dialog.mac.trim().is_empty()).then(|| dialog.mac.trim().to_owned()),
+                    });
+                }
+                UiAction::PromptRemoveVif { vif_uuid, mac } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.state.vif_confirm = Some(crate::state::VifConfirm {
+                        connection_id,
+                        vm_uuid,
+                        vif_uuid,
+                        mac,
+                    });
+                }
+                UiAction::CancelRemoveVif => self.state.vif_confirm = None,
+                UiAction::RemoveVif => {
+                    let Some(confirm) = self.state.vif_confirm.take() else {
+                        continue;
+                    };
+                    self.worker.send(Command::RemoveVif {
+                        connection_id: confirm.connection_id,
+                        vm_uuid: confirm.vm_uuid,
+                        vif_uuid: confirm.vif_uuid,
+                    });
+                }
+                UiAction::SetVifPlugged { vif_uuid, plugged } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.worker.send(Command::SetVifPlugged {
+                        connection_id,
+                        vm_uuid,
+                        vif_uuid,
+                        plugged,
                     });
                 }
                 UiAction::OpenConsole(connection_id, vm_uuid) => {

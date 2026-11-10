@@ -619,6 +619,143 @@ impl Connection {
         Ok(())
     }
 
+    /// Create a VIF on the next free device slot.
+    pub async fn add_vif(
+        &self,
+        vm_uuid: &str,
+        network_uuid: &str,
+        mac: Option<&str>,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["uuid"].as_str() != Some(vm_uuid)
+            || vm["is_control_domain"].as_bool() == Some(true)
+            || vm["is_a_template"].as_bool() == Some(true)
+            || vm["is_a_snapshot"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen(
+                "Network interfaces can only be added to a virtual machine.".into(),
+            ));
+        }
+        let network_ref: String = self
+            .request("network.get_by_uuid", json!([self.session, network_uuid]))
+            .await?;
+        let network: Value = self
+            .request("network.get_record", json!([self.session, network_ref]))
+            .await?;
+        if network["uuid"].as_str() != Some(network_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        let vifs = self.records("VIF").await?;
+        let mut used = std::collections::BTreeSet::new();
+        for vif in vifs.values() {
+            if vif["VM"].as_str() == Some(vm_ref.as_str())
+                && let Ok(device) = text(vif, "device").parse::<u8>()
+            {
+                used.insert(device);
+            }
+        }
+        let Some(device) = (0..4).find(|device| !used.contains(device)) else {
+            return Err(ApiError::Xen(
+                "This VM already has the maximum number of network interfaces.".into(),
+            ));
+        };
+        let mac = mac.unwrap_or_default().trim();
+        if !mac.is_empty()
+            && (mac.len() != 17
+                || !mac
+                    .chars()
+                    .all(|c| c.is_ascii_hexdigit() || c == ':' || c == '-'))
+        {
+            return Err(ApiError::Xen(
+                "Enter a MAC address like 02:00:00:00:00:01, or leave it empty to generate one."
+                    .into(),
+            ));
+        }
+        self.request::<Value>(
+            "VIF.create",
+            json!([
+                self.session,
+                {
+                    "VM": vm_ref,
+                    "network": network_ref,
+                    "device": device.to_string(),
+                    "MAC": mac,
+                    "MTU": 0,
+                    "other_config": {},
+                    "qos_algorithm_type": "",
+                    "qos_algorithm_params": {},
+                    "locking_mode": "network_default",
+                    "ipv4_allowed": [],
+                    "ipv6_allowed": []
+                }
+            ]),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn remove_vif(&self, vm_uuid: &str, vif_uuid: &str) -> Result<(), ApiError> {
+        let vif_ref = self.vif_for_vm(vm_uuid, vif_uuid).await?;
+        self.async_task("Async.VIF.destroy", json!([self.session, vif_ref]))
+            .await
+    }
+
+    pub async fn set_vif_plugged(
+        &self,
+        vm_uuid: &str,
+        vif_uuid: &str,
+        plugged: bool,
+    ) -> Result<(), ApiError> {
+        let vif_ref = self.vif_for_vm(vm_uuid, vif_uuid).await?;
+        let vif: Value = self
+            .request("VIF.get_record", json!([self.session, vif_ref]))
+            .await?;
+        let attached = vif["currently_attached"].as_bool().unwrap_or(false);
+        if attached == plugged {
+            return Ok(());
+        }
+        let method = if plugged {
+            "Async.VIF.plug"
+        } else {
+            "Async.VIF.unplug"
+        };
+        self.async_task(method, json!([self.session, vif_ref]))
+            .await
+    }
+
+    async fn vif_for_vm(&self, vm_uuid: &str, vif_uuid: &str) -> Result<String, ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vif_ref: String = self
+            .request("VIF.get_by_uuid", json!([self.session, vif_uuid]))
+            .await?;
+        let vif: Value = self
+            .request("VIF.get_record", json!([self.session, vif_ref]))
+            .await?;
+        if vif["VM"].as_str() != Some(vm_ref.as_str()) {
+            return Err(ApiError::Xen(
+                "The selected network interface does not belong to this VM.".into(),
+            ));
+        }
+        Ok(vif_ref)
+    }
+
     /// Delete a VM and, optionally, the disks it owns. Owner VBDs are identified
     /// the same way as upstream XenAdmin: a VBD with an `owner` key in
     /// `other_config`. The suspended-image VDI is removed as well.
@@ -760,6 +897,10 @@ impl Connection {
         let task: String = self.request(method, params).await?;
         wait_task(self, &task).await
     }
+}
+
+fn text(record: &Value, key: &str) -> String {
+    record[key].as_str().unwrap_or_default().to_owned()
 }
 
 fn number(record: &Value, key: &str) -> u64 {
