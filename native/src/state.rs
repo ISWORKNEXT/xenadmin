@@ -861,6 +861,7 @@ pub struct MoveDiskDialog {
     pub vbd_uuid: String,
     pub name: String,
     pub size: u64,
+    pub live: bool,
     pub srs: Vec<(String, String, u64)>,
     pub selected: Option<String>,
     pub submitting: bool,

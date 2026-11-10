@@ -1516,7 +1516,7 @@ fn storage(
             .column(Column::exact(55.0))
             .column(Column::exact(65.0))
             .column(Column::exact(65.0))
-            .column(Column::exact(95.0))
+            .column(Column::exact(150.0))
             .header(28.0, |mut header| {
                 for title in [
                     "Device", "VDI", "SR", "Size", "Mode", "Attached", "Bootable", "Actions",
@@ -1679,24 +1679,50 @@ fn storage(
                                         ui.close();
                                     }
                                 });
-                            } else if ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new(if disk.attached {
-                                            "Unplug"
-                                        } else {
-                                            "Plug"
-                                        })
-                                        .size(9.5),
-                                    )
-                                    .small(),
-                                )
-                                .on_hover_text("Hot-plug or unplug this disk from the running VM")
-                                .clicked()
-                            {
-                                actions.push(UiAction::SetVbdPlugged {
-                                    vbd_uuid: disk.vbd_uuid.clone(),
-                                    plugged: !disk.attached,
+                            } else {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 4.0;
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                RichText::new(if disk.attached {
+                                                    "Unplug"
+                                                } else {
+                                                    "Plug"
+                                                })
+                                                .size(9.5),
+                                            )
+                                            .small(),
+                                        )
+                                        .on_hover_text(
+                                            "Hot-plug or unplug this disk from the running VM",
+                                        )
+                                        .clicked()
+                                    {
+                                        actions.push(UiAction::SetVbdPlugged {
+                                            vbd_uuid: disk.vbd_uuid.clone(),
+                                            plugged: !disk.attached,
+                                        });
+                                    }
+                                    if ui
+                                        .add(
+                                            egui::Button::new(RichText::new("Move").size(9.5))
+                                                .small(),
+                                        )
+                                        .on_hover_text("Move this disk to another SR")
+                                        .clicked()
+                                    {
+                                        actions.push(UiAction::OpenMoveDisk {
+                                            vbd_uuid: disk.vbd_uuid.clone(),
+                                            name: if disk.vdi_name.is_empty() {
+                                                format!("Disk {}", disk.device)
+                                            } else {
+                                                disk.vdi_name.clone()
+                                            },
+                                            size: disk.virtual_size,
+                                            source_sr_uuid: disk.sr_uuid.clone(),
+                                        });
+                                    }
                                 });
                             }
                         });

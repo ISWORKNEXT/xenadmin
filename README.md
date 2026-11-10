@@ -31,10 +31,11 @@ default and a persisted dark-theme toggle.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.
 - Manage physical interfaces on the network page (plug/unplug with management
   protection), and create bonds or VLANs with validation.
-- Add, attach existing VDIs, move disks between storage repositories, resize
-  and remove virtual disks while the VM is halted, change a data disk between
-  RO/RW, toggle the bootable flag, hot-plug and unplug data disks on running
-  VMs, and create empty CD/DVD drives.
+- Add, attach existing VDIs, move disks between storage repositories (live
+  migration for running VMs, copy/swap while halted), resize and remove virtual
+  disks while the VM is halted, change a data disk between RO/RW, toggle the
+  bootable flag, hot-plug and unplug data disks on running VMs, and create empty
+  CD/DVD drives.
 - Host actions menu for enable/disable, power-on, evacuate, rescan physical
   interfaces, restart toolstack, reboot and shutdown, with explicit confirmation
   for disruptive actions.

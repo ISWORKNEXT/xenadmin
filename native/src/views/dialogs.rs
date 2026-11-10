@@ -2376,7 +2376,11 @@ fn move_disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<
             modal_title(
                 ui,
                 "Move virtual disk",
-                "The disk is copied to the target SR and then re-attached.",
+                if dialog.live {
+                    "The disk is migrated live; the VM stays running."
+                } else {
+                    "The disk is copied to the target SR and then re-attached."
+                },
             );
             ui.label(
                 RichText::new(format!("{} · {}", dialog.name, crate::format::bytes(dialog.size)))
@@ -2413,9 +2417,11 @@ fn move_disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<
             });
             ui.add_space(8.0);
             ui.label(
-                RichText::new(
-                    "The VM must be shut down. The copy uses the target SR's free space until the source is deleted.",
-                )
+                RichText::new(if dialog.live {
+                    "The destination SR must be visible to the running guest. The VM stays running during the move."
+                } else {
+                    "The VM must be shut down. The copy uses the target SR's free space until the source is deleted."
+                })
                 .size(9.0)
                 .color(dim_fg()),
             );

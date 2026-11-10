@@ -59,6 +59,7 @@
 - Add a read-only Pool status page for HA, WLB, PVS, VMSS snapshot schedules and DR tasks.
 - Add directory subject role assignment (add/remove) with internal-role/unknown-role guards and local-root protection.
 - Add AD authentication enable/disable with domain/service-account validation and confirmation guards.
+- Add live VDI migration for running VMs using VDI.pool_migrate, alongside the existing offline copy/swap move.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

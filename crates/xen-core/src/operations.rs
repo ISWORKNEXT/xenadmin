@@ -1455,7 +1455,8 @@ impl Connection {
         Ok(())
     }
 
-    /// Move a data disk to another SR by copying the VDI and swapping the VBD.
+    /// Move a data disk to another SR. Running VM disks are migrated live with
+    /// VDI.pool_migrate; halted VM disks are copied and their VBD is swapped.
     pub async fn move_disk(
         &self,
         vm_uuid: &str,
@@ -1473,9 +1474,10 @@ impl Connection {
         let vm: Value = self
             .request("VM.get_record", json!([self.session, vm_ref]))
             .await?;
-        if vm["power_state"].as_str() != Some("Halted") {
+        let power = text(&vm, "power_state");
+        if !movable_power_state(&power) {
             return Err(ApiError::Xen(
-                "Shut down the VM before moving a disk.".into(),
+                "Only a halted or running VM can move a disk.".into(),
             ));
         }
         let vbd_ref: String = self
@@ -1491,6 +1493,11 @@ impl Connection {
         {
             return Err(ApiError::Xen(
                 "Only a non-empty data disk attached to this VM can be moved.".into(),
+            ));
+        }
+        if power == "Running" && vbd["currently_attached"].as_bool() != Some(true) {
+            return Err(ApiError::Xen(
+                "Plug the disk into the running VM before moving it live.".into(),
             ));
         }
         let vdi_ref = text(&vbd, "VDI");
@@ -1539,6 +1546,14 @@ impl Connection {
             return Err(ApiError::Xen(
                 "The target storage repository does not have enough free space.".into(),
             ));
+        }
+        if power == "Running" {
+            return self
+                .async_task(
+                    "Async.VDI.pool_migrate",
+                    json!([self.session, vdi_ref, target_sr_ref, {}]),
+                )
+                .await;
         }
         let task: String = self
             .request(
@@ -2462,6 +2477,10 @@ fn number_i64(record: &Value, key: &str) -> i64 {
         .unwrap_or(-1)
 }
 
+fn movable_power_state(power: &str) -> bool {
+    matches!(power, "Halted" | "Running")
+}
+
 fn valid_vbd_mode(mode: &str) -> bool {
     matches!(mode, "RO" | "RW")
 }
@@ -2746,6 +2765,15 @@ mod tests {
             );
         }
         assert!(validate_sr_location("/var/tmp/xen-storage").is_ok());
+    }
+
+    #[test]
+    fn disk_move_accepts_only_halted_or_running_vms() {
+        assert!(movable_power_state("Halted"));
+        assert!(movable_power_state("Running"));
+        assert!(!movable_power_state("Paused"));
+        assert!(!movable_power_state("Suspended"));
+        assert!(!movable_power_state(""));
     }
 
     #[test]

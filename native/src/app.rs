@@ -3272,12 +3272,18 @@ impl App {
                         ));
                         continue;
                     }
+                    let live = self
+                        .state
+                        .vm_state
+                        .ready()
+                        .is_some_and(|details| details.power_state == "Running");
                     self.state.move_disk_dialog = Some(crate::state::MoveDiskDialog {
                         connection_id,
                         vm_uuid,
                         vbd_uuid,
                         name,
                         size,
+                        live,
                         selected: srs.first().map(|(uuid, _, _)| uuid.clone()),
                         srs,
                         submitting: false,
