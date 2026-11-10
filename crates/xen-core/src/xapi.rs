@@ -218,13 +218,14 @@ impl Connection {
     }
 
     pub async fn raw_inventory(&self) -> Result<RawInventory, ApiError> {
-        let (pools, hosts, metrics, vms, storage, networks) = tokio::join!(
+        let (pools, hosts, metrics, vms, storage, networks, tasks) = tokio::join!(
             self.records("pool"),
             self.records("host"),
             self.records("host_metrics"),
             self.records("VM"),
             self.records("SR"),
-            self.records("network")
+            self.records("network"),
+            self.records("task")
         );
         Ok(RawInventory {
             pools: pools?,
@@ -233,6 +234,9 @@ impl Connection {
             vms: vms?,
             storage: storage?,
             networks: networks?,
+            // Older hosts may not expose task listing to this role; the
+            // inventory remains useful without it.
+            tasks: tasks.unwrap_or_default(),
         })
     }
 
@@ -261,6 +265,7 @@ pub struct RawInventory {
     pub(crate) vms: HashMap<String, Value>,
     pub(crate) storage: HashMap<String, Value>,
     pub(crate) networks: HashMap<String, Value>,
+    pub(crate) tasks: HashMap<String, Value>,
 }
 
 impl RawInventory {
@@ -280,6 +285,7 @@ impl RawInventory {
                 "vm" => &mut self.vms,
                 "sr" => &mut self.storage,
                 "network" => &mut self.networks,
+                "task" => &mut self.tasks,
                 _ => continue,
             };
             if operation == "del" {
@@ -288,6 +294,18 @@ impl RawInventory {
             } else if let Some(snapshot) = event.get("snapshot").filter(|value| value.is_object()) {
                 target.insert(reference.to_owned(), snapshot.clone());
                 changed = true;
+            }
+        }
+        let excess = self.tasks.len().saturating_sub(500);
+        if excess > 0 {
+            let mut oldest: Vec<(String, String)> = self
+                .tasks
+                .iter()
+                .map(|(reference, task)| (reference.clone(), text(task, "created")))
+                .collect();
+            oldest.sort_by(|left, right| left.1.cmp(&right.1));
+            for (reference, _) in oldest.into_iter().take(excess) {
+                self.tasks.remove(&reference);
             }
         }
         changed
@@ -386,6 +404,40 @@ impl RawInventory {
             .map(|r| text(r, "uuid"))
             .filter(|s| !s.is_empty())
             .ok_or(ApiError::Protocol)?;
+        let mut tasks: Vec<_> = self
+            .tasks
+            .iter()
+            .filter(|(_, task)| !text(task, "name_label").is_empty())
+            .map(|(reference, task)| {
+                let host_ref = text(task, "resident_on");
+                ExternalTask {
+                    reference: reference.clone(),
+                    uuid: text(task, "uuid"),
+                    name: text(task, "name_label"),
+                    status: text(task, "status"),
+                    progress: task["progress"]
+                        .as_f64()
+                        .or_else(|| task["progress"].as_str().and_then(|p| p.parse().ok()))
+                        .unwrap_or(0.0)
+                        .clamp(0.0, 1.0),
+                    host_name: host_names.get(&host_ref).cloned().unwrap_or_default(),
+                    task_type: text(task, "type"),
+                    started_at: xapi_epoch(&text(task, "created")),
+                    finished_at: xapi_epoch(&text(task, "finished")),
+                    error: task["error_info"]
+                        .as_array()
+                        .and_then(|values| values.first())
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    can_cancel: task["allowed_operations"]
+                        .as_array()
+                        .is_some_and(|ops| ops.iter().any(|op| op.as_str() == Some("cancel"))),
+                }
+            })
+            .collect();
+        tasks.sort_by_key(|task| std::cmp::Reverse(task.started_at));
+        tasks.truncate(100);
         Ok(Inventory {
             pool_id,
             templates,
@@ -396,8 +448,15 @@ impl RawInventory {
             vms,
             storage,
             networks,
+            tasks,
         })
     }
+}
+
+fn xapi_epoch(value: &str) -> u64 {
+    chrono::NaiveDateTime::parse_from_str(value, "%Y%m%dT%H:%M:%SZ")
+        .map(|date| date.and_utc().timestamp().max(0) as u64)
+        .unwrap_or(0)
 }
 
 fn vm_record(reference: String, r: &Value, host_names: &HashMap<String, String>) -> VirtualMachine {
@@ -472,6 +531,7 @@ pub struct Inventory {
     pub vms: Vec<VirtualMachine>,
     pub storage: Vec<Storage>,
     pub networks: Vec<Network>,
+    pub tasks: Vec<ExternalTask>,
 }
 
 #[derive(Clone, Serialize)]
@@ -509,6 +569,21 @@ pub struct VirtualMachine {
 }
 
 #[derive(Clone, Serialize)]
+pub struct ExternalTask {
+    pub reference: String,
+    pub uuid: String,
+    pub name: String,
+    pub status: String,
+    pub progress: f64,
+    pub host_name: String,
+    pub task_type: String,
+    pub started_at: u64,
+    pub finished_at: u64,
+    pub error: String,
+    pub can_cancel: bool,
+}
+
+#[derive(Clone, Serialize)]
 pub struct Storage {
     pub uuid: String,
     pub name: String,
@@ -540,6 +615,12 @@ mod tests {
         assert_eq!(number(&record, "string"), 4096);
         assert_eq!(number(&record, "number"), 8192);
         assert_eq!(number(&record, "unknown"), 0);
+    }
+    #[test]
+    fn xapi_timestamps_are_parsed() {
+        assert!(xapi_epoch("20261110T18:36:56Z") > 0);
+        assert_eq!(xapi_epoch("19700101T00:00:00Z"), 0);
+        assert_eq!(xapi_epoch(""), 0);
     }
     #[test]
     fn production_host_cannot_disable_read_only() {

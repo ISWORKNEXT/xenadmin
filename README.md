@@ -32,6 +32,8 @@ default and a persisted dark-theme toggle.
   process memory) and automatic `HOST_IS_SLAVE` coordinator redirects.
 - XenAPI task progress, failure, success, cancellation and “check again” for
   interrupted tasks without resubmitting the mutation.
+- Activity & tasks also lists host tasks from the event stream, including
+  operations started by other clients.
 - VM detail tabs: General, Performance (VM RRD), Storage, Network, HA, Snapshots and Console.
 - Embedded VNC console over the host's HTTPS CONNECT tunnel, with live
   framebuffer updates, mouse, scroll wheel and keyboard input.

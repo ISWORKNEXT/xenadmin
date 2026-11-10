@@ -57,7 +57,7 @@
 | Host details | General/NIC/Network/Storage/GPU/USB/Performance/Alerts/HA เต็ม | read-only subset + warnings | ข้อมูลไม่ครบ, แก้ไขไม่ได้ |
 | Performance | host + VM RRD, ช่วง 5s/1m/1h/1d, custom graphs, server-time offset | host + VM RRD, 15m/1h/24h, graph คงที่ | จัดกราฟเองไม่ได้, ช่วงเวลาไม่ครบ |
 | Alerts | typed alerts + diagnostics checks | host `message` records เท่านั้น | ไม่มี health diagnostics/alert actions |
-| Tasks | task ของ host + AsyncAction หลายสถานะ | เฉพาะ task ที่เราส่ง, เก็บใน memory | ไม่เห็น task จาก client อื่น; task ค้างใน memory |
+| Tasks | task ของ host + AsyncAction หลายสถานะ | task ที่เราส่ง + host tasks จาก event stream (read-only); task ของเราเก็บใน memory | เห็น task จาก client อื่นแล้ว แต่ยัง cancel/check งานของ client อื่นไม่ได้ |
 | Errors | 774 friendly errors + RBAC errors | 5 mapped messages + generic | ข้อความ error ไม่ละเอียด |
 | Search | XenSearch query/group/saved search | substring filter | ค้นหาแบบซับซ้อนไม่ได้ |
 | TLS | certificate install/reset/trust | per-connection bypass เท่านั้น | จัดการ certificate ไม่ได้ |
@@ -169,8 +169,8 @@
 2. **แก้ VM พื้นฐาน**: disk/VIF editing, create CD drive, boot options อื่น
 3. **Revert ที่คืน power state** และ bulk snapshot selection
 4. **Console RDP + clipboard/SSH console**
-5. **External tasks**: แสดง task จาก client อื่นผ่าน event stream
-6. **Alerts + diagnostics + health check**, host maintenance
+5. **Alerts + diagnostics + health check**, host maintenance
+6. **Disk/VIF editing**
 
 ### P1 — จัดการโครงสร้างพื้นฐาน
 

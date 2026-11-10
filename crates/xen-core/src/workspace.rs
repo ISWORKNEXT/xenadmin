@@ -17,7 +17,15 @@ use crate::{
     xapi::{ApiError, Connection, ConnectionSettings, Inventory, RawInventory},
 };
 
-const EVENT_CLASSES: &[&str] = &["VM", "host", "host_metrics", "SR", "network", "pool"];
+const EVENT_CLASSES: &[&str] = &[
+    "VM",
+    "host",
+    "host_metrics",
+    "SR",
+    "network",
+    "pool",
+    "task",
+];
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Profile {
@@ -67,6 +75,7 @@ pub struct Operation {
     pub connection_id: String,
     pub connection_name: String,
     pub vm_uuid: String,
+    pub remote_ref: String,
     pub object_name: String,
     pub action: String,
     pub status: TaskStatus,
@@ -725,6 +734,7 @@ impl Workspace {
             connection_id,
             connection_name,
             vm_uuid: vm_uuid.clone(),
+            remote_ref: remote_ref.clone(),
             object_name,
             action: action.title().into(),
             status: TaskStatus::Running,
@@ -797,6 +807,7 @@ impl Workspace {
             connection_id,
             connection_name,
             vm_uuid: vm_uuid.clone(),
+            remote_ref: String::new(),
             object_name,
             action: "Clone".into(),
             status: TaskStatus::Running,
@@ -885,6 +896,7 @@ impl Workspace {
             connection_id,
             connection_name,
             vm_uuid: vm_uuid.clone(),
+            remote_ref: String::new(),
             object_name,
             action: "Delete".into(),
             status: TaskStatus::Running,
