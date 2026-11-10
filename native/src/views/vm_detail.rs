@@ -1091,24 +1091,48 @@ fn console(
             );
             if focused {
                 let events = ui.input(|input| input.events.clone());
+                let command = ui.input(|input| {
+                    input.modifiers.ctrl || input.modifiers.alt || input.modifiers.command
+                });
                 for event in events {
-                    if let egui::Event::Key {
-                        key,
-                        pressed,
-                        repeat,
-                        ..
-                    } = event
-                    {
-                        if repeat {
-                            continue;
+                    match event {
+                        egui::Event::Key {
+                            key,
+                            pressed,
+                            repeat,
+                            ..
+                        } => {
+                            if repeat {
+                                continue;
+                            }
+                            if !command && is_printable_key(key) {
+                                continue;
+                            }
+                            if let Some(keycode) = console_keysym(key) {
+                                input_actions.push(UiAction::ConsoleKey {
+                                    console_id: console_id.clone(),
+                                    keycode,
+                                    down: pressed,
+                                });
+                            }
                         }
-                        if let Some(keycode) = console_keysym(key) {
-                            input_actions.push(UiAction::ConsoleKey {
-                                console_id: console_id.clone(),
-                                keycode,
-                                down: pressed,
-                            });
+                        egui::Event::Text(text) if !command => {
+                            for character in text.chars() {
+                                if let Some(keycode) = unicode_keysym(character) {
+                                    input_actions.push(UiAction::ConsoleKey {
+                                        console_id: console_id.clone(),
+                                        keycode,
+                                        down: true,
+                                    });
+                                    input_actions.push(UiAction::ConsoleKey {
+                                        console_id: console_id.clone(),
+                                        keycode,
+                                        down: false,
+                                    });
+                                }
+                            }
                         }
+                        _ => {}
                     }
                 }
             }
@@ -1225,6 +1249,77 @@ fn sync_console_modifiers(
         }
     }
     console.modifiers = desired;
+}
+
+fn is_printable_key(key: egui::Key) -> bool {
+    use egui::Key;
+    matches!(
+        key,
+        Key::Space
+            | Key::Colon
+            | Key::Comma
+            | Key::Backslash
+            | Key::Slash
+            | Key::Pipe
+            | Key::Questionmark
+            | Key::Exclamationmark
+            | Key::OpenBracket
+            | Key::CloseBracket
+            | Key::OpenCurlyBracket
+            | Key::CloseCurlyBracket
+            | Key::Backtick
+            | Key::Minus
+            | Key::Period
+            | Key::Plus
+            | Key::Equals
+            | Key::Semicolon
+            | Key::Quote
+            | Key::Num0
+            | Key::Num1
+            | Key::Num2
+            | Key::Num3
+            | Key::Num4
+            | Key::Num5
+            | Key::Num6
+            | Key::Num7
+            | Key::Num8
+            | Key::Num9
+            | Key::A
+            | Key::B
+            | Key::C
+            | Key::D
+            | Key::E
+            | Key::F
+            | Key::G
+            | Key::H
+            | Key::I
+            | Key::J
+            | Key::K
+            | Key::L
+            | Key::M
+            | Key::N
+            | Key::O
+            | Key::P
+            | Key::Q
+            | Key::R
+            | Key::S
+            | Key::T
+            | Key::U
+            | Key::V
+            | Key::W
+            | Key::X
+            | Key::Y
+            | Key::Z
+    )
+}
+
+fn unicode_keysym(character: char) -> Option<u32> {
+    let code = character as u32;
+    match code {
+        0x20..=0x7e | 0xa0..=0xff => Some(code),
+        code if code > 0xff => Some(0x0100_0000 + code),
+        _ => None,
+    }
 }
 
 fn console_keysym(key: egui::Key) -> Option<u32> {
@@ -1971,5 +2066,10 @@ mod tests {
         assert_eq!(console_keysym(egui::Key::F5), Some(0xffc2));
         assert_eq!(console_keysym(egui::Key::ArrowLeft), Some(0xff51));
         assert_eq!(console_keysym(egui::Key::MediaPlayPause), None);
+        assert!(is_printable_key(egui::Key::A));
+        assert!(!is_printable_key(egui::Key::Enter));
+        assert_eq!(unicode_keysym('a'), Some(0x61));
+        assert_eq!(unicode_keysym('ก'), Some(0x0100_0e01));
+        assert_eq!(unicode_keysym('\n'), None);
     }
 }

@@ -15,7 +15,8 @@ default and a persisted dark-theme toggle.
   connection/host scopes.
 - Infrastructure tree with search, context menus and object tabs.
 - Pool overview page with hosts, storage, networks and VM summary.
-- VM lifecycle: start (including start/resume on a chosen host), clean
+- VM lifecycle: start (including a missing-VDI/SR preflight and start/resume on
+  a chosen host), clean
   shutdown/reboot, force shutdown/reboot, pause, unpause, suspend, resume,
   clone, disk snapshot, snapshot revert/delete (restoring a running snapshot's
   power state) and delete VM with owned-disk and optional snapshot cleanup.
@@ -39,8 +40,8 @@ default and a persisted dark-theme toggle.
   operations started by other clients.
 - VM detail tabs: General, Performance (VM RRD), Storage, Network, HA, Snapshots and Console.
 - Embedded VNC console over the host's HTTPS CONNECT tunnel, with live
-  framebuffer updates, mouse, scroll wheel, keyboard input, Ctrl+Alt+Del and
-  clipboard exchange with the local desktop.
+  framebuffer updates, mouse, scroll wheel, keyboard input (including typed
+  Unicode characters), Ctrl+Alt+Del and clipboard exchange with the local desktop.
 - Host detail page: General, CPU/memory, Performance, Networking, Storage,
   Hardware, Updates, Certificates, Health.
 - Host performance graphs with all CPU cores in one chart, plus memory and

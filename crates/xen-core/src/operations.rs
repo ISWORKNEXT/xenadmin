@@ -147,6 +147,7 @@ impl Connection {
                 | VmAction::Resume
                 | VmAction::ResumeOn { .. }
         ) {
+            self.preflight_boot(&reference).await?;
             let host_ref = match action {
                 VmAction::StartOn { host_ref } | VmAction::ResumeOn { host_ref } => {
                     Some(host_ref.clone())
@@ -1061,6 +1062,54 @@ impl Connection {
             return Ok(None);
         }
         Ok(Some((parent_uuid, power)))
+    }
+
+    /// Reject a start when a configured disk or CD media points at a missing
+    /// VDI or an unavailable storage repository.
+    async fn preflight_boot(&self, vm_ref: &str) -> Result<(), ApiError> {
+        let Ok(vbds) = self.records("VBD").await else {
+            return Ok(());
+        };
+        let Ok(vdis) = self.records("VDI").await else {
+            return Ok(());
+        };
+        let Ok(srs) = self.records("SR").await else {
+            return Ok(());
+        };
+        for vbd in vbds.values() {
+            if vbd["VM"].as_str() != Some(vm_ref) || vbd["empty"].as_bool() == Some(true) {
+                continue;
+            }
+            let vdi_ref = vbd["VDI"].as_str().unwrap_or_default();
+            if vdi_ref.is_empty() || vdi_ref == "OpaqueRef:NULL" {
+                continue;
+            }
+            let device = text(vbd, "device");
+            let Some(vdi) = vdis.get(vdi_ref) else {
+                return Err(ApiError::Xen(format!(
+                    "Cannot start: disk {device} points to a VDI that no longer exists."
+                )));
+            };
+            if vdi["missing"].as_bool() == Some(true) {
+                return Err(ApiError::Xen(format!(
+                    "Cannot start: disk {device} uses missing VDI {}.",
+                    text(vdi, "name_label")
+                )));
+            }
+            let sr_ref = text(vdi, "SR");
+            let Some(sr) = srs.get(&sr_ref) else {
+                return Err(ApiError::Xen(format!(
+                    "Cannot start: the storage repository for disk {device} is unavailable."
+                )));
+            };
+            if sr["PBDs"].as_array().is_none_or(Vec::is_empty) {
+                return Err(ApiError::Xen(format!(
+                    "Cannot start: storage repository {} has no attached PBD.",
+                    text(sr, "name_label")
+                )));
+            }
+        }
+        Ok(())
     }
 
     pub async fn wait_task(&self, reference: &str) -> Result<(), ApiError> {

@@ -49,7 +49,7 @@
 | Inventory sync | `event.from("*")` + cache + token | `event.register`/`event.next` + raw-record cache; rebuild inventory จาก cache และ refresh fallback | ได้ข้อมูลสดจาก client อื่น; ยังไม่เห็น task ของ client อื่น |
 | Connection lifecycle | heartbeat ทุก 15 วินาที, reconnect, coordinator failover | heartbeat 15 วินาที, reconnect ด้วย password ใน memory, mark stale หลังพลาด 2 ครั้ง | ไม่มี dialog ขอ credential ใหม่; ถ้า password เปลี่ยนจะ reconnect ไม่ได้ |
 | Coordinator | handle `HOST_IS_SLAVE` และสลับไป master | redirect ไป master อัตโนมัติ ระหว่าง login/reconnect | ต้องมี network ไปถึง master |
-| VM start | `start_on` / `resume_on`, `assert_can_boot_here`, ตรวจ CD/ISO/SR ที่ broken, HA | `start_on` / `resume_on` + host picker + `assert_can_boot_here`; ยังไม่ตรวจ CD/ISO/SR/HA เชิงลึก | start อาจล้มเหลวเพราะ CD/SR ที่ broken โดยไม่แจ้งล่วงหน้า |
+| VM start | `start_on` / `resume_on`, `assert_can_boot_here`, ตรวจ CD/ISO/SR ที่ broken, HA | `start_on` / `resume_on` + host picker + missing-VDI/SR preflight + `assert_can_boot_here` | ยังไม่ตรวจ HA/ลึกเท่า upstream |
 | Snapshot revert | คืน power state และ start/resume บน host เดิม | revert + start/resume อัตโนมัติเมื่อ snapshot ถ่ายตอน Running | ยังไม่เลือก host เดิมแบบเจาะจง |
 | Snapshot delete | เลือก snapshots และลบ VBD/VDI ที่เป็นเจ้าของ | ลบ snapshot เดี่ยว หรือลบ snapshots ทั้งหมดพร้อม VM; ยังเลือกบาง snapshot ไม่ได้ | ถ้าต้องการเก็บ snapshot บางรายการต้องลบเองก่อน |
 | Clone | ตั้งชื่อ + description | ตั้งชื่อเท่านั้น | description ไม่ตรง |
@@ -92,7 +92,7 @@
 
 - VNC ผ่าน HTTPS CONNECT + framebuffer/keyboard/mouse/clipboard (มีแล้ว)
 - RDP (เดิมใช้ Windows ActiveX)
-- แป้นพิมพ์ layout ที่ไม่ใช่ US, SSH/text console; clipboard จำกัด Latin-1 ตาม RFB
+- SSH/text console, RDP; การพิมพ์ Unicode ใช้ X11 keysym (guest ต้องรองรับ); clipboard จำกัด Latin-1 ตาม RFB
 
 ### 4. Storage
 
@@ -165,7 +165,7 @@
 
 ### P0 — ทำให้ใช้งานประจำวันได้
 
-1. **Broken CD/ISO/SR + HA precheck** ก่อน start (host picker และ `assert_can_boot_here` มีแล้ว)
+1. **HA precheck** ก่อน start (missing VDI/SR + `assert_can_boot_here` มีแล้ว)
 2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, boot options อื่น
 3. **Bulk snapshot selection** (revert คืน power state แล้ว)
 4. **Console RDP + clipboard/SSH console**
