@@ -46,7 +46,7 @@ dependency.
 | VM editing | Implemented | Name/description, BIOS/UEFI, secure boot, boot order/policy, after-crash policy; vCPUs/static memory while halted; dynamic memory live when allowed |
 | CD/DVD media | Implemented | List/eject/insert ISO media on existing virtual CD drives from the Storage tab |
 | VM network interfaces | Implemented | Add/remove VIFs, plug/unplug, next-free device slot and optional MAC |
-| VM virtual disks | Implemented | Add (choose SR/size/name), grow, remove disks and create empty CD drives on halted VMs |
+| VM virtual disks | Implemented | Add, attach existing VDI, grow, remove disks, toggle bootable, create empty CD drives on halted VMs |
 | VM start on host | Implemented | Start/resume on a chosen host with missing-VDI/SR preflight and `assert_can_boot_here` |
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
 | Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |

@@ -31,7 +31,7 @@
 | เลือก pool coordinator | connection manager | ต้องเลือก coordinator เอง; ถ้าต่อ member จะได้ error `HOST_IS_SLAVE` |
 | Inventory พื้นฐาน | pool/host/VM/template/snapshot/SR/network | เทียบเท่าข้อมูลหลัก |
 | VM power actions | start/shutdown/reboot/force/pause/unpause/suspend/resume | เทียบเท่าคำสั่งหลัก |
-| VM edit | name/description/CPU/memory/boot options/ISO/disk/VIF | name/description, BIOS/UEFI, secure boot, boot order/policy, after-crash; dynamic memory live; ISO/CD; disk/VIF management | ยังไม่มี disk move/attach existing VDI |
+| VM edit | name/description/CPU/memory/boot options/ISO/disk/VIF | name/description, BIOS/UEFI, secure boot, boot order/policy, after-crash; dynamic memory live; ISO/CD; add/attach/resize/remove disk, bootable flag; VIF management | ยังไม่มี disk move ระหว่าง SR |
 | Clone | `VM.clone` + set description | clone VM/template ได้, ตั้งชื่อได้, ยังไม่ตั้ง description |
 | Template provisioning | New VM from template + provision disks | clone + provision (`VM.provision`) + ล้าง `other_config.disks` |
 | Snapshot | create/revert/delete | create/revert/delete + cleanup VBD/VDI ที่เป็นเจ้าของ |
@@ -72,7 +72,7 @@
 
 - New VM wizard, fast create, create from snapshot (create from template มีแล้ว)
 - boot options อื่น, disk move ระหว่าง SR
-- disk attach จาก VDI ที่มีอยู่, disk move ระหว่าง SR (add/resize/remove มีแล้ว)
+- disk move ระหว่าง SR (attach existing VDI, add/resize/remove มีแล้ว)
 - VIF edit network/locking mode (create/delete/plug/unplug มีแล้ว)
 - HA restart priority, startup options, other_config
 - XenStore data/keys, VM logs

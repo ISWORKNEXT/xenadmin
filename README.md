@@ -29,8 +29,8 @@ default and a persisted dark-theme toggle.
 - Change or eject CD/DVD media from the VM Storage tab, with a searchable list
   of ISO images from ISO storage repositories.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.
-- Add, resize and remove virtual disks while the VM is halted, and create empty
-  CD/DVD drives.
+- Add, attach existing VDIs, resize and remove virtual disks while the VM is
+  halted, toggle the bootable VBD flag, and create empty CD/DVD drives.
 - Host actions menu for enable/disable, power-on, evacuate, rescan physical
   interfaces, restart toolstack, reboot and shutdown, with explicit confirmation
   for disruptive actions.

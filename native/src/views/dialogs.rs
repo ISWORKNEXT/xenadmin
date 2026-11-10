@@ -33,6 +33,9 @@ pub fn show(
     if state.disk_dialog.is_some() {
         disk_dialog(ctx, state, actions);
     }
+    if state.attach_vdi_dialog.is_some() {
+        attach_vdi_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1153,6 +1156,145 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn attach_vdi_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut attach = false;
+    let Some(dialog) = state.attach_vdi_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("attach-vdi-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(600.0);
+            modal_title(
+                ui,
+                "Attach existing disk",
+                "Choose an unattached user VDI from this pool.",
+            );
+            widgets::field_label(ui, "Search disks");
+            ui.add_enabled(
+                !dialog.submitting && !dialog.loading,
+                egui::TextEdit::singleline(&mut dialog.search)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("Filter by disk name or storage repository")
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            if dialog.loading {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(
+                        RichText::new("Loading available disks…")
+                            .size(10.5)
+                            .color(muted_fg()),
+                    );
+                });
+            } else {
+                let query = dialog.search.trim().to_lowercase();
+                let mut visible = 0usize;
+                egui::ScrollArea::vertical()
+                    .max_height(300.0)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        for vdi in &dialog.vdis {
+                            if !query.is_empty()
+                                && !vdi.name.to_lowercase().contains(&query)
+                                && !vdi.sr_name.to_lowercase().contains(&query)
+                            {
+                                continue;
+                            }
+                            visible += 1;
+                            let selected = dialog.selected.as_deref() == Some(vdi.uuid.as_str());
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .selectable_label(
+                                        selected,
+                                        RichText::new(if vdi.name.is_empty() {
+                                            "(unnamed disk)"
+                                        } else {
+                                            &vdi.name
+                                        })
+                                        .size(11.0),
+                                    )
+                                    .clicked()
+                                {
+                                    dialog.selected = Some(vdi.uuid.clone());
+                                }
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} · {}",
+                                        vdi.sr_name,
+                                        crate::format::bytes(vdi.virtual_size)
+                                    ))
+                                    .size(9.0)
+                                    .color(dim_fg()),
+                                );
+                            });
+                        }
+                        if visible == 0 {
+                            ui.label(
+                                RichText::new(if dialog.vdis.is_empty() {
+                                    "No unattached writable disks were found."
+                                } else {
+                                    "No disks match the search."
+                                })
+                                .size(10.5)
+                                .color(dim_fg()),
+                            );
+                        }
+                    });
+            }
+            ui.add_space(8.0);
+            ui.add_enabled(
+                !dialog.submitting && !dialog.loading,
+                egui::Checkbox::new(
+                    &mut dialog.bootable,
+                    RichText::new("Mark the attached disk as bootable").size(10.5),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && !dialog.loading && dialog.selected.is_some(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Attaching…"
+                            } else {
+                                "Attach disk"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        attach = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting && !dialog.loading {
+        close = true;
+    }
+    if attach {
+        actions.push(UiAction::SaveAttachVdi);
+    }
+    if close {
+        actions.push(UiAction::CloseAttachVdi);
     }
 }
 

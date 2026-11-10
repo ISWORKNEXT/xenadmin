@@ -6,7 +6,7 @@ use xen_core::{
     host::{DataSection, HostDetails, InfoGroup},
     operations::{TaskStatus, VmAction},
     performance::HostPerformance,
-    vm::{VmDetails, VmIso},
+    vm::{VdiSummary, VmDetails, VmIso},
     workspace::{ConnectionView, Operation, WorkspaceView},
     xapi::{ConnectionSettings, Host, Inventory, VirtualMachine},
 };
@@ -741,6 +741,18 @@ pub struct HostActionConfirm {
     pub error: Option<String>,
 }
 
+pub struct AttachVdiDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub vdis: Vec<VdiSummary>,
+    pub selected: Option<String>,
+    pub search: String,
+    pub bootable: bool,
+    pub loading: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct DiskAddDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -854,6 +866,8 @@ pub struct UiState {
     pub vif_dialog: Option<VifDialog>,
     pub vif_confirm: Option<VifConfirm>,
     pub disk_dialog: Option<DiskDialog>,
+    pub attach_vdi_dialog: Option<AttachVdiDialog>,
+    pub vdi_catalog_seq: u64,
     pub host_action_confirm: Option<HostActionConfirm>,
     pub snapshot_selection: HashSet<String>,
     pub snapshot_confirm: Option<SnapshotDeleteConfirm>,
@@ -917,6 +931,8 @@ impl Default for UiState {
             vif_dialog: None,
             vif_confirm: None,
             disk_dialog: None,
+            attach_vdi_dialog: None,
+            vdi_catalog_seq: 0,
             host_action_confirm: None,
             snapshot_selection: HashSet::new(),
             snapshot_confirm: None,
@@ -1040,6 +1056,13 @@ pub enum UiAction {
     CancelHostAction,
     ConfirmHostAction,
     OpenAddDisk,
+    OpenAttachVdi,
+    CloseAttachVdi,
+    SaveAttachVdi,
+    SetVbdBootable {
+        vbd_uuid: String,
+        bootable: bool,
+    },
     AddCdDrive,
     OpenDiskResize {
         vdi_uuid: String,

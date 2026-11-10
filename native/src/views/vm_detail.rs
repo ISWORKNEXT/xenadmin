@@ -1465,6 +1465,17 @@ fn storage(
             widgets::badge(ui, disks.len().to_string(), muted_fg());
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if ui
+                    .add_enabled(editable && halted, widgets::primary_button("Attach disk"))
+                    .on_hover_text(if halted {
+                        "Attach an existing unattached VDI"
+                    } else {
+                        "Shut down the VM to attach a disk"
+                    })
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenAttachVdi);
+                }
+                if ui
                     .add_enabled(editable && halted, widgets::primary_button("Add disk"))
                     .on_hover_text(if halted {
                         "Create a new virtual disk"
@@ -1559,11 +1570,25 @@ fn storage(
                         );
                     });
                     row.col(|ui| {
-                        ui.label(
-                            RichText::new(if disk.bootable { "Yes" } else { "No" })
-                                .size(10.5)
-                                .color(muted_fg()),
-                        );
+                        if editable {
+                            let mut bootable = disk.bootable;
+                            if ui
+                                .checkbox(&mut bootable, "")
+                                .on_hover_text("Bootable flag (takes effect on next start)")
+                                .changed()
+                            {
+                                actions.push(UiAction::SetVbdBootable {
+                                    vbd_uuid: disk.vbd_uuid.clone(),
+                                    bootable,
+                                });
+                            }
+                        } else {
+                            ui.label(
+                                RichText::new(if disk.bootable { "Yes" } else { "No" })
+                                    .size(10.5)
+                                    .color(muted_fg()),
+                            );
+                        }
                     });
                     row.col(|ui| {
                         if disk.is_cd {

@@ -92,6 +92,15 @@ pub struct VmInterface {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct VdiSummary {
+    pub uuid: String,
+    pub name: String,
+    pub sr_name: String,
+    pub virtual_size: u64,
+    pub read_only: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct VmSnapshot {
     pub uuid: String,
     pub name: String,
@@ -124,6 +133,49 @@ const OTHER_CONFIG_FIELDS: &[(&str, &str)] = &[
 ];
 
 impl Connection {
+    /// List unattached, writable user VDIs available for attach.
+    pub async fn vdi_catalog(&self) -> Result<Vec<VdiSummary>, ApiError> {
+        let (vdis, srs, vbds) =
+            tokio::join!(self.records("VDI"), self.records("SR"), self.records("VBD"));
+        let vdis = vdis?;
+        let srs = srs?;
+        let vbds = vbds?;
+        let mut attached = std::collections::HashSet::new();
+        for vbd in vbds.values() {
+            if let Some(vdi) = vbd["VDI"].as_str() {
+                attached.insert(vdi.to_owned());
+            }
+        }
+        let mut catalog: Vec<VdiSummary> = vdis
+            .iter()
+            .filter(|(reference, vdi)| {
+                text(vdi, "type") == "user"
+                    && vdi["missing"].as_bool() != Some(true)
+                    && vdi["is_a_snapshot"].as_bool() != Some(true)
+                    && !attached.contains(reference.as_str())
+                    && vdi["read_only"].as_bool() != Some(true)
+            })
+            .map(|(_, vdi)| {
+                let sr_ref = text(vdi, "SR");
+                let sr = srs.get(&sr_ref).unwrap_or(&Value::Null);
+                VdiSummary {
+                    uuid: text(vdi, "uuid"),
+                    name: text(vdi, "name_label"),
+                    sr_name: text(sr, "name_label"),
+                    virtual_size: number(vdi, "virtual_size"),
+                    read_only: vdi["read_only"].as_bool().unwrap_or(false),
+                }
+            })
+            .collect();
+        catalog.sort_by(|left, right| {
+            left.name
+                .cmp(&right.name)
+                .then(left.sr_name.cmp(&right.sr_name))
+        });
+        catalog.truncate(500);
+        Ok(catalog)
+    }
+
     pub async fn vm_details(&self, vm_uuid: &str) -> Result<VmDetails, ApiError> {
         let reference: String = self
             .request("VM.get_by_uuid", json!([self.session, vm_uuid]))

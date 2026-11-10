@@ -716,6 +716,22 @@ impl App {
                         }
                     }
                 },
+                Event::VdiCatalog { seq, result } => {
+                    if seq == self.state.vdi_catalog_seq
+                        && let Some(dialog) = self.state.attach_vdi_dialog.as_mut()
+                    {
+                        dialog.loading = false;
+                        match result {
+                            Ok(vdis) => {
+                                if dialog.selected.is_none() {
+                                    dialog.selected = vdis.first().map(|vdi| vdi.uuid.clone());
+                                }
+                                dialog.vdis = vdis;
+                            }
+                            Err(message) => dialog.error = Some(message),
+                        }
+                    }
+                }
                 Event::SnapshotsDeleted { vm_uuid, result } => match result {
                     Ok(count) => {
                         if self
@@ -924,6 +940,8 @@ impl App {
                     let message = match action.as_str() {
                         "add" => "Virtual disk added.",
                         "add_cd" => "CD/DVD drive added.",
+                        "attach" => "Virtual disk attached.",
+                        "bootable" => "Boot flag updated.",
                         "resize" => "Virtual disk resized.",
                         "remove" => "Virtual disk removed.",
                         _ => "Virtual disk updated.",
@@ -938,6 +956,14 @@ impl App {
                             {
                                 self.state.disk_dialog = None;
                             }
+                            if self
+                                .state
+                                .attach_vdi_dialog
+                                .as_ref()
+                                .is_some_and(|dialog| dialog.vm_uuid == vm_uuid)
+                            {
+                                self.state.attach_vdi_dialog = None;
+                            }
                             self.state
                                 .toasts
                                 .push(Toast::new(message, ToastKind::Success));
@@ -948,6 +974,11 @@ impl App {
                                 && disk_dialog_vm(dialog) == vm_uuid
                             {
                                 disk_dialog_error(dialog, message);
+                            } else if let Some(dialog) = self.state.attach_vdi_dialog.as_mut()
+                                && dialog.vm_uuid == vm_uuid
+                            {
+                                dialog.submitting = false;
+                                dialog.error = Some(message);
                             } else {
                                 self.state
                                     .toasts
@@ -1869,6 +1900,81 @@ impl App {
                         connection_id: confirm.connection_id.clone(),
                         host_uuid: confirm.host_uuid.clone(),
                         action: confirm.action,
+                    });
+                }
+                UiAction::OpenAttachVdi => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.state.vdi_catalog_seq += 1;
+                    self.state.attach_vdi_dialog = Some(crate::state::AttachVdiDialog {
+                        connection_id: connection_id.clone(),
+                        vm_uuid,
+                        vdis: Vec::new(),
+                        selected: None,
+                        search: String::new(),
+                        bootable: false,
+                        loading: true,
+                        submitting: false,
+                        error: None,
+                    });
+                    self.worker.send(Command::VdiCatalog {
+                        seq: self.state.vdi_catalog_seq,
+                        connection_id,
+                    });
+                }
+                UiAction::CloseAttachVdi => {
+                    if !self
+                        .state
+                        .attach_vdi_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.loading || dialog.submitting)
+                    {
+                        self.state.attach_vdi_dialog = None;
+                    }
+                }
+                UiAction::SaveAttachVdi => {
+                    let Some(dialog) = self.state.attach_vdi_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(vdi_uuid) = dialog.selected.clone() else {
+                        dialog.error = Some("Select a disk to attach.".into());
+                        continue;
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::AttachVdi {
+                        connection_id: dialog.connection_id.clone(),
+                        vm_uuid: dialog.vm_uuid.clone(),
+                        vdi_uuid,
+                        bootable: dialog.bootable,
+                    });
+                }
+                UiAction::SetVbdBootable { vbd_uuid, bootable } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.worker.send(Command::SetVbdBootable {
+                        connection_id,
+                        vm_uuid,
+                        vbd_uuid,
+                        bootable,
                     });
                 }
                 UiAction::OpenAddDisk => {

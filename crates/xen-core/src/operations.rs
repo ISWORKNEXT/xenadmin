@@ -1007,6 +1007,123 @@ impl Connection {
         Ok(())
     }
 
+    /// Attach an existing unattached user VDI as a disk on a halted VM.
+    pub async fn attach_vdi(
+        &self,
+        vm_uuid: &str,
+        vdi_uuid: &str,
+        bootable: bool,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["uuid"].as_str() != Some(vm_uuid)
+            || vm["is_control_domain"].as_bool() == Some(true)
+            || vm["is_a_template"].as_bool() == Some(true)
+            || vm["is_a_snapshot"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen(
+                "Disks can only be attached to a virtual machine.".into(),
+            ));
+        }
+        if vm["power_state"].as_str() != Some("Halted") {
+            return Err(ApiError::Xen(
+                "Shut down the VM before attaching a disk.".into(),
+            ));
+        }
+        let vdi_ref: String = self
+            .request("VDI.get_by_uuid", json!([self.session, vdi_uuid]))
+            .await?;
+        let vdi: Value = self
+            .request("VDI.get_record", json!([self.session, vdi_ref]))
+            .await?;
+        if vdi["uuid"].as_str() != Some(vdi_uuid) || !attachable_vdi(&vdi) {
+            return Err(ApiError::Xen(
+                "Select an available writable user disk.".into(),
+            ));
+        }
+        let vbds = self.records("VBD").await?;
+        if vbds.values().any(|vbd| {
+            vbd["VDI"].as_str() == Some(vdi_ref.as_str())
+                && vbd["VM"].as_str() == Some(vm_ref.as_str())
+        }) {
+            return Err(ApiError::Xen(
+                "This disk is already attached to the VM.".into(),
+            ));
+        }
+        if vbds
+            .values()
+            .any(|vbd| vbd["VDI"].as_str() == Some(vdi_ref.as_str()))
+        {
+            return Err(ApiError::Xen(
+                "This disk is attached to another VM. Detach it first.".into(),
+            ));
+        }
+        let devices: Vec<String> = self
+            .request("VM.get_allowed_VBD_devices", json!([self.session, vm_ref]))
+            .await?;
+        let Some(userdevice) = devices.first().cloned() else {
+            return Err(ApiError::Xen(
+                "This VM has no free virtual disk device slots.".into(),
+            ));
+        };
+        let mode = vbd_mode(vdi["read_only"].as_bool() == Some(true));
+        let vbd = json!({
+            "VM": vm_ref,
+            "VDI": vdi_ref,
+            "userdevice": userdevice,
+            "bootable": bootable,
+            "mode": mode,
+            "type": "Disk",
+            "empty": false,
+            "unpluggable": true,
+            "device": "",
+            "other_config": {"owner": "true"},
+            "qos_algorithm_type": "",
+            "qos_algorithm_params": {}
+        });
+        self.async_task("Async.VBD.create", json!([self.session, vbd]))
+            .await
+    }
+
+    pub async fn set_vbd_bootable(
+        &self,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        bootable: bool,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vbd_ref: String = self
+            .request("VBD.get_by_uuid", json!([self.session, vbd_uuid]))
+            .await?;
+        let vbd: Value = self
+            .request("VBD.get_record", json!([self.session, vbd_ref]))
+            .await?;
+        if vbd["uuid"].as_str() != Some(vbd_uuid) || vbd["VM"].as_str() != Some(vm_ref.as_str()) {
+            return Err(ApiError::Xen(
+                "The selected disk does not belong to this VM.".into(),
+            ));
+        }
+        self.request::<Value>("VBD.set_bootable", json!([self.session, vbd_ref, bootable]))
+            .await?;
+        Ok(())
+    }
+
     pub async fn resize_disk(
         &self,
         vm_uuid: &str,
@@ -1582,6 +1699,14 @@ impl Connection {
     }
 }
 
+fn attachable_vdi(vdi: &Value) -> bool {
+    text(vdi, "type") == "user" && vdi["missing"].as_bool() != Some(true)
+}
+
+fn vbd_mode(read_only: bool) -> &'static str {
+    if read_only { "RO" } else { "RW" }
+}
+
 fn valid_firmware(value: &str) -> bool {
     matches!(value, "bios" | "uefi")
 }
@@ -1768,6 +1893,15 @@ mod tests {
         );
         assert!(owner_vdis(&vbds, &json!({"suspend_VDI": "OpaqueRef:NULL"}), "vm").len() == 1);
     }
+    #[test]
+    fn attach_accepts_only_available_user_disks() {
+        assert!(attachable_vdi(&json!({"type":"user","missing":false})));
+        assert!(!attachable_vdi(&json!({"type":"iso","missing":false})));
+        assert!(!attachable_vdi(&json!({"type":"user","missing":true})));
+        assert_eq!(vbd_mode(false), "RW");
+        assert_eq!(vbd_mode(true), "RO");
+    }
+
     #[test]
     fn boot_option_validation_rejects_unsafe_combinations() {
         assert!(valid_firmware("bios"));

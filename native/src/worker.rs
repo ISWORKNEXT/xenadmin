@@ -114,6 +114,22 @@ pub enum Command {
         connection_id: String,
         vm_uuid: String,
     },
+    VdiCatalog {
+        seq: u64,
+        connection_id: String,
+    },
+    AttachVdi {
+        connection_id: String,
+        vm_uuid: String,
+        vdi_uuid: String,
+        bootable: bool,
+    },
+    SetVbdBootable {
+        connection_id: String,
+        vm_uuid: String,
+        vbd_uuid: String,
+        bootable: bool,
+    },
     AddDisk {
         connection_id: String,
         vm_uuid: String,
@@ -233,6 +249,10 @@ pub enum Event {
     VmEdited {
         vm_uuid: String,
         result: Result<(), String>,
+    },
+    VdiCatalog {
+        seq: u64,
+        result: Result<Vec<xen_core::vm::VdiSummary>, String>,
     },
     CdChanged {
         vm_uuid: String,
@@ -606,6 +626,40 @@ fn dispatch(
                     .change_cd(&connection_id, &vm_uuid, &vbd_uuid, iso_uuid)
                     .await;
                 let _ = events.send(Event::CdChanged { vm_uuid, result });
+            }
+            Command::VdiCatalog { seq, connection_id } => {
+                let result = workspace.vdi_catalog(&connection_id).await;
+                let _ = events.send(Event::VdiCatalog { seq, result });
+            }
+            Command::AttachVdi {
+                connection_id,
+                vm_uuid,
+                vdi_uuid,
+                bootable,
+            } => {
+                let result = workspace
+                    .attach_vdi(&connection_id, &vm_uuid, &vdi_uuid, bootable)
+                    .await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: "attach".into(),
+                    result,
+                });
+            }
+            Command::SetVbdBootable {
+                connection_id,
+                vm_uuid,
+                vbd_uuid,
+                bootable,
+            } => {
+                let result = workspace
+                    .set_vbd_bootable(&connection_id, &vm_uuid, &vbd_uuid, bootable)
+                    .await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: "bootable".into(),
+                    result,
+                });
             }
             Command::AddCdDrive {
                 connection_id,

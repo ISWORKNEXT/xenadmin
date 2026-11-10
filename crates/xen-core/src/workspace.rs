@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::{
     operations::{TaskStatus, VmAction},
-    vm::VmDetails,
+    vm::{VdiSummary, VmDetails},
     xapi::{ApiError, Connection, ConnectionSettings, Inventory, RawInventory},
 };
 
@@ -548,6 +548,56 @@ impl Workspace {
         active
             .connection
             .add_cd_drive(vm_uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn vdi_catalog(&self, connection_id: &str) -> Result<Vec<VdiSummary>, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .vdi_catalog()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub async fn attach_vdi(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        vdi_uuid: &str,
+        bootable: bool,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .attach_vdi(vm_uuid, vdi_uuid, bootable)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn set_vbd_bootable(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        bootable: bool,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .set_vbd_bootable(vm_uuid, vbd_uuid, bootable)
             .await
             .map_err(|error| error.to_string())?;
         refresh_inventory_cache(&active).await
