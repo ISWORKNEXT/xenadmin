@@ -77,6 +77,25 @@ pub enum Command {
         vbd_uuid: String,
         iso_uuid: Option<String>,
     },
+    AddDisk {
+        connection_id: String,
+        vm_uuid: String,
+        sr_uuid: String,
+        size_bytes: u64,
+        name: Option<String>,
+    },
+    ResizeDisk {
+        connection_id: String,
+        vm_uuid: String,
+        vdi_uuid: String,
+        size_bytes: u64,
+    },
+    RemoveDisk {
+        connection_id: String,
+        vm_uuid: String,
+        vbd_uuid: String,
+        delete_vdi: bool,
+    },
     AddVif {
         connection_id: String,
         vm_uuid: String,
@@ -155,6 +174,11 @@ pub enum Event {
         result: Result<(), String>,
     },
     VifChanged {
+        vm_uuid: String,
+        action: String,
+        result: Result<(), String>,
+    },
+    DiskChanged {
         vm_uuid: String,
         action: String,
         result: Result<(), String>,
@@ -440,6 +464,52 @@ fn dispatch(
                     .change_cd(&connection_id, &vm_uuid, &vbd_uuid, iso_uuid)
                     .await;
                 let _ = events.send(Event::CdChanged { vm_uuid, result });
+            }
+            Command::AddDisk {
+                connection_id,
+                vm_uuid,
+                sr_uuid,
+                size_bytes,
+                name,
+            } => {
+                let result = workspace
+                    .add_disk(&connection_id, &vm_uuid, &sr_uuid, size_bytes, name)
+                    .await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: "add".into(),
+                    result,
+                });
+            }
+            Command::ResizeDisk {
+                connection_id,
+                vm_uuid,
+                vdi_uuid,
+                size_bytes,
+            } => {
+                let result = workspace
+                    .resize_disk(&connection_id, &vm_uuid, &vdi_uuid, size_bytes)
+                    .await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: "resize".into(),
+                    result,
+                });
+            }
+            Command::RemoveDisk {
+                connection_id,
+                vm_uuid,
+                vbd_uuid,
+                delete_vdi,
+            } => {
+                let result = workspace
+                    .remove_disk(&connection_id, &vm_uuid, &vbd_uuid, delete_vdi)
+                    .await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: "remove".into(),
+                    result,
+                });
             }
             Command::AddVif {
                 connection_id,

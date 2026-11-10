@@ -26,6 +26,7 @@ default and a persisted dark-theme toggle.
 - Change or eject CD/DVD media from the VM Storage tab, with a searchable list
   of ISO images from ISO storage repositories.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.
+- Add, resize and remove virtual disks while the VM is halted.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.

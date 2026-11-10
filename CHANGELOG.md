@@ -20,6 +20,7 @@
 - Add CD/DVD media management: list ISO images from ISO SRs, insert a selected image or eject the current media.
 - Show host tasks from the event stream in Activity & tasks, including tasks started by other clients.
 - Add VM network interface management: create on the next free slot with an optional MAC, remove, plug and unplug.
+- Add virtual disk management: create on a chosen SR, grow, and remove disks (optionally deleting the VDI) on halted VMs.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

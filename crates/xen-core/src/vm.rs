@@ -61,6 +61,7 @@ pub struct VmDisk {
     pub virtual_size: u64,
     pub physical_utilisation: u64,
     pub read_only: bool,
+    pub owner: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -187,6 +188,7 @@ impl Connection {
                     virtual_size: number(vdi, "virtual_size"),
                     physical_utilisation: number(vdi, "physical_utilisation"),
                     read_only: vdi["read_only"].as_bool().unwrap_or(false),
+                    owner: vbd["other_config"].get("owner").is_some(),
                 });
             }
         }

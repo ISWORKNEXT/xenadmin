@@ -371,6 +371,67 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn add_disk(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        sr_uuid: &str,
+        size_bytes: u64,
+        name: Option<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .add_disk(vm_uuid, sr_uuid, size_bytes, name.as_deref())
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn resize_disk(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        vdi_uuid: &str,
+        size_bytes: u64,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .resize_disk(vm_uuid, vdi_uuid, size_bytes)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn remove_disk(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        delete_vdi: bool,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .remove_disk(vm_uuid, vbd_uuid, delete_vdi)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn add_vif(
         &self,
         connection_id: &str,

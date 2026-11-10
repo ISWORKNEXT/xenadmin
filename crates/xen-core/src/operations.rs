@@ -619,6 +619,227 @@ impl Connection {
         Ok(())
     }
 
+    pub async fn add_disk(
+        &self,
+        vm_uuid: &str,
+        sr_uuid: &str,
+        size_bytes: u64,
+        name: Option<&str>,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        if size_bytes == 0 {
+            return Err(ApiError::Xen("Enter a disk size greater than zero.".into()));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["uuid"].as_str() != Some(vm_uuid)
+            || vm["is_control_domain"].as_bool() == Some(true)
+            || vm["is_a_template"].as_bool() == Some(true)
+            || vm["is_a_snapshot"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen(
+                "Disks can only be added to a virtual machine.".into(),
+            ));
+        }
+        if vm["power_state"].as_str() != Some("Halted") {
+            return Err(ApiError::Xen(
+                "Shut down the VM before adding a disk.".into(),
+            ));
+        }
+        let sr_ref: String = self
+            .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
+            .await?;
+        let sr: Value = self
+            .request("SR.get_record", json!([self.session, sr_ref]))
+            .await?;
+        if sr["uuid"].as_str() != Some(sr_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        if sr["content_type"].as_str() == Some("iso") {
+            return Err(ApiError::Xen(
+                "ISO storage repositories cannot hold virtual disks.".into(),
+            ));
+        }
+        let mut name = name.unwrap_or_default().trim().to_owned();
+        if name.is_empty() {
+            let vm_name = vm["name_label"].as_str().unwrap_or("VM");
+            name = format!("{vm_name} disk");
+        }
+        if name.chars().count() > 255 {
+            return Err(ApiError::Xen(
+                "The disk name must be 255 characters or fewer.".into(),
+            ));
+        }
+        let devices: Vec<String> = self
+            .request("VM.get_allowed_VBD_devices", json!([self.session, vm_ref]))
+            .await?;
+        let Some(userdevice) = devices.first().cloned() else {
+            return Err(ApiError::Xen(
+                "This VM has no free virtual disk device slots.".into(),
+            ));
+        };
+        let vdi_ref: String = self
+            .request(
+                "VDI.create",
+                json!([
+                    self.session,
+                    {
+                        "name_label": name,
+                        "name_description": "",
+                        "SR": sr_ref,
+                        "virtual_size": size_bytes,
+                        "type": "user",
+                        "sharable": false,
+                        "read_only": false,
+                        "other_config": {},
+                        "sm_config": {},
+                        "tags": []
+                    }
+                ]),
+            )
+            .await?;
+        let vbd = json!({
+            "VM": vm_ref,
+            "VDI": vdi_ref,
+            "userdevice": userdevice,
+            "bootable": false,
+            "mode": "RW",
+            "type": "Disk",
+            "empty": false,
+            "unpluggable": true,
+            "device": "",
+            "other_config": {"owner": "true"},
+            "qos_algorithm_type": "",
+            "qos_algorithm_params": {}
+        });
+        if let Err(error) = self
+            .async_task("Async.VBD.create", json!([self.session, vbd]))
+            .await
+        {
+            let _ = self
+                .request::<Value>("VDI.destroy", json!([self.session, vdi_ref]))
+                .await;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub async fn resize_disk(
+        &self,
+        vm_uuid: &str,
+        vdi_uuid: &str,
+        size_bytes: u64,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["power_state"].as_str() != Some("Halted") {
+            return Err(ApiError::Xen(
+                "Shut down the VM before resizing a disk.".into(),
+            ));
+        }
+        let vdi_ref: String = self
+            .request("VDI.get_by_uuid", json!([self.session, vdi_uuid]))
+            .await?;
+        let vdi: Value = self
+            .request("VDI.get_record", json!([self.session, vdi_ref]))
+            .await?;
+        let current = number(&vdi, "virtual_size");
+        if size_bytes <= current {
+            return Err(ApiError::Xen(
+                "A disk can only be increased in size.".into(),
+            ));
+        }
+        let vbds = self.records("VBD").await?;
+        if !vbds.values().any(|vbd| {
+            vbd["VM"].as_str() == Some(vm_ref.as_str())
+                && vbd["VDI"].as_str() == Some(vdi_ref.as_str())
+        }) {
+            return Err(ApiError::Xen(
+                "The selected disk is not attached to this VM.".into(),
+            ));
+        }
+        self.request::<Value>("VDI.resize", json!([self.session, vdi_ref, size_bytes]))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn remove_disk(
+        &self,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        delete_vdi: bool,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["power_state"].as_str() != Some("Halted") {
+            return Err(ApiError::Xen(
+                "Shut down the VM before removing a disk.".into(),
+            ));
+        }
+        let vbd_ref: String = self
+            .request("VBD.get_by_uuid", json!([self.session, vbd_uuid]))
+            .await?;
+        let vbd: Value = self
+            .request("VBD.get_record", json!([self.session, vbd_ref]))
+            .await?;
+        if vbd["uuid"].as_str() != Some(vbd_uuid)
+            || vbd["VM"].as_str() != Some(vm_ref.as_str())
+            || vbd["type"].as_str() != Some("Disk")
+        {
+            return Err(ApiError::Xen(
+                "The selected disk does not belong to this VM.".into(),
+            ));
+        }
+        if delete_vdi && vbd["other_config"].get("owner").is_none() {
+            return Err(ApiError::Xen(
+                "This disk is shared, so only the attachment can be removed.".into(),
+            ));
+        }
+        let vdi_ref = vbd["VDI"]
+            .as_str()
+            .filter(|vdi| !vdi.is_empty())
+            .map(str::to_owned);
+        self.async_task("Async.VBD.destroy", json!([self.session, vbd_ref]))
+            .await?;
+        if delete_vdi && let Some(vdi_ref) = vdi_ref {
+            match self
+                .request::<Value>("VDI.destroy", json!([self.session, vdi_ref]))
+                .await
+            {
+                Ok(_) => {}
+                Err(ApiError::XenCode(code, _)) if code == "HANDLE_INVALID" => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    }
+
     /// Create a VIF on the next free device slot.
     pub async fn add_vif(
         &self,

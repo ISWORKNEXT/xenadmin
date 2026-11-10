@@ -748,6 +748,45 @@ impl App {
                         }
                     }
                 }
+                Event::DiskChanged {
+                    vm_uuid,
+                    action,
+                    result,
+                } => {
+                    let message = match action.as_str() {
+                        "add" => "Virtual disk added.",
+                        "resize" => "Virtual disk resized.",
+                        "remove" => "Virtual disk removed.",
+                        _ => "Virtual disk updated.",
+                    };
+                    match result {
+                        Ok(()) => {
+                            if self
+                                .state
+                                .disk_dialog
+                                .as_ref()
+                                .is_some_and(|dialog| disk_dialog_vm(dialog) == vm_uuid)
+                            {
+                                self.state.disk_dialog = None;
+                            }
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Success));
+                            self.apply(vec![UiAction::ReloadVmDetails]);
+                        }
+                        Err(message) => {
+                            if let Some(dialog) = self.state.disk_dialog.as_mut()
+                                && disk_dialog_vm(dialog) == vm_uuid
+                            {
+                                disk_dialog_error(dialog, message);
+                            } else {
+                                self.state
+                                    .toasts
+                                    .push(Toast::new(message, ToastKind::Error));
+                            }
+                        }
+                    }
+                }
                 Event::ConsoleOpened {
                     console_id,
                     vm_uuid,
@@ -1360,6 +1399,192 @@ impl App {
                         iso_uuid: dialog.selected.clone(),
                     });
                 }
+                UiAction::OpenAddDisk => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let srs: Vec<(String, String, u64)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .storage
+                                    .iter()
+                                    .filter(|sr| sr.content_type != "iso" && sr.total > sr.used)
+                                    .map(|sr| {
+                                        (
+                                            sr.uuid.clone(),
+                                            sr.name.clone(),
+                                            sr.total.saturating_sub(sr.used),
+                                        )
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    if srs.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "No writable storage repositories are available.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    }
+                    self.state.disk_dialog =
+                        Some(crate::state::DiskDialog::Add(crate::state::DiskAddDialog {
+                            connection_id,
+                            vm_uuid,
+                            sr_uuid: srs.first().map(|(uuid, _, _)| uuid.clone()),
+                            srs,
+                            name: String::new(),
+                            size_gib: "10".into(),
+                            submitting: false,
+                            error: None,
+                        }));
+                }
+                UiAction::OpenDiskResize {
+                    vdi_uuid,
+                    name,
+                    current_gib,
+                } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.state.disk_dialog = Some(crate::state::DiskDialog::Resize(
+                        crate::state::DiskResizeDialog {
+                            connection_id,
+                            vm_uuid,
+                            vdi_uuid,
+                            name,
+                            current_gib,
+                            size_gib: current_gib.saturating_add(1).to_string(),
+                            submitting: false,
+                            error: None,
+                        },
+                    ));
+                }
+                UiAction::PromptRemoveDisk {
+                    vbd_uuid,
+                    name,
+                    owner,
+                } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.state.disk_dialog = Some(crate::state::DiskDialog::Remove(
+                        crate::state::DiskRemoveDialog {
+                            connection_id,
+                            vm_uuid,
+                            vbd_uuid,
+                            name,
+                            owner,
+                            delete_vdi: owner,
+                            submitting: false,
+                            error: None,
+                        },
+                    ));
+                }
+                UiAction::CloseDiskDialog => {
+                    let submitting = self
+                        .state
+                        .disk_dialog
+                        .as_ref()
+                        .is_some_and(disk_dialog_is_submitting);
+                    if !submitting {
+                        self.state.disk_dialog = None;
+                    }
+                }
+                UiAction::SaveDiskDialog => {
+                    const GIB: u64 = 1024 * 1024 * 1024;
+                    let Some(dialog) = self.state.disk_dialog.as_mut() else {
+                        continue;
+                    };
+                    match dialog {
+                        crate::state::DiskDialog::Add(dialog) => {
+                            let Some(size_gib) = dialog.size_gib.trim().parse::<u64>().ok() else {
+                                dialog.error = Some("Enter a whole number of GiB.".into());
+                                continue;
+                            };
+                            let Some(size_bytes) = size_gib.checked_mul(GIB) else {
+                                dialog.error = Some("The disk size is too large.".into());
+                                continue;
+                            };
+                            let Some(sr_uuid) = dialog.sr_uuid.clone() else {
+                                dialog.error = Some("Select a storage repository.".into());
+                                continue;
+                            };
+                            if size_bytes == 0 {
+                                dialog.error =
+                                    Some("The disk size must be greater than zero.".into());
+                                continue;
+                            }
+                            dialog.submitting = true;
+                            dialog.error = None;
+                            self.worker.send(Command::AddDisk {
+                                connection_id: dialog.connection_id.clone(),
+                                vm_uuid: dialog.vm_uuid.clone(),
+                                sr_uuid,
+                                size_bytes,
+                                name: (!dialog.name.trim().is_empty())
+                                    .then(|| dialog.name.trim().to_owned()),
+                            });
+                        }
+                        crate::state::DiskDialog::Resize(dialog) => {
+                            let Some(size_gib) = dialog.size_gib.trim().parse::<u64>().ok() else {
+                                dialog.error = Some("Enter a whole number of GiB.".into());
+                                continue;
+                            };
+                            let Some(size_bytes) = size_gib.checked_mul(GIB) else {
+                                dialog.error = Some("The disk size is too large.".into());
+                                continue;
+                            };
+                            if size_gib <= dialog.current_gib {
+                                dialog.error = Some("A disk can only be increased in size.".into());
+                                continue;
+                            }
+                            dialog.submitting = true;
+                            dialog.error = None;
+                            self.worker.send(Command::ResizeDisk {
+                                connection_id: dialog.connection_id.clone(),
+                                vm_uuid: dialog.vm_uuid.clone(),
+                                vdi_uuid: dialog.vdi_uuid.clone(),
+                                size_bytes,
+                            });
+                        }
+                        crate::state::DiskDialog::Remove(dialog) => {
+                            dialog.submitting = true;
+                            dialog.error = None;
+                            self.worker.send(Command::RemoveDisk {
+                                connection_id: dialog.connection_id.clone(),
+                                vm_uuid: dialog.vm_uuid.clone(),
+                                vbd_uuid: dialog.vbd_uuid.clone(),
+                                delete_vdi: dialog.delete_vdi,
+                            });
+                        }
+                    }
+                }
                 UiAction::OpenVifDialog => {
                     let Some(key) = self
                         .state
@@ -1686,5 +1911,38 @@ fn vm_key(key: &ObjectKey) -> Option<(String, String)> {
             vm_uuid,
         } => Some((connection_id.clone(), vm_uuid.clone())),
         _ => None,
+    }
+}
+
+fn disk_dialog_vm(dialog: &crate::state::DiskDialog) -> &str {
+    match dialog {
+        crate::state::DiskDialog::Add(dialog) => &dialog.vm_uuid,
+        crate::state::DiskDialog::Resize(dialog) => &dialog.vm_uuid,
+        crate::state::DiskDialog::Remove(dialog) => &dialog.vm_uuid,
+    }
+}
+
+fn disk_dialog_is_submitting(dialog: &crate::state::DiskDialog) -> bool {
+    match dialog {
+        crate::state::DiskDialog::Add(dialog) => dialog.submitting,
+        crate::state::DiskDialog::Resize(dialog) => dialog.submitting,
+        crate::state::DiskDialog::Remove(dialog) => dialog.submitting,
+    }
+}
+
+fn disk_dialog_error(dialog: &mut crate::state::DiskDialog, message: String) {
+    match dialog {
+        crate::state::DiskDialog::Add(dialog) => {
+            dialog.submitting = false;
+            dialog.error = Some(message);
+        }
+        crate::state::DiskDialog::Resize(dialog) => {
+            dialog.submitting = false;
+            dialog.error = Some(message);
+        }
+        crate::state::DiskDialog::Remove(dialog) => {
+            dialog.submitting = false;
+            dialog.error = Some(message);
+        }
     }
 }

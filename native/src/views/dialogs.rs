@@ -30,6 +30,9 @@ pub fn show(
     if state.iso_dialog.is_some() {
         iso_dialog(ctx, state, actions);
     }
+    if state.disk_dialog.is_some() {
+        disk_dialog(ctx, state, actions);
+    }
     if state.vif_dialog.is_some() {
         vif_dialog(ctx, state, actions);
     }
@@ -549,6 +552,220 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
     if close {
         actions.push(UiAction::CloseVmEdit);
     }
+}
+
+fn disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.disk_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("disk-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(540.0);
+            match dialog {
+                crate::state::DiskDialog::Add(dialog) => {
+                    modal_title(
+                        ui,
+                        "Add virtual disk",
+                        "Create a new disk in a storage repository. The VM must be shut down.",
+                    );
+                    widgets::field_label(ui, "Storage repository");
+                    let selected = dialog
+                        .sr_uuid
+                        .as_ref()
+                        .and_then(|uuid| dialog.srs.iter().find(|(sr_uuid, _, _)| sr_uuid == uuid))
+                        .map(|(_, name, free)| {
+                            format!("{name} · {} free", crate::format::bytes(*free))
+                        })
+                        .unwrap_or_else(|| "Select a storage repository".into());
+                    ui.add_enabled_ui(!dialog.submitting, |ui| {
+                        egui::ComboBox::from_id_salt("disk-sr")
+                            .selected_text(RichText::new(selected).size(11.0))
+                            .width(ui.available_width())
+                            .show_ui(ui, |ui| {
+                                for (uuid, name, free) in &dialog.srs {
+                                    let text =
+                                        format!("{name} · {} free", crate::format::bytes(*free));
+                                    let checked = dialog.sr_uuid.as_deref() == Some(uuid.as_str());
+                                    if ui
+                                        .selectable_label(checked, RichText::new(text).size(11.0))
+                                        .clicked()
+                                    {
+                                        dialog.sr_uuid = Some(uuid.clone());
+                                    }
+                                }
+                            });
+                    });
+                    ui.add_space(8.0);
+                    disk_size_field(ui, "Size (GiB)", &mut dialog.size_gib, !dialog.submitting);
+                    ui.add_space(8.0);
+                    widgets::field_label(ui, "Disk name (optional)");
+                    ui.add_enabled(
+                        !dialog.submitting,
+                        egui::TextEdit::singleline(&mut dialog.name)
+                            .desired_width(f32::INFINITY)
+                            .hint_text("Generated from the VM name")
+                            .char_limit(255)
+                            .margin(egui::Margin::symmetric(8, 5)),
+                    );
+                    if let Some(error) = &dialog.error {
+                        ui.add_space(8.0);
+                        ui.label(RichText::new(error).size(10.0).color(red()));
+                    }
+                    dialog_footer(ui, dialog.submitting, "Add disk", &mut close, &mut save);
+                }
+                crate::state::DiskDialog::Resize(dialog) => {
+                    modal_title(
+                        ui,
+                        "Resize virtual disk",
+                        "Disks can be increased while the VM is shut down.",
+                    );
+                    ui.label(
+                        RichText::new(format!(
+                            "{} · current size {} GiB",
+                            dialog.name, dialog.current_gib
+                        ))
+                        .size(11.0)
+                        .color(muted_fg()),
+                    );
+                    ui.add_space(8.0);
+                    disk_size_field(
+                        ui,
+                        "New size (GiB)",
+                        &mut dialog.size_gib,
+                        !dialog.submitting,
+                    );
+                    if let Some(error) = &dialog.error {
+                        ui.add_space(8.0);
+                        ui.label(RichText::new(error).size(10.0).color(red()));
+                    }
+                    dialog_footer(ui, dialog.submitting, "Resize disk", &mut close, &mut save);
+                }
+                crate::state::DiskDialog::Remove(dialog) => {
+                    modal_title(
+                        ui,
+                        "Remove virtual disk",
+                        "Detach the disk from this VM. The VM must be shut down.",
+                    );
+                    ui.label(RichText::new(&dialog.name).size(11.5).strong());
+                    ui.add_space(8.0);
+                    ui.add_enabled(
+                        dialog.owner && !dialog.submitting,
+                        egui::Checkbox::new(
+                            &mut dialog.delete_vdi,
+                            RichText::new("Delete the disk from storage").size(10.5),
+                        ),
+                    );
+                    if !dialog.owner {
+                        ui.label(
+                            RichText::new("This disk is shared; only the attachment is removed.")
+                                .size(9.0)
+                                .color(amber()),
+                        );
+                    }
+                    ui.label(
+                        RichText::new("Deleting the disk cannot be undone.")
+                            .size(9.0)
+                            .color(red()),
+                    );
+                    if let Some(error) = &dialog.error {
+                        ui.add_space(8.0);
+                        ui.label(RichText::new(error).size(10.0).color(red()));
+                    }
+                    ui.add_space(12.0);
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_enabled(
+                                !dialog.submitting,
+                                egui::Button::new(RichText::new("Cancel").size(11.0)),
+                            )
+                            .clicked()
+                        {
+                            close = true;
+                        }
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui
+                                .add_enabled(
+                                    !dialog.submitting,
+                                    egui::Button::new(
+                                        RichText::new(if dialog.submitting {
+                                            "Removing…"
+                                        } else {
+                                            "Remove disk"
+                                        })
+                                        .size(11.0)
+                                        .color(red()),
+                                    )
+                                    .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120))),
+                                )
+                                .clicked()
+                            {
+                                save = true;
+                            }
+                        });
+                    });
+                }
+            }
+        });
+    let submitting = match dialog {
+        crate::state::DiskDialog::Add(dialog) => dialog.submitting,
+        crate::state::DiskDialog::Resize(dialog) => dialog.submitting,
+        crate::state::DiskDialog::Remove(dialog) => dialog.submitting,
+    };
+    if response.should_close() && !submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveDiskDialog);
+    }
+    if close {
+        actions.push(UiAction::CloseDiskDialog);
+    }
+}
+
+fn disk_size_field(ui: &mut Ui, label: &str, value: &mut String, enabled: bool) {
+    widgets::field_label(ui, label);
+    ui.add_enabled(
+        enabled,
+        egui::TextEdit::singleline(value)
+            .desired_width(f32::INFINITY)
+            .char_limit(8)
+            .margin(egui::Margin::symmetric(8, 5)),
+    );
+}
+
+fn dialog_footer(
+    ui: &mut Ui,
+    submitting: bool,
+    save_label: &str,
+    close: &mut bool,
+    save: &mut bool,
+) {
+    ui.add_space(12.0);
+    ui.horizontal(|ui| {
+        if ui
+            .add_enabled(
+                !submitting,
+                egui::Button::new(RichText::new("Cancel").size(11.0)),
+            )
+            .clicked()
+        {
+            *close = true;
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if ui
+                .add_enabled(
+                    !submitting,
+                    widgets::primary_button(if submitting { "Working…" } else { save_label }),
+                )
+                .clicked()
+            {
+                *save = true;
+            }
+        });
+    });
 }
 
 fn vif_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {

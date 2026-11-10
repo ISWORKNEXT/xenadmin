@@ -686,6 +686,45 @@ impl ConsoleState {
     }
 }
 
+pub struct DiskAddDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub srs: Vec<(String, String, u64)>,
+    pub sr_uuid: Option<String>,
+    pub name: String,
+    pub size_gib: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct DiskResizeDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub vdi_uuid: String,
+    pub name: String,
+    pub current_gib: u64,
+    pub size_gib: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct DiskRemoveDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub vbd_uuid: String,
+    pub name: String,
+    pub owner: bool,
+    pub delete_vdi: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub enum DiskDialog {
+    Add(DiskAddDialog),
+    Resize(DiskResizeDialog),
+    Remove(DiskRemoveDialog),
+}
+
 pub struct VifDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -753,6 +792,7 @@ pub struct UiState {
     pub iso_dialog: Option<IsoDialog>,
     pub vif_dialog: Option<VifDialog>,
     pub vif_confirm: Option<VifConfirm>,
+    pub disk_dialog: Option<DiskDialog>,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -809,6 +849,7 @@ impl Default for UiState {
             iso_dialog: None,
             vif_dialog: None,
             vif_confirm: None,
+            disk_dialog: None,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -893,6 +934,19 @@ pub enum UiAction {
     },
     CloseIsoDialog,
     SaveIso,
+    OpenAddDisk,
+    OpenDiskResize {
+        vdi_uuid: String,
+        name: String,
+        current_gib: u64,
+    },
+    PromptRemoveDisk {
+        vbd_uuid: String,
+        name: String,
+        owner: bool,
+    },
+    CloseDiskDialog,
+    SaveDiskDialog,
     OpenVifDialog,
     CloseVifDialog,
     SaveVif,

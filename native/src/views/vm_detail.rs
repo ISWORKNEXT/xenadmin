@@ -107,7 +107,15 @@ pub fn show(
         VmTab::Performance => performance(ui, state, actions),
         VmTab::Storage => {
             if let Some(details) = details_state(ui, state, actions) {
-                storage(ui, read_only, is_template, is_snapshot, &details, actions);
+                storage(
+                    ui,
+                    read_only,
+                    is_template,
+                    is_snapshot,
+                    vm.power_state == "Halted",
+                    &details,
+                    actions,
+                );
             }
         }
         VmTab::Network => {
@@ -1296,15 +1304,37 @@ fn storage(
     read_only: bool,
     is_template: bool,
     is_snapshot: bool,
+    halted: bool,
     details: &VmDetails,
     actions: &mut Vec<UiAction>,
 ) {
     let disks = &details.disks;
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
+        let editable = !read_only && !is_template && !is_snapshot;
         ui.horizontal(|ui| {
             ui.label(RichText::new("Virtual disks").size(15.0).strong());
             widgets::badge(ui, disks.len().to_string(), muted_fg());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(editable && halted, widgets::primary_button("Add disk"))
+                    .on_hover_text(if halted {
+                        "Create a new virtual disk"
+                    } else {
+                        "Shut down the VM to add a disk"
+                    })
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenAddDisk);
+                }
+                if editable && !halted {
+                    ui.label(
+                        RichText::new("Shut down to edit disks")
+                            .size(9.0)
+                            .color(dim_fg()),
+                    );
+                }
+            });
         });
         ui.add_space(6.0);
         if disks.is_empty() {
@@ -1325,8 +1355,11 @@ fn storage(
             .column(Column::exact(95.0))
             .column(Column::exact(80.0))
             .column(Column::exact(80.0))
+            .column(Column::exact(150.0))
             .header(28.0, |mut header| {
-                for title in ["Device", "VDI", "SR", "Size", "Attached", "Bootable"] {
+                for title in [
+                    "Device", "VDI", "SR", "Size", "Attached", "Bootable", "Actions",
+                ] {
                     header.col(|ui| {
                         ui.label(RichText::new(title).size(10.0).color(muted_fg()));
                     });
@@ -1383,6 +1416,57 @@ fn storage(
                                 .size(10.5)
                                 .color(muted_fg()),
                         );
+                    });
+                    row.col(|ui| {
+                        if disk.is_cd {
+                            ui.label(RichText::new("CD media below").size(9.0).color(dim_fg()));
+                            return;
+                        }
+                        if !editable {
+                            ui.label(RichText::new("—").size(10.0).color(dim_fg()));
+                            return;
+                        }
+                        let gib = disk.virtual_size.div_ceil(1024 * 1024 * 1024);
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 4.0;
+                            if ui
+                                .add_enabled(
+                                    halted,
+                                    egui::Button::new(RichText::new("Resize").size(9.5)).small(),
+                                )
+                                .clicked()
+                            {
+                                actions.push(UiAction::OpenDiskResize {
+                                    vdi_uuid: disk.vdi_uuid.clone(),
+                                    name: if disk.vdi_name.is_empty() {
+                                        format!("Disk {}", disk.device)
+                                    } else {
+                                        disk.vdi_name.clone()
+                                    },
+                                    current_gib: gib,
+                                });
+                            }
+                            if ui
+                                .add_enabled(
+                                    halted,
+                                    egui::Button::new(
+                                        RichText::new("Remove").size(9.5).color(red()),
+                                    )
+                                    .small(),
+                                )
+                                .clicked()
+                            {
+                                actions.push(UiAction::PromptRemoveDisk {
+                                    vbd_uuid: disk.vbd_uuid.clone(),
+                                    name: if disk.vdi_name.is_empty() {
+                                        format!("Disk {}", disk.device)
+                                    } else {
+                                        disk.vdi_name.clone()
+                                    },
+                                    owner: disk.owner,
+                                });
+                            }
+                        });
                     });
                 });
             });
