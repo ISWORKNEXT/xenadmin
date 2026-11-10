@@ -1,20 +1,22 @@
 use egui::{
-    Align2, Button, Color32, CornerRadius, Frame, Label, Margin, Rect, Response, RichText, Sense,
-    Stroke, Ui, Vec2,
+    Align2, Button, Color32, CornerRadius, FontId, Frame, Label, Margin, Rect, Response, RichText,
+    Sense, Stroke, Ui, Vec2,
 };
 
 use crate::state::{ToastKind, UiAction, UiState};
 use crate::theme::*;
 
 pub fn badge(ui: &mut Ui, text: impl Into<String>, color: Color32) -> Response {
-    Frame::NONE
-        .fill(with_alpha(color, 26))
-        .corner_radius(CornerRadius::same(20))
-        .inner_margin(Margin::symmetric(8, 2))
-        .show(ui, |ui| {
-            ui.label(RichText::new(text).size(10.5).color(color).strong());
-        })
-        .response
+    let text = text.into();
+    let font = FontId::proportional(11.0);
+    let galley = ui.painter().layout_no_wrap(text, font, color);
+    let size = Vec2::new(galley.size().x + 18.0, galley.size().y + 6.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    ui.painter()
+        .rect_filled(rect, CornerRadius::same(20), with_alpha(color, 26));
+    ui.painter()
+        .galley(rect.min + Vec2::new(9.0, 3.0), galley, color);
+    response
 }
 
 pub fn dot(ui: &mut Ui, color: Color32, size: f32) {
@@ -27,7 +29,7 @@ pub fn power_badge(ui: &mut Ui, state: &str) -> Response {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         dot(ui, color, 6.0);
-        ui.label(RichText::new(label).size(11.5).color(color));
+        ui.label(RichText::new(label).size(12.5).color(color));
     })
     .response
 }
@@ -90,17 +92,17 @@ pub fn search_field(ui: &mut Ui, value: &mut String, hint: &str) -> Response {
 }
 
 pub fn section_title(ui: &mut Ui, title: &str, subtitle: Option<&str>) {
-    ui.label(RichText::new(title).size(14.0).strong().color(fg()));
+    ui.label(RichText::new(title).size(15.0).strong().color(fg()));
     if let Some(subtitle) = subtitle {
-        ui.label(RichText::new(subtitle).size(11.0).color(muted_fg()));
+        ui.label(RichText::new(subtitle).size(12.0).color(muted_fg()));
     }
 }
 
 pub fn panel_heading(ui: &mut Ui, title: &str, subtitle: &str, right: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
-            ui.label(RichText::new(title).size(14.0).strong());
-            ui.label(RichText::new(subtitle).size(11.0).color(muted_fg()));
+            ui.label(RichText::new(title).size(15.0).strong());
+            ui.label(RichText::new(subtitle).size(12.0).color(muted_fg()));
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             right(ui);
@@ -112,12 +114,12 @@ pub fn kv(ui: &mut Ui, label: &str, value: &str, mono: bool) {
     ui.horizontal(|ui| {
         ui.add_sized(
             [130.0, 18.0],
-            Label::new(RichText::new(label).size(11.5).color(muted_fg())),
+            Label::new(RichText::new(label).size(12.5).color(muted_fg())),
         );
         let text = if mono {
-            RichText::new(value).monospace().size(11.5)
+            RichText::new(value).monospace().size(12.5)
         } else {
-            RichText::new(value).size(12.0)
+            RichText::new(value).size(13.0)
         };
         ui.add(Label::new(text).wrap());
     });

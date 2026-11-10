@@ -1,8 +1,8 @@
 # Native desktop client
 
-Pure Rust `egui`/`eframe` client for XCP-ng and XenServer. It shares the
-`xen-core` crate with the legacy Tauri client but has no WebView, React,
-shadcn/ui or Tauri dependency.
+Pure Rust `egui`/`eframe` client for XCP-ng and XenServer. It uses the shared
+`crates/xen-core` crate and has no WebView, React, shadcn/ui or Tauri
+dependency.
 
 ## Layout
 
@@ -20,7 +20,8 @@ native/
       sidebar.rs     navigation and connection tree
       chrome.rs      custom title bar/tabs, footer, resize handles
       content.rs     page header, scope toolbar, offline state
-      overview.rs    stats, connection cards, resources
+      overview.rs    all-connections home
+      pool_page.rs   pool summary, hosts, storage, networks, VMs
       inventory.rs   VM/template tables, host cards, storage, networks
       tasks.rs       XenAPI task list
       vm_detail.rs   right-side VM detail panel

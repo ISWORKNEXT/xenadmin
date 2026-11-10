@@ -14,6 +14,7 @@ default and a persisted dark-theme toggle.
 - Multiple pools with independent sessions, an all-connections home view and
   connection/host scopes.
 - Infrastructure tree with search, context menus and object tabs.
+- Pool overview page with hosts, storage, networks and VM summary.
 - VM lifecycle: start, clean shutdown/reboot, force shutdown/reboot, pause,
   unpause, suspend, resume, clone, disk snapshot and snapshot revert.
 - Bulk actions with an explicit target review dialog.
@@ -24,6 +25,7 @@ default and a persisted dark-theme toggle.
   Hardware, Updates, Certificates, Health.
 - Host RRD charts for 15 minutes, 1 hour and 24 hours, with gap handling.
 - Light/white theme by default; dark theme toggle persisted in `ui.json`.
+- Adjustable UI scale (110% by default) from the title bar or with `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`.
 - Keyboard navigation: `Ctrl+K` tree search, `F5` refresh, `Ctrl+W` close tab.
 
 The native client is still growing toward full XCP-ng Center parity. See

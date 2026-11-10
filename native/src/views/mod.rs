@@ -4,6 +4,7 @@ pub mod dialogs;
 pub mod host_details;
 pub mod inventory;
 pub mod overview;
+pub mod pool_page;
 pub mod resource_page;
 pub mod sidebar;
 pub mod tasks;

@@ -156,6 +156,22 @@ pub enum ObjectKey {
     Tasks,
 }
 
+impl ObjectKey {
+    pub fn connection_id(&self) -> Option<&str> {
+        match self {
+            ObjectKey::Home | ObjectKey::Tasks => None,
+            ObjectKey::Pool(id) => Some(id),
+            ObjectKey::Host { connection_id, .. }
+            | ObjectKey::Vm { connection_id, .. }
+            | ObjectKey::Template { connection_id, .. }
+            | ObjectKey::Snapshot { connection_id, .. }
+            | ObjectKey::Storage { connection_id, .. }
+            | ObjectKey::Network { connection_id, .. } => Some(connection_id),
+            ObjectKey::List { connection_id, .. } => connection_id.as_deref(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ObjectTab {
     pub key: ObjectKey,

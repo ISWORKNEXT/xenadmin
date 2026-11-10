@@ -140,8 +140,8 @@ pub fn cyan() -> Color32 {
 }
 
 pub const GAP: f32 = 8.0;
-pub const PAD: f32 = 14.0;
-pub const RADIUS: u8 = 10;
+pub const PAD: f32 = 16.0;
+pub const RADIUS: u8 = 12;
 
 pub fn with_alpha(color: Color32, alpha: u8) -> Color32 {
     Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
@@ -216,20 +216,20 @@ pub fn apply(ctx: &egui::Context) {
     visuals.widgets.open = visuals.widgets.active;
 
     style.visuals = visuals;
-    style.spacing.item_spacing = Vec2::new(8.0, 6.0);
-    style.spacing.button_padding = Vec2::new(10.0, 4.0);
-    style.spacing.interact_size = Vec2::new(0.0, 26.0);
+    style.spacing.item_spacing = Vec2::new(9.0, 7.0);
+    style.spacing.button_padding = Vec2::new(11.0, 5.0);
+    style.spacing.interact_size = Vec2::new(0.0, 28.0);
     style.spacing.window_margin = Margin::same(0);
     style.spacing.menu_margin = Margin::same(6);
     style.spacing.indent = 16.0;
-    style.spacing.scroll.bar_width = 8.0;
+    style.spacing.scroll.bar_width = 10.0;
     style.spacing.scroll.floating = true;
     style.text_styles = [
-        (TextStyle::Small, FontId::proportional(10.5)),
-        (TextStyle::Body, FontId::proportional(12.5)),
-        (TextStyle::Button, FontId::proportional(12.5)),
-        (TextStyle::Heading, FontId::proportional(21.0)),
-        (TextStyle::Monospace, FontId::monospace(11.5)),
+        (TextStyle::Small, FontId::proportional(11.5)),
+        (TextStyle::Body, FontId::proportional(13.5)),
+        (TextStyle::Button, FontId::proportional(13.0)),
+        (TextStyle::Heading, FontId::proportional(23.0)),
+        (TextStyle::Monospace, FontId::monospace(12.5)),
     ]
     .into();
 

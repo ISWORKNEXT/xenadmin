@@ -14,8 +14,8 @@ use crate::state::{
 use crate::theme::*;
 use crate::widgets;
 
-const TREE_WIDTH: f32 = 300.0;
-const ROW_HEIGHT: f32 = 24.0;
+const TREE_WIDTH: f32 = 310.0;
+const ROW_HEIGHT: f32 = 28.0;
 
 #[derive(Clone, Copy)]
 enum TreeIcon {
@@ -79,7 +79,7 @@ pub fn show(
                 ui.label(
                     RichText::new("Ctrl+K search · F5 refresh · Ctrl+W close tab")
                         .monospace()
-                        .size(8.5)
+                        .size(9.5)
                         .color(dim_fg()),
                 );
             });
@@ -88,11 +88,11 @@ pub fn show(
 
 fn header(ui: &mut Ui, state: &mut UiState, workspace: &WorkspaceView) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new("INFRASTRUCTURE").size(9.0).color(dim_fg()));
+        ui.label(RichText::new("INFRASTRUCTURE").size(10.0).color(dim_fg()));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if ui
                 .add(
-                    egui::Button::new(RichText::new("+").size(15.0).color(muted_fg())).frame(false),
+                    egui::Button::new(RichText::new("+").size(17.0).color(muted_fg())).frame(false),
                 )
                 .on_hover_text("Add connection")
                 .clicked()
@@ -106,7 +106,7 @@ fn header(ui: &mut Ui, state: &mut UiState, workspace: &WorkspaceView) {
                     workspace.connections.len()
                 ))
                 .monospace()
-                .size(9.0)
+                .size(10.0)
                 .color(dim_fg()),
             );
         });
@@ -532,7 +532,7 @@ fn host_leaf(
         ui.separator();
         ui.label(
             RichText::new(format!("{} · {}", host.address, host.version))
-                .size(9.0)
+                .size(10.0)
                 .color(dim_fg()),
         );
         let _ = workspace;
@@ -591,7 +591,7 @@ fn vm_leaf(
             .find(|connection| crate::state::connection_id(connection) == connection_id)
             .is_some_and(is_read_only);
         if read_only {
-            ui.label(RichText::new("Read-only").size(9.0).color(amber()));
+            ui.label(RichText::new("Read-only").size(10.0).color(amber()));
         }
         for kind in ActionKind::MENU {
             let allowed = action_allowed(workspace, connection_id, vm, kind.operation());
@@ -599,7 +599,7 @@ fn vm_leaf(
             if ui
                 .add_enabled(
                     allowed,
-                    egui::Button::new(RichText::new(kind.label()).size(10.5).color(color))
+                    egui::Button::new(RichText::new(kind.label()).size(11.5).color(color))
                         .frame(false),
                 )
                 .clicked()
@@ -764,10 +764,10 @@ fn tree_row_colored(
 ) -> (egui::Response, Option<egui::Response>) {
     let width = ui.available_width().max(120.0);
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::hover());
-    let indent = depth as f32 * 14.0;
+    let indent = depth as f32 * 16.0;
     let chevron_rect = Rect::from_min_size(
         pos2(rect.left() + indent, rect.top()),
-        vec2(16.0, ROW_HEIGHT),
+        vec2(18.0, ROW_HEIGHT),
     );
     let main_rect = Rect::from_min_max(
         pos2(chevron_rect.right(), rect.top()),
@@ -839,8 +839,8 @@ fn tree_row_colored(
     }
 
     let icon_rect = Rect::from_min_size(
-        pos2(rect.left() + indent + 17.0, rect.top() + 6.0),
-        Vec2::splat(12.0),
+        pos2(rect.left() + indent + 19.0, rect.top() + 7.0),
+        Vec2::splat(14.0),
     );
     paint_icon(
         painter,
@@ -849,11 +849,17 @@ fn tree_row_colored(
         if selected { accent() } else { icon_color },
     );
     let text_color = if selected { fg() } else { muted_fg() };
+    let text_x = icon_rect.right() + 6.0;
+    let badge_width = badge
+        .as_ref()
+        .map_or(0.0, |value| value.chars().count() as f32 * 6.0 + 18.0);
+    let max_chars = (((rect.right() - text_x - badge_width) / 6.6).max(8.0)) as usize;
+    let label = crate::format::truncate(label, max_chars);
     painter.text(
-        pos2(icon_rect.right() + 6.0, rect.center().y),
+        pos2(text_x, rect.center().y),
         Align2::LEFT_CENTER,
         label,
-        FontId::proportional(11.0),
+        FontId::proportional(12.0),
         text_color,
     );
     if task_dot {
@@ -865,7 +871,7 @@ fn tree_row_colored(
             pos2(rect.right() - 8.0, rect.center().y),
             Align2::RIGHT_CENTER,
             badge,
-            FontId::monospace(8.5),
+            FontId::monospace(9.5),
             if selected { muted_fg() } else { dim_fg() },
         );
     }

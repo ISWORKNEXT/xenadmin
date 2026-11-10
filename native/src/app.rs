@@ -44,7 +44,9 @@ impl App {
             vm: startup_vm,
             light: startup_light,
         } = options;
-        theme::set_light(startup_light.unwrap_or_else(crate::config::load_light_preference));
+        let preferences = crate::config::load_ui_preferences();
+        theme::set_light(startup_light.unwrap_or(preferences.light));
+        cc.egui_ctx.set_zoom_factor(preferences.zoom);
         theme::apply(&cc.egui_ctx);
         let worker = Worker::start();
         for entry in startup {
@@ -195,6 +197,31 @@ impl App {
         self.state.active_tab = index;
         let key = self.state.object_tabs[index].key.clone();
         self.state.tree_selection = Some(key.clone());
+        if let Some(connection_id) = key.connection_id() {
+            self.state
+                .tree_expanded
+                .insert(format!("pool:{connection_id}"));
+            let group = match &key {
+                ObjectKey::Host { .. } => Some("Hosts"),
+                ObjectKey::Vm { .. } | ObjectKey::Snapshot { .. } => Some("Vms"),
+                ObjectKey::Template { .. } => Some("Templates"),
+                ObjectKey::Storage { .. } => Some("Storage"),
+                ObjectKey::Network { .. } => Some("Networks"),
+                ObjectKey::List { kind, .. } => Some(match kind {
+                    ListKind::Vms => "Vms",
+                    ListKind::Hosts => "Hosts",
+                    ListKind::Templates => "Templates",
+                    ListKind::Storage => "Storage",
+                    ListKind::Networks => "Networks",
+                }),
+                _ => None,
+            };
+            if let Some(group) = group {
+                self.state
+                    .tree_expanded
+                    .insert(format!("group:{group}:{connection_id}"));
+            }
+        }
         self.state.selected.clear();
         self.state.page = 0;
         self.state.detail = None;
@@ -515,6 +542,7 @@ impl App {
         let mut focus_search = false;
         let mut refresh = false;
         let mut close_tab = false;
+        let mut zoom_action = None;
         ctx.input_mut(|input| {
             if input.consume_key(egui::Modifiers::COMMAND, egui::Key::K) {
                 focus_search = true;
@@ -524,6 +552,17 @@ impl App {
             }
             if input.consume_key(egui::Modifiers::COMMAND, egui::Key::W) {
                 close_tab = true;
+            }
+            if input.consume_key(egui::Modifiers::COMMAND, egui::Key::Plus)
+                || input.consume_key(egui::Modifiers::COMMAND, egui::Key::Equals)
+            {
+                zoom_action = Some(1);
+            }
+            if input.consume_key(egui::Modifiers::COMMAND, egui::Key::Minus) {
+                zoom_action = Some(-1);
+            }
+            if input.consume_key(egui::Modifiers::COMMAND, egui::Key::Num0) {
+                zoom_action = Some(0);
             }
         });
         if focus_search {
@@ -535,6 +574,22 @@ impl App {
         if refresh {
             let connection = self.state.scope.connection_id().map(str::to_owned);
             self.apply(vec![UiAction::Refresh(connection)]);
+        }
+        if let Some(direction) = zoom_action {
+            let next = if direction == 0 {
+                crate::config::default_zoom()
+            } else {
+                (ctx.zoom_factor() + direction as f32 * 0.05).clamp(0.8, 1.6)
+            };
+            ctx.set_zoom_factor(next);
+            crate::config::save_ui_preferences(&crate::config::UiPreferences {
+                light: theme::is_light(),
+                zoom: next,
+            });
+            self.state.toasts.push(Toast::new(
+                format!("UI scale {:.0}%", next * 100.0),
+                ToastKind::Info,
+            ));
         }
     }
 

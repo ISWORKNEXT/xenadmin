@@ -12,7 +12,7 @@ dependency.
 | UI toolkit | `egui` 0.37, `egui_extras` tables |
 | Async/runtime | Tokio multi-thread runtime in a dedicated worker thread |
 | Protocol | `xen-core`: reqwest + rustls, XenAPI JSON-RPC, RRD HTTP |
-| Persistence | `connections.json` in the platform config directory; no passwords |
+| Persistence | `connections.json` and `ui.json` in the platform config directory; no passwords |
 
 ## Implemented screens
 
@@ -20,7 +20,8 @@ dependency.
 | --- | --- | --- |
 | Connection dialog | Implemented | Label, host, username, password, read-only, per-connection TLS bypass; production host is locked read-only |
 | Infrastructure tree | Implemented | Pools → hosts, VMs, templates, storage and networks; search, expand/collapse and context menus |
-| Overview | Implemented | Pool/host/VM/task stats, connection cards, memory and storage allocation, recent VMs |
+| Overview | Implemented | All-connections home with pool/host/VM/task stats, resources and recent VMs |
+| Pool page | Implemented | Pool header, hosts, storage usage, networks and VM summary with object links |
 | Virtual machines | Implemented | Search, power filter, 25-row pagination, multi-select, bulk actions, connection-scoped rows |
 | Templates | Implemented | Search/power filter, detail dialog |
 | Hosts | Implemented | Host cards with CPU/memory, “view VMs”, host details |
@@ -34,9 +35,11 @@ dependency.
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
 | Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |
 | Themes | Implemented | Light/white theme by default with a persisted dark toggle |
+| UI scale | Implemented | 110% default, title-bar control and `Ctrl+Plus` / `Ctrl+Minus` / `Ctrl+0`, persisted in `ui.json` |
 
 Keyboard shortcuts: `Ctrl+K` focuses the Infrastructure search, `F5` refreshes
-the active scope, `Ctrl+W` closes the active object tab, `Esc` closes modals.
+the active scope, `Ctrl+W` closes the active object tab, `Ctrl+Plus` /
+`Ctrl+Minus` / `Ctrl+0` adjust the UI scale, and `Esc` closes modals.
 
 ## Verification
 

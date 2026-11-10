@@ -4,15 +4,16 @@ use egui::{
 };
 use xen_core::workspace::WorkspaceView;
 
+use crate::config;
 use crate::state::{
-    ObjectKey, Scope, UiAction, UiState, connected_connections, connection_inventory,
-    find_connection, is_read_only,
+    ActionKind, ObjectKey, Scope, UiAction, UiState, action_allowed, connected_connections,
+    connection_inventory, find_connection, find_vm, is_read_only,
 };
 use crate::theme;
 use crate::theme::*;
 use crate::widgets;
 
-const TITLEBAR_HEIGHT: f32 = 46.0;
+const TITLEBAR_HEIGHT: f32 = 50.0;
 
 pub fn titlebar(
     ui: &mut Ui,
@@ -61,6 +62,8 @@ pub fn titlebar(
                     ui.add_space(8.0);
                     theme_toggle(ui, &ctx);
                     ui.add_space(6.0);
+                    zoom_control(ui, &ctx);
+                    ui.add_space(6.0);
 
                     let running = workspace
                         .tasks
@@ -101,7 +104,7 @@ pub fn toolbar(
     actions: &mut Vec<UiAction>,
 ) {
     egui::Panel::top("toolbar")
-        .exact_size(38.0)
+        .exact_size(42.0)
         .resizable(false)
         .frame(
             Frame::NONE
@@ -144,13 +147,21 @@ pub fn toolbar(
                     });
                 }
                 ui.add_space(6.0);
-                ui.label(RichText::new("Infrastructure").size(10.0).color(dim_fg()));
-                ui.label(RichText::new("›").size(10.0).color(dim_fg()));
-                let title = state
+                ui.label(RichText::new("Infrastructure").size(11.0).color(dim_fg()));
+                ui.label(RichText::new("›").size(11.0).color(dim_fg()));
+                let full_title = state
                     .object_tabs
                     .get(state.active_tab)
                     .map_or("Home", |tab| tab.title.as_str());
-                ui.label(RichText::new(title).size(10.5).strong().color(fg()));
+                let title = crate::format::truncate(full_title, 52);
+                ui.label(RichText::new(title).size(11.5).strong().color(fg()))
+                    .on_hover_text(full_title);
+                if ui.available_width() > 520.0 {
+                    ui.add_space(6.0);
+                    ui.separator();
+                    ui.add_space(2.0);
+                    context_actions(ui, state, workspace, actions);
+                }
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui
@@ -170,7 +181,7 @@ pub fn toolbar(
                             has_connections && !busy,
                             egui::Button::new(
                                 RichText::new(if busy { "Refreshing…" } else { "Refresh" })
-                                    .size(10.5)
+                                    .size(11.5)
                                     .color(if busy { dim_fg() } else { fg() }),
                             ),
                         )
@@ -195,7 +206,7 @@ pub fn object_tabs(
     actions: &mut Vec<UiAction>,
 ) {
     egui::Panel::top("object-tabs")
-        .exact_size(38.0)
+        .exact_size(42.0)
         .resizable(false)
         .frame(
             Frame::NONE
@@ -232,13 +243,15 @@ pub fn object_tabs(
 }
 
 fn object_tab(ui: &mut Ui, title: &str, active: bool, closable: bool) -> (egui::Response, bool) {
-    let font = egui::FontId::proportional(10.5);
+    let full_title = title.to_owned();
+    let title = crate::format::truncate(title, 30);
+    let font = egui::FontId::proportional(11.5);
     let galley = ui
         .painter()
-        .layout_no_wrap(title.to_owned(), font.clone(), fg());
+        .layout_no_wrap(title.clone(), font.clone(), fg());
     let text_width = galley.size().x.min(220.0);
     let width = text_width + if closable { 42.0 } else { 22.0 };
-    let (rect, response) = ui.allocate_exact_size(vec2(width, 28.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(width, 32.0), Sense::click());
     let fill = if active { panel() } else { panel_2() };
     let stroke = if active {
         Stroke::new(1.0, border())
@@ -266,7 +279,7 @@ fn object_tab(ui: &mut Ui, title: &str, active: bool, closable: bool) -> (egui::
     ui.painter().text(
         egui::pos2(rect.left() + 10.0, rect.center().y),
         Align2::LEFT_CENTER,
-        title,
+        &title,
         font,
         color,
     );
@@ -274,7 +287,7 @@ fn object_tab(ui: &mut Ui, title: &str, active: bool, closable: bool) -> (egui::
     if closable {
         let close_rect = Rect::from_center_size(
             egui::pos2(rect.right() - 14.0, rect.center().y),
-            Vec2::splat(16.0),
+            Vec2::splat(18.0),
         );
         let close = ui.interact(
             close_rect,
@@ -296,11 +309,11 @@ fn object_tab(ui: &mut Ui, title: &str, active: bool, closable: bool) -> (egui::
         );
         close_clicked = close.clicked();
     }
-    (response, close_clicked)
+    (response.on_hover_text(full_title), close_clicked)
 }
 
 fn brand(ui: &mut Ui) {
-    let (rect, _) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(rect, CornerRadius::same(7), with_alpha(accent(), 30));
     painter.rect_stroke(
@@ -313,17 +326,151 @@ fn brand(ui: &mut Ui) {
         rect.center(),
         Align2::CENTER_CENTER,
         "X",
-        FontId::proportional(13.0),
+        FontId::proportional(14.0),
         accent(),
     );
-    ui.label(RichText::new("Xen Desktop").size(12.5).strong().color(fg()));
-    ui.label(RichText::new("XCP-ng").size(9.0).color(dim_fg()));
+    ui.label(RichText::new("Xen Desktop").size(13.5).strong().color(fg()));
+    ui.label(RichText::new("XCP-ng").size(9.5).color(dim_fg()));
 }
 
 fn separator(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(1.0, 18.0), Sense::hover());
     ui.painter()
         .vline(rect.center().x, rect.y_range(), Stroke::new(1.0, border()));
+}
+
+fn context_actions(
+    ui: &mut Ui,
+    state: &UiState,
+    workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
+) {
+    let Some(key) = state.object_tabs.get(state.active_tab).map(|tab| &tab.key) else {
+        return;
+    };
+    match key {
+        ObjectKey::Vm {
+            connection_id,
+            vm_uuid,
+        } => {
+            let Some((_, vm)) = find_vm(workspace, connection_id, vm_uuid) else {
+                return;
+            };
+            let (start_kind, start_label) = if vm.power_state == "Suspended" {
+                (ActionKind::Resume, "Resume")
+            } else {
+                (ActionKind::Start, "Start")
+            };
+            if ui
+                .add_enabled(
+                    action_allowed(workspace, connection_id, vm, start_kind.operation()),
+                    Button::new(RichText::new(start_label).size(11.0).color(accent())).frame(false),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    start_kind,
+                    vec![(connection_id.clone(), vm_uuid.clone())],
+                ));
+            }
+            if ui
+                .add_enabled(
+                    action_allowed(
+                        workspace,
+                        connection_id,
+                        vm,
+                        ActionKind::Shutdown.operation(),
+                    ),
+                    Button::new(RichText::new("Shut down").size(11.0).color(muted_fg()))
+                        .frame(false),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Shutdown,
+                    vec![(connection_id.clone(), vm_uuid.clone())],
+                ));
+            }
+            if ui
+                .add_enabled(
+                    action_allowed(
+                        workspace,
+                        connection_id,
+                        vm,
+                        ActionKind::Snapshot.operation(),
+                    ),
+                    Button::new(RichText::new("Snapshot").size(11.0).color(muted_fg()))
+                        .frame(false),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Snapshot,
+                    vec![(connection_id.clone(), vm_uuid.clone())],
+                ));
+            }
+            ui.menu_button(RichText::new("More").size(11.0).color(muted_fg()), |ui| {
+                for kind in ActionKind::MENU {
+                    let allowed = action_allowed(workspace, connection_id, vm, kind.operation());
+                    let color = if kind.destructive() { red() } else { fg() };
+                    if ui
+                        .add_enabled(
+                            allowed,
+                            Button::new(RichText::new(kind.label()).size(11.0).color(color))
+                                .frame(false),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::Propose(
+                            kind,
+                            vec![(connection_id.clone(), vm_uuid.clone())],
+                        ));
+                        ui.close();
+                    }
+                }
+            });
+        }
+        ObjectKey::Host { .. } => {
+            if ui
+                .add(
+                    Button::new(
+                        RichText::new("Refresh details")
+                            .size(11.0)
+                            .color(muted_fg()),
+                    )
+                    .frame(false),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::ReloadHostDetails);
+            }
+        }
+        ObjectKey::Snapshot { .. } => {
+            if let ObjectKey::Snapshot {
+                connection_id,
+                vm_uuid,
+            } = key
+                && let Some((_, snapshot)) = find_vm(workspace, connection_id, vm_uuid)
+                && ui
+                    .add_enabled(
+                        action_allowed(
+                            workspace,
+                            connection_id,
+                            snapshot,
+                            ActionKind::Revert.operation(),
+                        ),
+                        Button::new(RichText::new("Revert").size(11.0).color(amber())).frame(false),
+                    )
+                    .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Revert,
+                    vec![(connection_id.clone(), vm_uuid.clone())],
+                ));
+            }
+        }
+        _ => {}
+    }
 }
 
 fn scope_pill(ui: &mut Ui, state: &UiState, workspace: &WorkspaceView) {
@@ -353,7 +500,7 @@ fn scope_pill(ui: &mut Ui, state: &UiState, workspace: &WorkspaceView) {
                 ui.spacing_mut().item_spacing.x = 5.0;
                 widgets::dot(ui, status_color, 5.0);
                 ui.add(
-                    egui::Label::new(RichText::new(label).size(9.5).color(muted_fg())).truncate(),
+                    egui::Label::new(RichText::new(label).size(10.5).color(muted_fg())).truncate(),
                 );
             });
         });
@@ -493,13 +640,43 @@ fn theme_toggle(ui: &mut Ui, ctx: &egui::Context) {
     {
         let light = theme::toggle();
         theme::apply(ctx);
-        crate::config::save_light_preference(light);
+        config::save_ui_preferences(&config::UiPreferences {
+            light,
+            zoom: ctx.zoom_factor(),
+        });
+    }
+}
+
+fn zoom_control(ui: &mut Ui, ctx: &egui::Context) {
+    let current = ctx.zoom_factor();
+    let label = format!("{:.0}%", current * 100.0);
+    if ui
+        .add(Button::new(RichText::new(label).size(10.5).color(muted_fg())).frame(false))
+        .on_hover_text("UI scale — click to cycle · Ctrl+Plus / Ctrl+Minus / Ctrl+0")
+        .clicked()
+    {
+        let next = if current < 0.95 {
+            1.0
+        } else if current < 1.05 {
+            1.1
+        } else if current < 1.2 {
+            1.25
+        } else if current < 1.35 {
+            1.4
+        } else {
+            0.9
+        };
+        ctx.set_zoom_factor(next);
+        config::save_ui_preferences(&config::UiPreferences {
+            light: theme::is_light(),
+            zoom: next,
+        });
     }
 }
 
 pub fn footer(ui: &mut Ui, state: &mut UiState, workspace: &WorkspaceView) {
     egui::Panel::bottom("footer")
-        .exact_size(28.0)
+        .exact_size(30.0)
         .resizable(false)
         .frame(
             Frame::NONE

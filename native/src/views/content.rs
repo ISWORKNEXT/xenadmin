@@ -21,9 +21,10 @@ pub fn show(
         .unwrap_or(ObjectKey::Home);
 
     match key {
-        ObjectKey::Home | ObjectKey::Pool(_) | ObjectKey::List { .. } | ObjectKey::Tasks => {
+        ObjectKey::Home | ObjectKey::List { .. } | ObjectKey::Tasks => {
             workspace_page(ui, state, workspace, actions);
         }
+        ObjectKey::Pool(_) => super::pool_page::show(ui, state, workspace, actions),
         ObjectKey::Host { .. } => super::host_details::show(ui, state, workspace, actions),
         ObjectKey::Vm { .. } | ObjectKey::Template { .. } | ObjectKey::Snapshot { .. } => {
             super::vm_detail::show(ui, state, workspace, actions);
@@ -112,15 +113,15 @@ fn page_header(ui: &mut Ui, state: &mut UiState, workspace: &WorkspaceView) {
                 ui.spacing_mut().item_spacing.x = 2.0;
                 ui.label(
                     RichText::new(state.view.title())
-                        .size(26.0)
+                        .size(28.0)
                         .strong()
                         .color(fg()),
                 );
-                ui.label(RichText::new(".").size(26.0).color(accent()));
+                ui.label(RichText::new(".").size(28.0).color(accent()));
             });
             ui.label(
                 RichText::new(state.view.subtitle())
-                    .size(11.5)
+                    .size(12.5)
                     .color(muted_fg()),
             );
         });

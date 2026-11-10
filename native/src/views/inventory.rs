@@ -88,7 +88,7 @@ pub fn vms(
             }
 
             builder
-                .header(28.0, |mut header| {
+                .header(30.0, |mut header| {
                     if !templates {
                         header.col(|ui| {
                             select_all(ui, state, workspace, &page_targets, selected_on_page);
@@ -102,7 +102,7 @@ pub fn vms(
                         "Memory",
                     ] {
                         header.col(|ui| {
-                            ui.label(RichText::new(title).size(9.5).color(dim_fg()));
+                            ui.label(RichText::new(title).size(10.5).color(dim_fg()));
                         });
                     }
                     if !templates {
@@ -112,7 +112,7 @@ pub fn vms(
                     }
                 })
                 .body(|body| {
-                    body.rows(34.0, page_targets.len(), |mut row| {
+                    body.rows(38.0, page_targets.len(), |mut row| {
                         let target = page_targets[row.index()];
                         let id = key(&target);
                         if !templates {
@@ -128,7 +128,7 @@ pub fn vms(
                             if ui
                                 .add(
                                     Label::new(
-                                        RichText::new(&target.vm.name).size(11.5).color(fg()),
+                                        RichText::new(&target.vm.name).size(12.5).color(fg()),
                                     )
                                     .truncate()
                                     .sense(Sense::click()),
@@ -158,7 +158,7 @@ pub fn vms(
                                 });
                                 ui.label(
                                     RichText::new(&target.vm.host_name)
-                                        .size(9.0)
+                                        .size(10.0)
                                         .color(dim_fg()),
                                 );
                             });
@@ -642,20 +642,20 @@ pub fn storage(
                 .column(Column::exact(90.0))
                 .column(Column::exact(100.0))
                 .column(Column::initial(170.0))
-                .header(28.0, |mut header| {
+                .header(30.0, |mut header| {
                     for title in ["Name", "Connection", "Type", "Capacity", "Usage"] {
                         header.col(|ui| {
-                            ui.label(RichText::new(title).size(9.5).color(dim_fg()));
+                            ui.label(RichText::new(title).size(10.5).color(dim_fg()));
                         });
                     }
                 })
                 .body(|body| {
-                    body.rows(32.0, rows.len(), |mut row| {
+                    body.rows(36.0, rows.len(), |mut row| {
                         let (connection, sr) = rows[row.index()];
                         row.col(|ui| {
                             if ui
                                 .add(
-                                    Label::new(RichText::new(&sr.name).size(11.0))
+                                    Label::new(RichText::new(&sr.name).size(12.0))
                                         .truncate()
                                         .sense(Sense::click()),
                                 )
@@ -773,7 +773,7 @@ pub fn networks(
                 .column(Column::initial(120.0))
                 .column(Column::exact(70.0))
                 .column(Column::initial(150.0))
-                .header(28.0, |mut header| {
+                .header(30.0, |mut header| {
                     for title in [
                         "Name",
                         "Connection",
@@ -782,17 +782,17 @@ pub fn networks(
                         "Physical / virtual interfaces",
                     ] {
                         header.col(|ui| {
-                            ui.label(RichText::new(title).size(9.5).color(dim_fg()));
+                            ui.label(RichText::new(title).size(10.5).color(dim_fg()));
                         });
                     }
                 })
                 .body(|body| {
-                    body.rows(32.0, rows.len(), |mut row| {
+                    body.rows(36.0, rows.len(), |mut row| {
                         let (connection, network) = rows[row.index()];
                         row.col(|ui| {
                             if ui
                                 .add(
-                                    Label::new(RichText::new(&network.name).size(11.0))
+                                    Label::new(RichText::new(&network.name).size(12.0))
                                         .truncate()
                                         .sense(Sense::click()),
                                 )
