@@ -59,7 +59,7 @@
 | Alerts | typed alerts + diagnostics checks | priority 1–4 messages + dismiss บน pool page | ยังไม่มี 34 diagnostic checks/health check service |
 | Tasks | task ของ host + AsyncAction หลายสถานะ | task ที่เราส่ง + host tasks จาก event stream (read-only); task ของเราเก็บใน memory | เห็น task จาก client อื่นแล้ว แต่ยัง cancel/check งานของ client อื่นไม่ได้ |
 | Errors | 774 friendly errors + RBAC errors | 5 mapped messages + generic | ข้อความ error ไม่ละเอียด |
-| Search | XenSearch query/group/saved search | fields + comparators, grouping, editable named saved searches | ยังไม่มีทุก field และ query syntax เชิงลึก |
+| Search | XenSearch query/group/saved search | fields + comparators, AND/OR/NOT + parentheses, grouping, editable saved searches | ยังไม่มีทุก field/saved groups เชิงลึก |
 | TLS | certificate install/reset/trust | per-connection bypass เท่านั้น | จัดการ certificate ไม่ได้ |
 | Proxy | HTTP proxy ตาม settings | per-connection HTTP/SOCKS proxy สำหรับ XenAPI/RRD; console tunnel ยังตรง | ใช้งาน XenAPI หลัง proxy ได้; console ต้องเปิดทางตรง |
 | Password saving | encrypted saved passwords + forget | ไม่บันทึกเลย (ตั้งใจ) | ต้องกรอกรหัสทุกครั้ง |
@@ -155,7 +155,7 @@
 
 ### 10. อื่น ๆ
 
-- XenSearch fields/query syntax เพิ่มเติม (grouping + saved searches มีแล้ว)
+- XenSearch fields/operators เชิงลึกเพิ่มเติม (AND/OR/NOT, grouping, saved searches มีแล้ว)
 - Plugins, i18n/localization
 - Installer/MSI packaging, update check
 - XCM conversion manager
