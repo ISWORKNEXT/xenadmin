@@ -105,6 +105,52 @@ pub struct DrStatus {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct SriovPif {
+    pub uuid: String,
+    pub host_name: String,
+    pub device: String,
+    pub physical_of: Vec<String>,
+    pub logical_of: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SriovNetwork {
+    pub uuid: String,
+    pub name: String,
+    pub purpose: Vec<String>,
+    pub mtu: u64,
+    pub bridge: String,
+    pub host_internal: bool,
+    pub guest_installer: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TunnelInfo {
+    pub uuid: String,
+    pub protocol: String,
+    pub access_device: String,
+    pub transport_device: String,
+    pub status: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct NetworkSriovInfo {
+    pub uuid: String,
+    pub physical_device: String,
+    pub logical_device: String,
+    pub requires_reboot: bool,
+    pub configuration_mode: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SriovStatus {
+    pub pifs: Vec<SriovPif>,
+    pub networks: Vec<SriovNetwork>,
+    pub tunnels: Vec<TunnelInfo>,
+    pub network_sriovs: Vec<NetworkSriovInfo>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct PoolStatus {
     pub name: String,
     pub uuid: String,
@@ -114,6 +160,7 @@ pub struct PoolStatus {
     pub pvs: PvsStatus,
     pub vmss: Vec<VmssStatus>,
     pub dr: Vec<DrStatus>,
+    pub sriov: SriovStatus,
 }
 
 impl Connection {
@@ -138,6 +185,14 @@ impl Connection {
             self.records("PVS_cache_storage"),
             self.records("DR_task")
         );
+        let (pifs, network_sriovs, tunnels) = tokio::join!(
+            self.records("PIF"),
+            self.records("network_sriov"),
+            self.records("tunnel")
+        );
+        let pifs = pifs.unwrap_or_default();
+        let network_sriovs = network_sriovs.unwrap_or_default();
+        let tunnels = tunnels.unwrap_or_default();
         let vmss = vmss.unwrap_or_default();
         let pvs_sites = pvs_sites.unwrap_or_default();
         let pvs_servers = pvs_servers.unwrap_or_default();
@@ -306,6 +361,73 @@ impl Connection {
                     .unwrap_or_default(),
             })
             .collect();
+        let networks = self.records("network").await.unwrap_or_default();
+        let pif_device = |reference: &str| {
+            pifs.get(reference)
+                .map(|pif| field(pif, "device"))
+                .unwrap_or_else(|| reference.to_owned())
+        };
+        let mut sriov_pifs: Vec<SriovPif> = pifs
+            .values()
+            .filter(|pif| {
+                list_len(&pif["sriov_physical_PIF_of"]) > 0
+                    || list_len(&pif["sriov_logical_PIF_of"]) > 0
+            })
+            .map(|pif| SriovPif {
+                uuid: field(pif, "uuid"),
+                host_name: lookup(&hosts, &field(pif, "host")),
+                device: field(pif, "device"),
+                physical_of: ref_labels(&pif["sriov_physical_PIF_of"]),
+                logical_of: ref_labels(&pif["sriov_logical_PIF_of"]),
+            })
+            .collect();
+        sriov_pifs.sort_by(|left, right| {
+            left.host_name
+                .cmp(&right.host_name)
+                .then(left.device.cmp(&right.device))
+        });
+        let mut sriov_networks: Vec<SriovNetwork> = networks
+            .values()
+            .map(|network| {
+                let other = &network["other_config"];
+                SriovNetwork {
+                    uuid: field(network, "uuid"),
+                    name: field(network, "name_label"),
+                    purpose: purpose_list(&network["purpose"]),
+                    mtu: number(network, "MTU"),
+                    bridge: field(network, "bridge"),
+                    host_internal: other["is_host_internal_management_network"]
+                        .as_str()
+                        .is_some_and(|value| value == "true"),
+                    guest_installer: other["is_guest_installer_network"]
+                        .as_str()
+                        .is_some_and(|value| value == "true"),
+                }
+            })
+            .collect();
+        sriov_networks.sort_by(|left, right| left.name.cmp(&right.name));
+        let mut tunnels_info: Vec<TunnelInfo> = tunnels
+            .values()
+            .map(|tunnel| TunnelInfo {
+                uuid: field(tunnel, "uuid"),
+                protocol: field(tunnel, "protocol"),
+                access_device: pif_device(&field(tunnel, "access_PIF")),
+                transport_device: pif_device(&field(tunnel, "transport_PIF")),
+                status: map_label(&tunnel["status"]),
+            })
+            .collect();
+        tunnels_info.sort_by(|left, right| left.uuid.cmp(&right.uuid));
+        let mut network_sriov_info: Vec<NetworkSriovInfo> = network_sriovs
+            .values()
+            .map(|sriov| NetworkSriovInfo {
+                uuid: field(sriov, "uuid"),
+                physical_device: pif_device(&field(sriov, "physical_PIF")),
+                logical_device: pif_device(&field(sriov, "logical_PIF")),
+                requires_reboot: sriov["requires_reboot"].as_bool().unwrap_or(false),
+                configuration_mode: field(sriov, "configuration_mode"),
+            })
+            .collect();
+        network_sriov_info.sort_by(|left, right| left.uuid.cmp(&right.uuid));
         Ok(PoolStatus {
             name: field(pool, "name_label"),
             uuid: field(pool, "uuid"),
@@ -340,6 +462,12 @@ impl Connection {
             },
             vmss: vmss_list,
             dr,
+            sriov: SriovStatus {
+                pifs: sriov_pifs,
+                networks: sriov_networks,
+                tunnels: tunnels_info,
+                network_sriovs: network_sriov_info,
+            },
         })
     }
 }
@@ -360,6 +488,54 @@ fn number(record: &Value, key: &str) -> u64 {
         .as_u64()
         .or_else(|| record[key].as_str().and_then(|value| value.parse().ok()))
         .unwrap_or(0)
+}
+
+fn list_len(value: &Value) -> usize {
+    value.as_array().map_or(0, Vec::len)
+}
+
+fn ref_labels(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|refs| {
+            refs.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn purpose_list(value: &Value) -> Vec<String> {
+    match value {
+        Value::Array(values) => values
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect(),
+        Value::String(value) if !value.is_empty() => vec![value.clone()],
+        _ => Vec::new(),
+    }
+}
+
+fn map_label(value: &Value) -> String {
+    let Some(values) = value.as_object() else {
+        return String::new();
+    };
+    let mut entries: Vec<String> = values
+        .iter()
+        .map(|(key, value)| {
+            format!(
+                "{key}={}",
+                value
+                    .as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| value.to_string())
+            )
+        })
+        .collect();
+    entries.sort();
+    entries.join(", ")
 }
 
 fn schedule_number(schedule: &Value, key: &str) -> u8 {
@@ -436,6 +612,20 @@ mod tests {
         );
         assert_eq!(schedule_label(&json!({})), "");
         assert_eq!(schedule_label(&Value::Null), "");
+    }
+
+    #[test]
+    fn sriov_networks_and_purposes_are_classified() {
+        let purposes = purpose_list(&json!(["insecure_sriov", "private"]));
+        assert_eq!(purposes, vec!["insecure_sriov", "private"]);
+        assert_eq!(purpose_list(&json!("insecure_none")), vec!["insecure_none"]);
+        assert!(purpose_list(&json!([])).is_empty());
+        assert_eq!(
+            map_label(&json!({"active": "true", "link": "up"})),
+            "active=true, link=up"
+        );
+        assert_eq!(list_len(&json!([1, 2])), 2);
+        assert_eq!(ref_labels(&json!(["a", "b"])), vec!["a", "b"]);
     }
 
     #[test]

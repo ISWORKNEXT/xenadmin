@@ -89,6 +89,8 @@ fn render(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_on
         wlb_card(&mut columns[1], status, actions, read_only);
     });
     ui.add_space(8.0);
+    sriov_card(ui, status);
+    ui.add_space(8.0);
     vmss_card(ui, status, actions, read_only);
     ui.add_space(8.0);
     pvs_card(ui, status);
@@ -581,6 +583,168 @@ fn dr_card(ui: &mut Ui, status: &PoolStatus) {
                 .color(muted_fg()),
             );
         }
+    });
+}
+
+fn sriov_card(ui: &mut Ui, status: &PoolStatus) {
+    let sriov = &status.sriov;
+    theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            widgets::section_title(ui, "SR-IOV, tunnels and internal networks", None);
+            widgets::badge(ui, format!("{} PIF", sriov.pifs.len()), accent());
+            widgets::badge(ui, format!("{} tunnel", sriov.tunnels.len()), cyan());
+            widgets::badge(
+                ui,
+                format!("{} network_sriov", sriov.network_sriovs.len()),
+                purple(),
+            );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                widgets::badge(ui, "Read-only discovery", muted_fg());
+            });
+        });
+        ui.add_space(4.0);
+        if sriov.pifs.is_empty() && sriov.tunnels.is_empty() && sriov.network_sriovs.is_empty() {
+            ui.label(
+                RichText::new(
+                    "No SR-IOV or tunnel objects are configured. This view is ready for SR-IOV NICs and cross-pool tunnels when the pool has them.",
+                )
+                .size(10.0)
+                .color(dim_fg()),
+            );
+        }
+        if !sriov.pifs.is_empty() {
+            ui.add_space(4.0);
+            for pif in &sriov.pifs {
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {} · physical of {} · logical of {}",
+                        pif.host_name,
+                        pif.device,
+                        pif.physical_of.len(),
+                        pif.logical_of.len()
+                    ))
+                    .size(9.5)
+                    .color(muted_fg()),
+                );
+            }
+        }
+        if !sriov.network_sriovs.is_empty() {
+            for entry in &sriov.network_sriovs {
+                ui.label(
+                    RichText::new(format!(
+                        "network_sriov {} · {} → {} · reboot={} · {}",
+                        entry.uuid,
+                        entry.physical_device,
+                        entry.logical_device,
+                        entry.requires_reboot,
+                        entry.configuration_mode
+                    ))
+                    .monospace()
+                    .size(9.0)
+                    .color(muted_fg()),
+                );
+            }
+        }
+        if !sriov.tunnels.is_empty() {
+            for tunnel in &sriov.tunnels {
+                ui.label(
+                    RichText::new(format!(
+                        "tunnel {} · {} · {} → {} · {}",
+                        tunnel.uuid,
+                        tunnel.protocol,
+                        tunnel.access_device,
+                        tunnel.transport_device,
+                        tunnel.status
+                    ))
+                    .monospace()
+                    .size(9.0)
+                    .color(muted_fg()),
+                );
+            }
+        }
+        if sriov.networks.is_empty() {
+            return;
+        }
+        ui.add_space(6.0);
+        TableBuilder::new(ui)
+            .id_salt("pool-sriov-networks")
+            .striped(true)
+            .cell_layout(Layout::left_to_right(Align::Center))
+            .column(Column::remainder().at_least(180.0))
+            .column(Column::initial(170.0))
+            .column(Column::exact(70.0))
+            .column(Column::initial(110.0))
+            .column(Column::exact(150.0))
+            .header(24.0, |mut header| {
+                for title in ["Network", "Purpose", "MTU", "Bridge", "Kind"] {
+                    header.col(|ui| {
+                        ui.label(RichText::new(title).size(9.0).color(muted_fg()));
+                    });
+                }
+            })
+            .body(|body| {
+                body.rows(26.0, sriov.networks.len(), |mut row| {
+                    let network = &sriov.networks[row.index()];
+                    row.col(|ui| {
+                        ui.add(
+                            egui::Label::new(RichText::new(&network.name).size(10.0)).truncate(),
+                        );
+                    });
+                    row.col(|ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(if network.purpose.is_empty() {
+                                    "—".to_owned()
+                                } else {
+                                    network.purpose.join(", ")
+                                })
+                                .size(9.0)
+                                .color(muted_fg()),
+                            )
+                            .truncate(),
+                        );
+                    });
+                    row.col(|ui| {
+                        ui.label(
+                            RichText::new(network.mtu.to_string())
+                                .monospace()
+                                .size(9.0),
+                        );
+                    });
+                    row.col(|ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(if network.bridge.is_empty() {
+                                    "—"
+                                } else {
+                                    &network.bridge
+                                })
+                                .monospace()
+                                .size(9.0)
+                                .color(muted_fg()),
+                            )
+                            .truncate(),
+                        );
+                    });
+                    row.col(|ui| {
+                        let (label, color) = if network.host_internal {
+                            ("Host internal", amber())
+                        } else if network.guest_installer {
+                            ("Guest installer", purple())
+                        } else if network
+                            .purpose
+                            .iter()
+                            .any(|purpose| purpose.contains("sriov"))
+                        {
+                            ("SR-IOV", accent())
+                        } else {
+                            ("Regular", dim_fg())
+                        };
+                        ui.label(RichText::new(label).size(9.0).color(color));
+                    });
+                });
+            });
     });
 }
 
