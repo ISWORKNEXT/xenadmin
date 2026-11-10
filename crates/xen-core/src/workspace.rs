@@ -25,6 +25,15 @@ const EVENT_CLASSES: &[&str] = &[
     "network",
     "pool",
     "task",
+    "message",
+    "VBD",
+    "VDI",
+    "PBD",
+    "VM_guest_metrics",
+    "PIF",
+    "Bond",
+    "VIF",
+    "Certificate",
 ];
 
 #[derive(Clone, Deserialize, Serialize)]

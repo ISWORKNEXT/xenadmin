@@ -71,13 +71,17 @@ pub(crate) fn evaluate(raw: &RawInventory) -> HealthReport {
     let checks = vec![
         alerts(raw),
         hosts(raw),
+        overcommit(raw),
         storage(raw),
         network(raw),
+        duplicate_macs(raw),
         pool_hosts(raw),
         ha(raw),
         guest_tools(raw),
         vm_disks(raw),
         vbd_consistency(raw),
+        boot_config(raw),
+        certificate_updates(raw),
     ];
     HealthReport {
         checks,
@@ -178,6 +182,138 @@ fn hosts(raw: &RawInventory) -> DiagnosticCheck {
             "All hosts are enabled and powered on.".into()
         } else {
             format!("{} host issue(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn overcommit(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for (host_ref, host) in &raw.hosts {
+        if host["power_on"].as_bool() == Some(false) {
+            continue;
+        }
+        let name = text(host, "name_label");
+        let cpus = host["host_CPUs"].as_array().map_or(0, Vec::len) as u64;
+        let metrics = raw.host_metrics.get(&text(host, "metrics"));
+        let memory_total = metrics.map_or(0, |metrics| number(metrics, "memory_total"));
+        let memory_free = metrics.map_or(0, |metrics| number(metrics, "memory_free"));
+        let running: Vec<&Value> = raw
+            .vms
+            .values()
+            .filter(|vm| {
+                vm["power_state"].as_str() == Some("Running")
+                    && vm["resident_on"].as_str() == Some(host_ref.as_str())
+            })
+            .collect();
+        let vcpus: u64 = running.iter().map(|vm| number(vm, "VCPUs_max")).sum();
+        let memory: u64 = running
+            .iter()
+            .map(|vm| {
+                let target = number(vm, "memory_target");
+                if target == 0 {
+                    number(vm, "memory_dynamic_max")
+                } else {
+                    target
+                }
+            })
+            .sum();
+        if cpus > 0 && vcpus > cpus.saturating_mul(4) {
+            details.push(format!(
+                "{name}: vCPU overcommit {vcpus}/{cpus} (more than 4x)"
+            ));
+            severity = Severity::Critical;
+        } else if cpus > 0 && vcpus > cpus.saturating_mul(2) {
+            details.push(format!("{name}: vCPU overcommit {vcpus}/{cpus}"));
+            severity = max_severity(severity, Severity::Warning);
+        }
+        if memory_total > 0 {
+            if memory > memory_total.saturating_mul(5) / 4 {
+                details.push(format!(
+                    "{name}: memory overcommit {}/{}",
+                    human_bytes(memory),
+                    human_bytes(memory_total)
+                ));
+                severity = Severity::Critical;
+            } else if memory > memory_total {
+                details.push(format!(
+                    "{name}: memory overcommit {}/{}",
+                    human_bytes(memory),
+                    human_bytes(memory_total)
+                ));
+                severity = max_severity(severity, Severity::Warning);
+            }
+            if memory_free > 0 && memory_free * 20 < memory_total {
+                details.push(format!(
+                    "{name}: only {} host memory free",
+                    human_bytes(memory_free)
+                ));
+                severity = max_severity(severity, Severity::Warning);
+            }
+        }
+    }
+    check(
+        "overcommit",
+        "CPU / memory pressure",
+        severity,
+        if details.is_empty() {
+            "No CPU or memory overcommit warnings.".into()
+        } else {
+            format!("{} capacity warning(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn duplicate_macs(raw: &RawInventory) -> DiagnosticCheck {
+    let real_vms: std::collections::HashSet<&str> = raw
+        .vms
+        .iter()
+        .filter(|(_, vm)| {
+            vm["is_control_domain"].as_bool() != Some(true)
+                && vm["is_a_template"].as_bool() != Some(true)
+                && vm["is_a_snapshot"].as_bool() != Some(true)
+        })
+        .map(|(reference, _)| reference.as_str())
+        .collect();
+    let mut owners: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for vif in raw.vifs.values() {
+        let mac = text(vif, "MAC").to_ascii_lowercase();
+        if mac.is_empty() {
+            continue;
+        }
+        let Some(vm_ref) = vif["VM"].as_str().filter(|vm| real_vms.contains(vm)) else {
+            continue;
+        };
+        let name = raw
+            .vms
+            .get(vm_ref)
+            .map(|vm| text(vm, "name_label"))
+            .unwrap_or_else(|| vm_ref.to_owned());
+        owners.entry(mac).or_default().push(name);
+    }
+    let mut details = Vec::new();
+    for (mac, mut vms) in owners {
+        if vms.len() > 1 {
+            vms.sort();
+            vms.dedup();
+            details.push(format!("MAC {mac} is used by {}", vms.join(", ")));
+        }
+    }
+    check(
+        "duplicate-macs",
+        "Duplicate VIF MACs",
+        if details.is_empty() {
+            Severity::Ok
+        } else {
+            Severity::Warning
+        },
+        if details.is_empty() {
+            "No duplicate VIF MAC addresses were found.".into()
+        } else {
+            format!("{} duplicate MAC address(es).", details.len())
         },
         details,
     )
@@ -660,6 +796,162 @@ fn vbd_consistency(raw: &RawInventory) -> DiagnosticCheck {
     )
 }
 
+fn boot_config(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for (vm_ref, vm) in &raw.vms {
+        if vm["is_control_domain"].as_bool() == Some(true)
+            || vm["is_a_template"].as_bool() == Some(true)
+            || vm["is_a_snapshot"].as_bool() == Some(true)
+        {
+            continue;
+        }
+        if text(vm, "HVM_boot_policy").is_empty() {
+            continue;
+        }
+        let order = text(&vm["HVM_boot_params"], "order").to_ascii_lowercase();
+        if order.is_empty() {
+            continue;
+        }
+        let name = text(vm, "name_label");
+        let vbds: Vec<&Value> = raw
+            .vbds
+            .values()
+            .filter(|vbd| vbd["VM"].as_str() == Some(vm_ref.as_str()))
+            .collect();
+        let has_disk = vbds.iter().any(|vbd| text(vbd, "type") == "Disk");
+        let has_cd = vbds.iter().any(|vbd| text(vbd, "type") == "CD");
+        let has_vif = raw
+            .vifs
+            .values()
+            .any(|vif| vif["VM"].as_str() == Some(vm_ref.as_str()));
+        if order.contains('d') && !has_disk {
+            details.push(format!(
+                "{name}: boot order includes disk but the VM has no disk VBD"
+            ));
+            severity = max_severity(severity, Severity::Info);
+        }
+        if order.contains('c') && !has_cd {
+            details.push(format!(
+                "{name}: boot order includes CD but the VM has no CD VBD"
+            ));
+            severity = max_severity(severity, Severity::Info);
+        }
+        if order.contains('n') && !has_vif {
+            details.push(format!(
+                "{name}: boot order includes network but the VM has no VIF"
+            ));
+            severity = max_severity(severity, Severity::Info);
+        }
+    }
+    check(
+        "boot-config",
+        "Boot configuration",
+        severity,
+        if details.is_empty() {
+            "Boot order matches the VM devices.".into()
+        } else {
+            format!("{} boot-order issue(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn certificate_updates(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    let mut versions = std::collections::HashSet::new();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    for (host_ref, host) in &raw.hosts {
+        let name = text(host, "name_label");
+        let version = format!(
+            "{} {}",
+            text(&host["software_version"], "product_version"),
+            text(&host["software_version"], "build_number")
+        );
+        let version = version.trim().to_owned();
+        if !version.is_empty() {
+            versions.insert(version);
+        }
+        let updates = host["updates_requiring_reboot"]
+            .as_array()
+            .map_or(0, Vec::len);
+        if updates > 0 {
+            details.push(format!("{name}: {updates} update(s) require a host reboot"));
+            severity = max_severity(severity, Severity::Warning);
+        }
+        let certificates: Vec<&Value> = raw
+            .certificates
+            .values()
+            .filter(|certificate| certificate["host"].as_str() == Some(host_ref.as_str()))
+            .collect();
+        if certificates.is_empty() && host["certificates"].as_array().is_none_or(Vec::is_empty) {
+            details.push(format!("{name}: no host certificate is installed"));
+            severity = max_severity(severity, Severity::Info);
+            continue;
+        }
+        for certificate in certificates {
+            let not_after = xapi_timestamp(&text(certificate, "not_after"));
+            if not_after == 0 {
+                continue;
+            }
+            let label = text(certificate, "type");
+            if not_after <= now {
+                details.push(format!(
+                    "{name}: {label} certificate expired at {}",
+                    text(certificate, "not_after")
+                ));
+                severity = Severity::Critical;
+            } else if not_after - now < 30 * 24 * 60 * 60 {
+                details.push(format!(
+                    "{name}: {label} certificate expires at {}",
+                    text(certificate, "not_after")
+                ));
+                severity = max_severity(severity, Severity::Warning);
+            }
+        }
+    }
+    if versions.len() > 1 {
+        details.push("Pool hosts report different software versions.".into());
+        severity = max_severity(severity, Severity::Warning);
+    }
+    check(
+        "certificate-updates",
+        "Certificates / updates",
+        severity,
+        if details.is_empty() {
+            "Host certificates and update state are clean.".into()
+        } else {
+            format!("{} certificate/update note(s).", details.len())
+        },
+        details,
+    )
+}
+
+fn xapi_timestamp(value: &str) -> u64 {
+    chrono::NaiveDateTime::parse_from_str(value, "%Y%m%dT%H:%M:%SZ")
+        .map(|date| date.and_utc().timestamp().max(0) as u64)
+        .unwrap_or(0)
+}
+
+fn human_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
 fn number(record: &Value, key: &str) -> u64 {
     record[key]
         .as_u64()
@@ -736,6 +1028,158 @@ mod tests {
                 .checks
                 .iter()
                 .any(|check| check.id == "vm-disks" && !check.details.is_empty())
+        );
+    }
+
+    #[test]
+    fn detects_cpu_memory_overcommit_and_low_free_memory() {
+        let mut raw = base();
+        raw.hosts.get_mut("h1").unwrap()["host_CPUs"] = json!(["cpu1"]);
+        raw.hosts.get_mut("h1").unwrap()["metrics"] = json!("m1");
+        raw.host_metrics
+            .insert("m1".into(), json!({"memory_total":1000,"memory_free":40}));
+        raw.vms.insert(
+            "vm1".into(),
+            json!({
+                "name_label":"big",
+                "power_state":"Running",
+                "resident_on":"h1",
+                "VCPUs_max":5,
+                "memory_target":1200,
+                "is_control_domain":false,
+                "is_a_template":false,
+                "is_a_snapshot":false
+            }),
+        );
+        let report = evaluate(&raw);
+        let check = report
+            .checks
+            .iter()
+            .find(|check| check.id == "overcommit")
+            .unwrap();
+        assert_eq!(check.severity, Severity::Critical);
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("vCPU overcommit"))
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("memory overcommit"))
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("host memory free"))
+        );
+    }
+
+    #[test]
+    fn detects_duplicate_vif_macs() {
+        let mut raw = base();
+        raw.vms.insert(
+            "vm1".into(),
+            json!({"name_label":"one","is_control_domain":false,"is_a_template":false,"is_a_snapshot":false}),
+        );
+        raw.vms.insert(
+            "vm2".into(),
+            json!({"name_label":"two","is_control_domain":false,"is_a_template":false,"is_a_snapshot":false}),
+        );
+        raw.vifs
+            .insert("vif1".into(), json!({"VM":"vm1","MAC":"AA:BB:CC:DD:EE:01"}));
+        raw.vifs
+            .insert("vif2".into(), json!({"VM":"vm2","MAC":"aa:bb:cc:dd:ee:01"}));
+        let report = evaluate(&raw);
+        let check = report
+            .checks
+            .iter()
+            .find(|check| check.id == "duplicate-macs")
+            .unwrap();
+        assert_eq!(check.severity, Severity::Warning);
+        assert!(check.details[0].contains("one"));
+        assert!(check.details[0].contains("two"));
+    }
+
+    #[test]
+    fn detects_boot_order_referencing_missing_devices() {
+        let mut raw = base();
+        let vm = raw.vms.get_mut("vm").unwrap();
+        vm["HVM_boot_policy"] = json!("BIOS order");
+        vm["HVM_boot_params"] = json!({"order":"ncd"});
+        let report = evaluate(&raw);
+        let check = report
+            .checks
+            .iter()
+            .find(|check| check.id == "boot-config")
+            .unwrap();
+        assert_eq!(check.severity, Severity::Info);
+        assert!(check.details.iter().any(|detail| detail.contains("no CD")));
+        assert!(check.details.iter().any(|detail| detail.contains("no VIF")));
+        assert!(
+            !check
+                .details
+                .iter()
+                .any(|detail| detail.contains("no disk"))
+        );
+    }
+
+    #[test]
+    fn detects_expired_or_expiring_certificates_and_pending_updates() {
+        let mut raw = base();
+        raw.certificates.insert(
+            "c1".into(),
+            json!({"host":"h1","type":"host_internal","not_after":"20200101T00:00:00Z"}),
+        );
+        let soon = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 5 * 24 * 60 * 60;
+        let soon = chrono::DateTime::from_timestamp(soon as i64, 0)
+            .unwrap()
+            .format("%Y%m%dT%H:%M:%SZ")
+            .to_string();
+        raw.certificates.insert(
+            "c2".into(),
+            json!({"host":"h2","type":"host","not_after":soon}),
+        );
+        raw.hosts.get_mut("h2").unwrap()["updates_requiring_reboot"] = json!(["u1"]);
+        raw.hosts.get_mut("h1").unwrap()["software_version"] = json!({"product_version":"8.3"});
+        raw.hosts.get_mut("h2").unwrap()["software_version"] = json!({"product_version":"8.4"});
+        let report = evaluate(&raw);
+        let check = report
+            .checks
+            .iter()
+            .find(|check| check.id == "certificate-updates")
+            .unwrap();
+        assert_eq!(check.severity, Severity::Critical);
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("expired"))
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("expires"))
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("host reboot"))
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("different software versions"))
         );
     }
 
