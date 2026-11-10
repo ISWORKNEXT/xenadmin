@@ -89,11 +89,11 @@ fn render(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_on
         wlb_card(&mut columns[1], status, actions, read_only);
     });
     ui.add_space(8.0);
+    pvs_card(ui, status, actions, read_only);
+    ui.add_space(8.0);
     sriov_card(ui, status);
     ui.add_space(8.0);
     vmss_card(ui, status, actions, read_only);
-    ui.add_space(8.0);
-    pvs_card(ui, status);
     ui.add_space(8.0);
     dr_card(ui, status);
 }
@@ -343,13 +343,24 @@ fn wlb_card(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_
     });
 }
 
-fn pvs_card(ui: &mut Ui, status: &PoolStatus) {
+fn pvs_card(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_only: bool) {
     let pvs = &status.pvs;
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             widgets::section_title(ui, "Provisioning services (PVS)", None);
             widgets::badge(ui, pvs.sites.len().to_string(), accent());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(
+                        !read_only,
+                        egui::Button::new(RichText::new("Add PVS site…").size(10.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenPvsSiteDialog);
+                }
+            });
         });
         ui.add_space(4.0);
         if pvs.sites.is_empty()
@@ -367,63 +378,154 @@ fn pvs_card(ui: &mut Ui, status: &PoolStatus) {
         for site in &pvs.sites {
             ui.horizontal(|ui| {
                 widgets::dot(ui, accent(), 6.0);
-                ui.label(
-                    RichText::new(if site.name.is_empty() {
-                        "(unnamed site)"
-                    } else {
-                        &site.name
-                    })
-                    .size(11.0)
-                    .strong(),
-                );
-                ui.label(
-                    RichText::new(format!(
-                        "{} servers · {} proxies · {} cache stores",
-                        site.servers, site.proxies, site.cache_storages
-                    ))
-                    .size(9.0)
-                    .color(muted_fg()),
-                );
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label(
+                        RichText::new(if site.name.is_empty() {
+                            "(unnamed site)"
+                        } else {
+                            &site.name
+                        })
+                        .size(11.0)
+                        .strong(),
+                    );
+                    ui.label(
+                        RichText::new(format!(
+                            "{} servers · {} proxies · {} cache stores",
+                            site.servers, site.proxies, site.cache_storages
+                        ))
+                        .size(9.0)
+                        .color(muted_fg()),
+                    );
+                });
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Delete site…").size(9.5).color(red()))
+                                .small(),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::PromptPvsDelete {
+                            kind: crate::state::PvsDeleteKind::Site,
+                            uuid: site.uuid.clone(),
+                            name: site.name.clone(),
+                        });
+                    }
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Proxy…").size(9.5)).small(),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::OpenPvsProxyDialog);
+                    }
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Cache…").size(9.5)).small(),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::OpenPvsCacheDialog);
+                    }
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Server…").size(9.5)).small(),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::OpenPvsServerDialog);
+                    }
+                });
             });
         }
         if !pvs.servers.is_empty() {
             ui.add_space(4.0);
             for server in &pvs.servers {
-                ui.label(
-                    RichText::new(format!(
-                        "Server {} · {} · ports {}",
-                        server.site_name, server.addresses, server.port_range
-                    ))
-                    .size(9.5)
-                    .color(muted_fg()),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "Server {} · {} · ports {}",
+                            server.site_name, server.addresses, server.port_range
+                        ))
+                        .size(9.5)
+                        .color(muted_fg()),
+                    );
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Remove").size(9.0)).small(),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::PromptPvsDelete {
+                            kind: crate::state::PvsDeleteKind::Server,
+                            uuid: server.uuid.clone(),
+                            name: server.addresses.clone(),
+                        });
+                    }
+                });
             }
         }
         if !pvs.proxies.is_empty() {
             for proxy in &pvs.proxies {
-                ui.label(
-                    RichText::new(format!(
-                        "Proxy {} · {} · attached {} · {}",
-                        proxy.site_name, proxy.vif, proxy.attached, proxy.status
-                    ))
-                    .size(9.5)
-                    .color(muted_fg()),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "Proxy {} · {} · attached {} · {}",
+                            proxy.site_name, proxy.vif, proxy.attached, proxy.status
+                        ))
+                        .size(9.5)
+                        .color(muted_fg()),
+                    );
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Remove").size(9.0)).small(),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::PromptPvsDelete {
+                            kind: crate::state::PvsDeleteKind::Proxy,
+                            uuid: proxy.uuid.clone(),
+                            name: proxy.site_name.clone(),
+                        });
+                    }
+                });
             }
         }
         if !pvs.cache_storages.is_empty() {
             for cache in &pvs.cache_storages {
-                ui.label(
-                    RichText::new(format!(
-                        "Cache {} · {} · {} · {}",
-                        cache.site_name,
-                        cache.host_name,
-                        cache.sr_name,
-                        crate::format::bytes(cache.size)
-                    ))
-                    .size(9.5)
-                    .color(muted_fg()),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "Cache {} · {} · {} · {}",
+                            cache.site_name,
+                            cache.host_name,
+                            cache.sr_name,
+                            crate::format::bytes(cache.size)
+                        ))
+                        .size(9.5)
+                        .color(muted_fg()),
+                    );
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Remove").size(9.0)).small(),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::PromptPvsDelete {
+                            kind: crate::state::PvsDeleteKind::Cache,
+                            uuid: cache.uuid.clone(),
+                            name: cache.host_name.clone(),
+                        });
+                    }
+                });
             }
         }
     });

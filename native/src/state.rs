@@ -768,6 +768,66 @@ pub struct SshCredentialDialog {
     pub error: Option<String>,
 }
 
+pub struct PvsSiteDialog {
+    pub connection_id: String,
+    pub name: String,
+    pub description: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct PvsServerDialog {
+    pub connection_id: String,
+    pub sites: Vec<(String, String)>,
+    pub site_uuid: Option<String>,
+    pub addresses: String,
+    pub first_port: String,
+    pub last_port: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct PvsCacheDialog {
+    pub connection_id: String,
+    pub sites: Vec<(String, String)>,
+    pub site_uuid: Option<String>,
+    pub hosts: Vec<(String, String)>,
+    pub host_uuid: Option<String>,
+    pub srs: Vec<(String, String)>,
+    pub sr_uuid: Option<String>,
+    pub size_mib: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct PvsProxyDialog {
+    pub connection_id: String,
+    pub sites: Vec<(String, String)>,
+    pub site_uuid: Option<String>,
+    pub vifs: Vec<xen_core::pvs::PvsVif>,
+    pub vif_uuid: Option<String>,
+    pub loading: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PvsDeleteKind {
+    Site,
+    Server,
+    Proxy,
+    Cache,
+}
+
+pub struct PvsDeleteConfirm {
+    pub connection_id: String,
+    pub kind: PvsDeleteKind,
+    pub uuid: String,
+    pub name: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct VmssDialog {
     pub connection_id: String,
     pub uuid: Option<String>,
@@ -1185,6 +1245,12 @@ pub struct UiState {
     pub pool_confirm: Option<PoolConfirm>,
     pub wlb_config_dialog: Option<WlbConfigDialog>,
     pub vmss_dialog: Option<VmssDialog>,
+    pub pvs_site_dialog: Option<PvsSiteDialog>,
+    pub pvs_server_dialog: Option<PvsServerDialog>,
+    pub pvs_cache_dialog: Option<PvsCacheDialog>,
+    pub pvs_proxy_dialog: Option<PvsProxyDialog>,
+    pub pvs_delete_confirm: Option<PvsDeleteConfirm>,
+    pub pvs_vif_seq: u64,
     pub vmss_delete_confirm: Option<VmssDeleteConfirm>,
     pub ad_disable_dialog: Option<AdDisableDialog>,
     pub sr_probe_seq: u64,
@@ -1296,6 +1362,12 @@ impl Default for UiState {
             pool_confirm: None,
             wlb_config_dialog: None,
             vmss_dialog: None,
+            pvs_site_dialog: None,
+            pvs_server_dialog: None,
+            pvs_cache_dialog: None,
+            pvs_proxy_dialog: None,
+            pvs_delete_confirm: None,
+            pvs_vif_seq: 0,
             vmss_delete_confirm: None,
             ad_disable_dialog: None,
             sr_probe_seq: 0,
@@ -1434,6 +1506,25 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenPvsSiteDialog,
+    ClosePvsSiteDialog,
+    SavePvsSiteDialog,
+    OpenPvsServerDialog,
+    ClosePvsServerDialog,
+    SavePvsServerDialog,
+    OpenPvsCacheDialog,
+    ClosePvsCacheDialog,
+    SavePvsCacheDialog,
+    OpenPvsProxyDialog,
+    ClosePvsProxyDialog,
+    SavePvsProxyDialog,
+    PromptPvsDelete {
+        kind: PvsDeleteKind,
+        uuid: String,
+        name: String,
+    },
+    CancelPvsDelete,
+    ConfirmPvsDelete,
     OpenVmssCreate,
     OpenVmssEdit(String),
     CloseVmssDialog,

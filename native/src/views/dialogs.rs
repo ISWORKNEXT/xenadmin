@@ -93,6 +93,21 @@ pub fn show(
     if state.vmss_delete_confirm.is_some() {
         vmss_delete_dialog(ctx, state, actions);
     }
+    if state.pvs_site_dialog.is_some() {
+        pvs_site_dialog(ctx, state, actions);
+    }
+    if state.pvs_server_dialog.is_some() {
+        pvs_server_dialog(ctx, state, actions);
+    }
+    if state.pvs_cache_dialog.is_some() {
+        pvs_cache_dialog(ctx, state, actions);
+    }
+    if state.pvs_proxy_dialog.is_some() {
+        pvs_proxy_dialog(ctx, state, actions);
+    }
+    if state.pvs_delete_confirm.is_some() {
+        pvs_delete_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1010,6 +1025,548 @@ fn network_destroy(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<U
     }
     if close {
         actions.push(UiAction::CancelNetworkDestroy);
+    }
+}
+
+fn pvs_site_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.pvs_site_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("pvs-site-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(540.0);
+            modal_title(
+                ui,
+                "Add PVS site",
+                "Registers a Provisioning Services site with this pool.",
+            );
+            widgets::field_label(ui, "Site name");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.name)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Description");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::multiline(&mut dialog.description)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(2)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && !dialog.name.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Adding…"
+                            } else {
+                                "Add site"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SavePvsSiteDialog);
+    }
+    if close {
+        actions.push(UiAction::ClosePvsSiteDialog);
+    }
+}
+
+fn pvs_server_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.pvs_server_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("pvs-server-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(560.0);
+            modal_title(
+                ui,
+                "Add PVS server",
+                "Registers one or more PVS server addresses for a site.",
+            );
+            widgets::field_label(ui, "Site");
+            let site_label = dialog
+                .site_uuid
+                .as_ref()
+                .and_then(|uuid| dialog.sites.iter().find(|(id, _)| id == uuid))
+                .map(|(_, name)| name.as_str())
+                .unwrap_or("Select a site");
+            egui::ComboBox::from_id_salt("pvs-server-site")
+                .selected_text(RichText::new(site_label).size(11.0))
+                .width(ui.available_width())
+                .show_ui(ui, |ui| {
+                    for (uuid, name) in &dialog.sites {
+                        if ui
+                            .selectable_label(
+                                dialog.site_uuid.as_deref() == Some(uuid.as_str()),
+                                RichText::new(name).size(11.0),
+                            )
+                            .clicked()
+                        {
+                            dialog.site_uuid = Some(uuid.clone());
+                        }
+                    }
+                });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Addresses (comma or newline separated)");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::multiline(&mut dialog.addresses)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(3)
+                    .hint_text("10.0.0.10, pvs2.example.com")
+                    .char_limit(2048)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "First port");
+                columns[0].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.first_port)
+                        .char_limit(5)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                widgets::field_label(&mut columns[1], "Last port");
+                columns[1].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.last_port)
+                        .char_limit(5)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+            });
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && !dialog.addresses.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Adding…"
+                            } else {
+                                "Add server"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SavePvsServerDialog);
+    }
+    if close {
+        actions.push(UiAction::ClosePvsServerDialog);
+    }
+}
+
+fn pvs_cache_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.pvs_cache_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("pvs-cache-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(580.0);
+            modal_title(
+                ui,
+                "Add PVS cache storage",
+                "Allocates cache space on a host-local or shared SR for a PVS site.",
+            );
+            widgets::field_label(ui, "Site");
+            let site_label = dialog
+                .site_uuid
+                .as_ref()
+                .and_then(|uuid| dialog.sites.iter().find(|(id, _)| id == uuid))
+                .map(|(_, name)| name.as_str())
+                .unwrap_or("Select a site");
+            egui::ComboBox::from_id_salt("pvs-cache-site")
+                .selected_text(RichText::new(site_label).size(11.0))
+                .width(ui.available_width())
+                .show_ui(ui, |ui| {
+                    for (uuid, name) in &dialog.sites {
+                        if ui
+                            .selectable_label(
+                                dialog.site_uuid.as_deref() == Some(uuid.as_str()),
+                                RichText::new(name).size(11.0),
+                            )
+                            .clicked()
+                        {
+                            dialog.site_uuid = Some(uuid.clone());
+                        }
+                    }
+                });
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "Host");
+                let host_label = dialog
+                    .host_uuid
+                    .as_ref()
+                    .and_then(|uuid| dialog.hosts.iter().find(|(id, _)| id == uuid))
+                    .map(|(_, name)| name.as_str())
+                    .unwrap_or("Select a host");
+                egui::ComboBox::from_id_salt("pvs-cache-host")
+                    .selected_text(RichText::new(host_label).size(11.0))
+                    .width(columns[0].available_width())
+                    .show_ui(&mut columns[0], |ui| {
+                        for (uuid, name) in &dialog.hosts {
+                            if ui
+                                .selectable_label(
+                                    dialog.host_uuid.as_deref() == Some(uuid.as_str()),
+                                    RichText::new(name).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.host_uuid = Some(uuid.clone());
+                            }
+                        }
+                    });
+                widgets::field_label(&mut columns[1], "Cache SR");
+                let sr_label = dialog
+                    .sr_uuid
+                    .as_ref()
+                    .and_then(|uuid| dialog.srs.iter().find(|(id, _)| id == uuid))
+                    .map(|(_, name)| name.as_str())
+                    .unwrap_or("Select an SR");
+                egui::ComboBox::from_id_salt("pvs-cache-sr")
+                    .selected_text(RichText::new(sr_label).size(11.0))
+                    .width(columns[1].available_width())
+                    .show_ui(&mut columns[1], |ui| {
+                        for (uuid, name) in &dialog.srs {
+                            if ui
+                                .selectable_label(
+                                    dialog.sr_uuid.as_deref() == Some(uuid.as_str()),
+                                    RichText::new(name).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.sr_uuid = Some(uuid.clone());
+                            }
+                        }
+                    });
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Cache size (MiB, 1024–2097152)");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.size_mib)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(7)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.label(
+                RichText::new(
+                    "The SR is not created automatically; add or choose existing storage.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && dialog.site_uuid.is_some()
+                                && dialog.host_uuid.is_some()
+                                && dialog.sr_uuid.is_some(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Adding…"
+                            } else {
+                                "Add cache"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SavePvsCacheDialog);
+    }
+    if close {
+        actions.push(UiAction::ClosePvsCacheDialog);
+    }
+}
+
+fn pvs_proxy_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.pvs_proxy_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("pvs-proxy-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(580.0);
+            modal_title(
+                ui,
+                "Enable PVS read caching",
+                "Creates a PVS proxy on a connected VM interface.",
+            );
+            widgets::field_label(ui, "Site");
+            let site_label = dialog
+                .site_uuid
+                .as_ref()
+                .and_then(|uuid| dialog.sites.iter().find(|(id, _)| id == uuid))
+                .map(|(_, name)| name.as_str())
+                .unwrap_or("Select a site");
+            egui::ComboBox::from_id_salt("pvs-proxy-site")
+                .selected_text(RichText::new(site_label).size(11.0))
+                .width(ui.available_width())
+                .show_ui(ui, |ui| {
+                    for (uuid, name) in &dialog.sites {
+                        if ui
+                            .selectable_label(
+                                dialog.site_uuid.as_deref() == Some(uuid.as_str()),
+                                RichText::new(name).size(11.0),
+                            )
+                            .clicked()
+                        {
+                            dialog.site_uuid = Some(uuid.clone());
+                        }
+                    }
+                });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "VM interface");
+            if dialog.loading {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(
+                        RichText::new("Loading connected interfaces…")
+                            .size(10.0)
+                            .color(muted_fg()),
+                    );
+                });
+            } else if dialog.vifs.is_empty() {
+                ui.label(
+                    RichText::new("No connected VM interfaces are available.")
+                        .size(10.0)
+                        .color(amber()),
+                );
+            } else {
+                let vif_label = dialog
+                    .vif_uuid
+                    .as_ref()
+                    .and_then(|uuid| dialog.vifs.iter().find(|vif| vif.uuid == *uuid))
+                    .map(|vif| format!("{} · {} · {}", vif.vm_name, vif.network_name, vif.mac))
+                    .unwrap_or_else(|| "Select an interface".into());
+                egui::ComboBox::from_id_salt("pvs-proxy-vif")
+                    .selected_text(RichText::new(vif_label).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for vif in &dialog.vifs {
+                            let label =
+                                format!("{} · {} · {}", vif.vm_name, vif.network_name, vif.mac);
+                            if ui
+                                .selectable_label(
+                                    dialog.vif_uuid.as_deref() == Some(vif.uuid.as_str()),
+                                    RichText::new(label).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.vif_uuid = Some(vif.uuid.clone());
+                            }
+                        }
+                    });
+            }
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && !dialog.loading
+                                && dialog.site_uuid.is_some()
+                                && dialog.vif_uuid.is_some(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Enabling…"
+                            } else {
+                                "Enable caching"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SavePvsProxyDialog);
+    }
+    if close {
+        actions.push(UiAction::ClosePvsProxyDialog);
+    }
+}
+
+fn pvs_delete_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut confirm = false;
+    let Some(dialog) = state.pvs_delete_confirm.as_mut() else {
+        return;
+    };
+    let (title, detail) = match dialog.kind {
+        crate::state::PvsDeleteKind::Site => (
+            "Delete PVS site",
+            "Forgets the site and its servers. Proxies must be removed first.",
+        ),
+        crate::state::PvsDeleteKind::Server => (
+            "Remove PVS server",
+            "The server address is forgotten from this site. Cache storage is unaffected.",
+        ),
+        crate::state::PvsDeleteKind::Proxy => (
+            "Remove PVS read caching",
+            "Destroys the PVS proxy on this VM interface.",
+        ),
+        crate::state::PvsDeleteKind::Cache => (
+            "Remove PVS cache storage",
+            "Destroys the cache storage record. Data on the SR is left untouched.",
+        ),
+    };
+    let response = egui::Modal::new(egui::Id::unique("pvs-delete-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(500.0);
+            modal_title(ui, title, detail);
+            ui.horizontal(|ui| {
+                widgets::dot(ui, red(), 6.0);
+                ui.label(RichText::new(&dialog.name).size(11.5).strong());
+            });
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting,
+                            egui::Button::new(
+                                RichText::new(if dialog.submitting {
+                                    "Removing…"
+                                } else {
+                                    "Remove"
+                                })
+                                .size(11.0)
+                                .color(red()),
+                            )
+                            .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120))),
+                        )
+                        .clicked()
+                    {
+                        confirm = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if confirm {
+        actions.push(UiAction::ConfirmPvsDelete);
+    }
+    if close {
+        actions.push(UiAction::CancelPvsDelete);
     }
 }
 

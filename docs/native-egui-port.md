@@ -38,7 +38,7 @@ dependency.
 
 | Alerts | Implemented (basic) | Priority 1–4 XenAPI messages with dismiss; diagnostics/health checks are still separate |
 | Authentication / RBAC | Implemented | Auth/config/subjects/roles, subject role assignment, AD enable/disable with confirmation; local root protected |
-| Pool status | Implemented | HA enable/disable; WLB configure/enable/disable/deconfigure; VMSS schedule create/edit/delete; PVS/DR status; read-only SR-IOV/tunnel/internal-network discovery |
+| Pool status | Implemented | HA enable/disable; WLB configure/enable/disable/deconfigure; VMSS schedule create/edit/delete; PVS site/server/proxy/cache actions; DR status; read-only SR-IOV/tunnel/internal-network discovery |
 | Storage repository actions | Implemented | Create/introduce/forget/probe/repair/reattach/detach/scan/TRIM/destroy, PBD plug/unplug, user-VDI inventory and safe deletion |
 | Network actions | Implemented | Create internal networks, bonds and VLANs; destroy cleans dependent VLAN/bond PIFs; physical PIF plug/unplug with management protection |
 | Host performance | Implemented | Upstream-style CPU (all cores), memory and network graphs with legends; 15 min / 1 h / 24 h, search, remaining metrics and gap handling |

@@ -539,6 +539,132 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn introduce_pvs_site(
+        &self,
+        connection_id: &str,
+        name: String,
+        description: String,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .introduce_pvs_site(&name, &description)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn forget_pvs_site(&self, connection_id: &str, uuid: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .forget_pvs_site(uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn introduce_pvs_server(
+        &self,
+        connection_id: &str,
+        site_uuid: &str,
+        addresses: Vec<String>,
+        first_port: u16,
+        last_port: u16,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .introduce_pvs_server(site_uuid, &addresses, first_port, last_port)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn forget_pvs_server(&self, connection_id: &str, uuid: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .forget_pvs_server(uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn create_pvs_proxy(
+        &self,
+        connection_id: &str,
+        site_uuid: &str,
+        vif_uuid: &str,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_pvs_proxy(site_uuid, vif_uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn destroy_pvs_proxy(&self, connection_id: &str, uuid: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .destroy_pvs_proxy(uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_pvs_cache(
+        &self,
+        connection_id: &str,
+        site_uuid: &str,
+        host_uuid: &str,
+        sr_uuid: &str,
+        size_mib: u64,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_pvs_cache(site_uuid, host_uuid, sr_uuid, size_mib)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn destroy_pvs_cache(&self, connection_id: &str, uuid: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .destroy_pvs_cache(uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn pvs_vif_catalog(
+        &self,
+        connection_id: &str,
+    ) -> Result<Vec<crate::pvs::PvsVif>, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .pvs_vif_catalog()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     pub async fn pool_status(
         &self,
         connection_id: &str,

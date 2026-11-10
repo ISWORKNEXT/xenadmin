@@ -813,6 +813,88 @@ impl App {
                         }
                     }
                 },
+                Event::PvsChanged { action, result } => match result {
+                    Ok(()) => {
+                        self.state.pvs_site_dialog = None;
+                        self.state.pvs_server_dialog = None;
+                        self.state.pvs_cache_dialog = None;
+                        self.state.pvs_proxy_dialog = None;
+                        self.state.pvs_delete_confirm = None;
+                        let message = match action.as_str() {
+                            "site_create" => "PVS site added.",
+                            "site_delete" => "PVS site removed.",
+                            "server_create" => "PVS server added.",
+                            "server_delete" => "PVS server removed.",
+                            "proxy_create" => "PVS read caching enabled.",
+                            "proxy_delete" => "PVS read caching removed.",
+                            "cache_create" => "PVS cache storage added.",
+                            _ => "PVS cache storage removed.",
+                        };
+                        self.state
+                            .toasts
+                            .push(Toast::new(message, ToastKind::Success));
+                        self.state.pool_status_state = LoadState::Idle;
+                        if matches!(
+                            self.state
+                                .object_tabs
+                                .get(self.state.active_tab)
+                                .map(|tab| &tab.key),
+                            Some(ObjectKey::PoolStatus { .. })
+                        ) {
+                            self.apply(vec![UiAction::LoadPoolStatus]);
+                        }
+                    }
+                    Err(message) => {
+                        let mut handled = false;
+                        for error in [&mut self.state.pvs_site_dialog] {
+                            if let Some(dialog) = error.as_mut() {
+                                dialog.submitting = false;
+                                dialog.error = Some(message.clone());
+                                handled = true;
+                            }
+                        }
+                        if let Some(dialog) = self.state.pvs_server_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(dialog) = self.state.pvs_cache_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(dialog) = self.state.pvs_proxy_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(confirm) = self.state.pvs_delete_confirm.as_mut() {
+                            confirm.submitting = false;
+                            confirm.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if !handled {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
+                Event::PvsVifCatalog { seq, result } => {
+                    if seq == self.state.pvs_vif_seq
+                        && let Some(dialog) = self.state.pvs_proxy_dialog.as_mut()
+                    {
+                        dialog.loading = false;
+                        match result {
+                            Ok(vifs) => {
+                                dialog.error = None;
+                                dialog.vif_uuid = vifs.first().map(|vif| vif.uuid.clone());
+                                dialog.vifs = vifs;
+                            }
+                            Err(message) => dialog.error = Some(message),
+                        }
+                    }
+                }
                 Event::VmssChanged { action, result } => match result {
                     Ok(()) => {
                         self.state.vmss_dialog = None;
@@ -2273,6 +2355,355 @@ impl App {
                         connection_id,
                         vm_uuid,
                     });
+                }
+                UiAction::OpenPvsSiteDialog => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.pvs_site_dialog = Some(crate::state::PvsSiteDialog {
+                        connection_id,
+                        name: String::new(),
+                        description: String::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::ClosePvsSiteDialog => {
+                    if !self
+                        .state
+                        .pvs_site_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.pvs_site_dialog = None;
+                    }
+                }
+                UiAction::SavePvsSiteDialog => {
+                    let Some(dialog) = self.state.pvs_site_dialog.as_mut() else {
+                        continue;
+                    };
+                    if dialog.name.trim().is_empty() {
+                        dialog.error = Some("Enter a PVS site name.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::IntroducePvsSite {
+                        connection_id: dialog.connection_id.clone(),
+                        name: dialog.name.trim().to_owned(),
+                        description: dialog.description.clone(),
+                    });
+                }
+                UiAction::OpenPvsServerDialog => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let sites = pvs_site_list(&self.state);
+                    if sites.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "Add a PVS site before adding servers.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    }
+                    self.state.pvs_server_dialog = Some(crate::state::PvsServerDialog {
+                        connection_id,
+                        site_uuid: sites.first().map(|(uuid, _)| uuid.clone()),
+                        sites,
+                        addresses: String::new(),
+                        first_port: "6901".into(),
+                        last_port: "6910".into(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::ClosePvsServerDialog => {
+                    if !self
+                        .state
+                        .pvs_server_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.pvs_server_dialog = None;
+                    }
+                }
+                UiAction::SavePvsServerDialog => {
+                    let Some(dialog) = self.state.pvs_server_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(site_uuid) = dialog.site_uuid.clone() else {
+                        dialog.error = Some("Select a PVS site.".into());
+                        continue;
+                    };
+                    let Some(first_port) = dialog.first_port.trim().parse::<u16>().ok() else {
+                        dialog.error = Some("Enter a whole-number first port.".into());
+                        continue;
+                    };
+                    let Some(last_port) = dialog.last_port.trim().parse::<u16>().ok() else {
+                        dialog.error = Some("Enter a whole-number last port.".into());
+                        continue;
+                    };
+                    let addresses: Vec<String> = dialog
+                        .addresses
+                        .split([',', '\n'])
+                        .map(str::trim)
+                        .filter(|address| !address.is_empty())
+                        .map(str::to_owned)
+                        .collect();
+                    if let Err(error) = xen_core::pvs::validate_pvs_addresses(&addresses) {
+                        dialog.error = Some(error.to_string());
+                        continue;
+                    }
+                    if let Err(error) = xen_core::pvs::validate_pvs_ports(first_port, last_port) {
+                        dialog.error = Some(error.to_string());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::IntroducePvsServer {
+                        connection_id: dialog.connection_id.clone(),
+                        site_uuid,
+                        addresses,
+                        first_port,
+                        last_port,
+                    });
+                }
+                UiAction::OpenPvsCacheDialog => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let sites = pvs_site_list(&self.state);
+                    if sites.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "Add a PVS site before adding cache storage.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    }
+                    let hosts: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .hosts
+                                    .iter()
+                                    .map(|host| (host.uuid.clone(), host.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    let srs: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .storage
+                                    .iter()
+                                    .filter(|sr| sr.content_type != "iso")
+                                    .map(|sr| (sr.uuid.clone(), sr.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    if hosts.is_empty() || srs.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "PVS cache storage needs at least one host and writable SR.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    }
+                    self.state.pvs_cache_dialog = Some(crate::state::PvsCacheDialog {
+                        connection_id,
+                        site_uuid: sites.first().map(|(uuid, _)| uuid.clone()),
+                        sites,
+                        host_uuid: hosts.first().map(|(uuid, _)| uuid.clone()),
+                        hosts,
+                        sr_uuid: srs.first().map(|(uuid, _)| uuid.clone()),
+                        srs,
+                        size_mib: "10240".into(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::ClosePvsCacheDialog => {
+                    if !self
+                        .state
+                        .pvs_cache_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.pvs_cache_dialog = None;
+                    }
+                }
+                UiAction::SavePvsCacheDialog => {
+                    let Some(dialog) = self.state.pvs_cache_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(site_uuid) = dialog.site_uuid.clone() else {
+                        dialog.error = Some("Select a PVS site.".into());
+                        continue;
+                    };
+                    let Some(host_uuid) = dialog.host_uuid.clone() else {
+                        dialog.error = Some("Select a host.".into());
+                        continue;
+                    };
+                    let Some(sr_uuid) = dialog.sr_uuid.clone() else {
+                        dialog.error = Some("Select a cache SR.".into());
+                        continue;
+                    };
+                    let Some(size_mib) = dialog.size_mib.trim().parse::<u64>().ok() else {
+                        dialog.error = Some("Enter the cache size in MiB.".into());
+                        continue;
+                    };
+                    if let Err(error) = xen_core::pvs::validate_pvs_cache_size(size_mib) {
+                        dialog.error = Some(error.to_string());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::CreatePvsCache {
+                        connection_id: dialog.connection_id.clone(),
+                        site_uuid,
+                        host_uuid,
+                        sr_uuid,
+                        size_mib,
+                    });
+                }
+                UiAction::OpenPvsProxyDialog => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let sites = pvs_site_list(&self.state);
+                    if sites.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "Add a PVS site before enabling read caching.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    }
+                    self.state.pvs_vif_seq += 1;
+                    let seq = self.state.pvs_vif_seq;
+                    self.state.pvs_proxy_dialog = Some(crate::state::PvsProxyDialog {
+                        connection_id: connection_id.clone(),
+                        site_uuid: sites.first().map(|(uuid, _)| uuid.clone()),
+                        sites,
+                        vifs: Vec::new(),
+                        vif_uuid: None,
+                        loading: true,
+                        submitting: false,
+                        error: None,
+                    });
+                    self.worker
+                        .send(Command::PvsVifCatalog { seq, connection_id });
+                }
+                UiAction::ClosePvsProxyDialog => {
+                    if !self
+                        .state
+                        .pvs_proxy_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.pvs_proxy_dialog = None;
+                    }
+                }
+                UiAction::SavePvsProxyDialog => {
+                    let Some(dialog) = self.state.pvs_proxy_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(site_uuid) = dialog.site_uuid.clone() else {
+                        dialog.error = Some("Select a PVS site.".into());
+                        continue;
+                    };
+                    let Some(vif_uuid) = dialog.vif_uuid.clone() else {
+                        dialog.error = Some("Select a connected VM interface.".into());
+                        continue;
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::CreatePvsProxy {
+                        connection_id: dialog.connection_id.clone(),
+                        site_uuid,
+                        vif_uuid,
+                    });
+                }
+                UiAction::PromptPvsDelete { kind, uuid, name } => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.pvs_delete_confirm = Some(crate::state::PvsDeleteConfirm {
+                        connection_id,
+                        kind,
+                        uuid,
+                        name,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CancelPvsDelete => {
+                    if !self
+                        .state
+                        .pvs_delete_confirm
+                        .as_ref()
+                        .is_some_and(|confirm| confirm.submitting)
+                    {
+                        self.state.pvs_delete_confirm = None;
+                    }
+                }
+                UiAction::ConfirmPvsDelete => {
+                    let Some(confirm) = self.state.pvs_delete_confirm.as_mut() else {
+                        continue;
+                    };
+                    confirm.submitting = true;
+                    confirm.error = None;
+                    let connection_id = confirm.connection_id.clone();
+                    let uuid = confirm.uuid.clone();
+                    let command = match confirm.kind {
+                        crate::state::PvsDeleteKind::Site => Command::ForgetPvsSite {
+                            connection_id,
+                            uuid,
+                        },
+                        crate::state::PvsDeleteKind::Server => Command::ForgetPvsServer {
+                            connection_id,
+                            uuid,
+                        },
+                        crate::state::PvsDeleteKind::Proxy => Command::DestroyPvsProxy {
+                            connection_id,
+                            uuid,
+                        },
+                        crate::state::PvsDeleteKind::Cache => Command::DestroyPvsCache {
+                            connection_id,
+                            uuid,
+                        },
+                    };
+                    self.worker.send(command);
                 }
                 UiAction::OpenVmssCreate => {
                     let Some(connection_id) = self
@@ -4828,6 +5259,18 @@ fn vm_object_key(workspace: &WorkspaceView, connection_id: &str, vm_uuid: &str) 
             connection_id,
             vm_uuid,
         }
+    }
+}
+
+fn pvs_site_list(state: &crate::state::UiState) -> Vec<(String, String)> {
+    match &state.pool_status_state {
+        LoadState::Ready(status) => status
+            .pvs
+            .sites
+            .iter()
+            .map(|site| (site.uuid.clone(), site.name.clone()))
+            .collect(),
+        _ => Vec::new(),
     }
 }
 

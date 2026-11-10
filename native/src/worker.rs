@@ -145,6 +145,50 @@ pub enum Command {
         seq: u64,
         connection_id: String,
     },
+    IntroducePvsSite {
+        connection_id: String,
+        name: String,
+        description: String,
+    },
+    ForgetPvsSite {
+        connection_id: String,
+        uuid: String,
+    },
+    IntroducePvsServer {
+        connection_id: String,
+        site_uuid: String,
+        addresses: Vec<String>,
+        first_port: u16,
+        last_port: u16,
+    },
+    ForgetPvsServer {
+        connection_id: String,
+        uuid: String,
+    },
+    CreatePvsProxy {
+        connection_id: String,
+        site_uuid: String,
+        vif_uuid: String,
+    },
+    DestroyPvsProxy {
+        connection_id: String,
+        uuid: String,
+    },
+    CreatePvsCache {
+        connection_id: String,
+        site_uuid: String,
+        host_uuid: String,
+        sr_uuid: String,
+        size_mib: u64,
+    },
+    DestroyPvsCache {
+        connection_id: String,
+        uuid: String,
+    },
+    PvsVifCatalog {
+        seq: u64,
+        connection_id: String,
+    },
     CreateVmss {
         connection_id: String,
         name: String,
@@ -601,6 +645,14 @@ pub enum Event {
         action: String,
         result: Result<(), String>,
     },
+    PvsChanged {
+        action: String,
+        result: Result<(), String>,
+    },
+    PvsVifCatalog {
+        seq: u64,
+        result: Result<Vec<xen_core::pvs::PvsVif>, String>,
+    },
     Failed {
         context: String,
         message: String,
@@ -653,6 +705,9 @@ fn run_worker(mut commands: UnboundedReceiver<Command>, events: UnboundedSender<
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(2)
+        // Large inventory and pool-status futures can be several hundred KiB
+        // of async state; give the workers headroom instead of the default 2 MiB.
+        .thread_stack_size(16 * 1024 * 1024)
         .build()
     {
         Ok(runtime) => runtime,
@@ -861,6 +916,112 @@ fn dispatch(
                     subject_uuid,
                     result,
                 });
+            }
+            Command::IntroducePvsSite {
+                connection_id,
+                name,
+                description,
+            } => {
+                let result = workspace
+                    .introduce_pvs_site(&connection_id, name, description)
+                    .await;
+                let _ = events.send(Event::PvsChanged {
+                    action: "site_create".into(),
+                    result,
+                });
+            }
+            Command::ForgetPvsSite {
+                connection_id,
+                uuid,
+            } => {
+                let result = workspace.forget_pvs_site(&connection_id, &uuid).await;
+                let _ = events.send(Event::PvsChanged {
+                    action: "site_delete".into(),
+                    result,
+                });
+            }
+            Command::IntroducePvsServer {
+                connection_id,
+                site_uuid,
+                addresses,
+                first_port,
+                last_port,
+            } => {
+                let result = workspace
+                    .introduce_pvs_server(
+                        &connection_id,
+                        &site_uuid,
+                        addresses,
+                        first_port,
+                        last_port,
+                    )
+                    .await;
+                let _ = events.send(Event::PvsChanged {
+                    action: "server_create".into(),
+                    result,
+                });
+            }
+            Command::ForgetPvsServer {
+                connection_id,
+                uuid,
+            } => {
+                let result = workspace.forget_pvs_server(&connection_id, &uuid).await;
+                let _ = events.send(Event::PvsChanged {
+                    action: "server_delete".into(),
+                    result,
+                });
+            }
+            Command::CreatePvsProxy {
+                connection_id,
+                site_uuid,
+                vif_uuid,
+            } => {
+                let result = workspace
+                    .create_pvs_proxy(&connection_id, &site_uuid, &vif_uuid)
+                    .await;
+                let _ = events.send(Event::PvsChanged {
+                    action: "proxy_create".into(),
+                    result,
+                });
+            }
+            Command::DestroyPvsProxy {
+                connection_id,
+                uuid,
+            } => {
+                let result = workspace.destroy_pvs_proxy(&connection_id, &uuid).await;
+                let _ = events.send(Event::PvsChanged {
+                    action: "proxy_delete".into(),
+                    result,
+                });
+            }
+            Command::CreatePvsCache {
+                connection_id,
+                site_uuid,
+                host_uuid,
+                sr_uuid,
+                size_mib,
+            } => {
+                let result = workspace
+                    .create_pvs_cache(&connection_id, &site_uuid, &host_uuid, &sr_uuid, size_mib)
+                    .await;
+                let _ = events.send(Event::PvsChanged {
+                    action: "cache_create".into(),
+                    result,
+                });
+            }
+            Command::DestroyPvsCache {
+                connection_id,
+                uuid,
+            } => {
+                let result = workspace.destroy_pvs_cache(&connection_id, &uuid).await;
+                let _ = events.send(Event::PvsChanged {
+                    action: "cache_delete".into(),
+                    result,
+                });
+            }
+            Command::PvsVifCatalog { seq, connection_id } => {
+                let result = workspace.pvs_vif_catalog(&connection_id).await;
+                let _ = events.send(Event::PvsVifCatalog { seq, result });
             }
             Command::CreateVmss {
                 connection_id,

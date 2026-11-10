@@ -7,6 +7,7 @@ pub mod operations;
 pub mod performance;
 pub mod pool_actions;
 pub mod pool_status;
+pub mod pvs;
 pub mod storage;
 pub mod transport;
 pub mod vm;
