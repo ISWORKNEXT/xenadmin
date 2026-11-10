@@ -777,6 +777,36 @@ fn console(
                     {
                         actions.push(UiAction::CloseConsole);
                     }
+                    if ui
+                        .add(egui::Button::new(
+                            RichText::new("Ctrl+Alt+Del").size(11.0),
+                        ))
+                        .on_hover_text("Send the secure attention sequence to the guest")
+                        .clicked()
+                    {
+                        let console_id = state
+                            .console
+                            .as_ref()
+                            .map(|console| console.console_id.clone())
+                            .unwrap_or_default();
+                        for (keycode, down) in [
+                            (0xffe3, true),
+                            (0xffe9, true),
+                            (0xffff, true),
+                            (0xffff, false),
+                            (0xffe9, false),
+                            (0xffe3, false),
+                        ] {
+                            actions.push(UiAction::ConsoleKey {
+                                console_id: console_id.clone(),
+                                keycode,
+                                down,
+                            });
+                        }
+                        if let Some(console) = state.console.as_mut() {
+                            console.modifiers = (false, false, false, false);
+                        }
+                    }
                 } else if ui
                     .add_enabled(
                         vm.power_state == "Running",
