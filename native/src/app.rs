@@ -888,12 +888,10 @@ impl App {
                     }
                     Err(message) => {
                         let mut handled = false;
-                        for error in [&mut self.state.pvs_site_dialog] {
-                            if let Some(dialog) = error.as_mut() {
-                                dialog.submitting = false;
-                                dialog.error = Some(message.clone());
-                                handled = true;
-                            }
+                        if let Some(dialog) = self.state.pvs_site_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
                         }
                         if let Some(dialog) = self.state.pvs_server_dialog.as_mut() {
                             dialog.submitting = false;

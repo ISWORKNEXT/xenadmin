@@ -647,7 +647,7 @@ impl ConsoleState {
             let row = &mut self.pixels[dst..dst + row_bytes];
             row.copy_from_slice(&pixels[src..src + row_bytes]);
             // RFB returns an unused alpha byte; make every pixel opaque.
-            for pixel in row.chunks_exact_mut(4) {
+            for pixel in row.as_chunks_mut::<4>().0 {
                 pixel[3] = 255;
             }
         }
