@@ -89,13 +89,13 @@ fn render(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_on
         wlb_card(&mut columns[1], status, actions, read_only);
     });
     ui.add_space(8.0);
+    dr_card(ui, status, actions, read_only);
+    ui.add_space(8.0);
     pvs_card(ui, status, actions, read_only);
     ui.add_space(8.0);
     sriov_card(ui, status);
     ui.add_space(8.0);
     vmss_card(ui, status, actions, read_only);
-    ui.add_space(8.0);
-    dr_card(ui, status);
 }
 
 fn summary(ui: &mut Ui, status: &PoolStatus) {
@@ -653,12 +653,23 @@ fn vmss_card(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read
     });
 }
 
-fn dr_card(ui: &mut Ui, status: &PoolStatus) {
+fn dr_card(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_only: bool) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             widgets::section_title(ui, "Disaster recovery tasks", None);
             widgets::badge(ui, status.dr.len().to_string(), cyan());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(
+                        !read_only,
+                        egui::Button::new(RichText::new("Create DR task…").size(10.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenDrTaskDialog);
+                }
+            });
         });
         ui.add_space(4.0);
         if status.dr.is_empty() {
@@ -670,20 +681,34 @@ fn dr_card(ui: &mut Ui, status: &PoolStatus) {
             return;
         }
         for task in &status.dr {
-            ui.label(
-                RichText::new(format!(
-                    "{} · introduced SRs: {}",
-                    task.uuid,
-                    if task.introduced_srs.is_empty() {
-                        "—".to_owned()
-                    } else {
-                        task.introduced_srs.join(", ")
-                    }
-                ))
-                .monospace()
-                .size(9.0)
-                .color(muted_fg()),
-            );
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(format!(
+                        "{} · introduced SRs: {}",
+                        task.uuid,
+                        if task.introduced_srs.is_empty() {
+                            "—".to_owned()
+                        } else {
+                            task.introduced_srs.join(", ")
+                        }
+                    ))
+                    .monospace()
+                    .size(9.0)
+                    .color(muted_fg()),
+                );
+                if ui
+                    .add_enabled(
+                        !read_only,
+                        egui::Button::new(RichText::new("Destroy…").size(9.0).color(red())).small(),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptDrTaskDestroy {
+                        uuid: task.uuid.clone(),
+                        introduced_srs: task.introduced_srs.clone(),
+                    });
+                }
+            });
         }
     });
 }

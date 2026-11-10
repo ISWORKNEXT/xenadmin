@@ -539,6 +539,34 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn create_dr_task(
+        &self,
+        connection_id: &str,
+        sr_type: String,
+        device_config: Vec<(String, String)>,
+        whitelist: Vec<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_dr_task(&sr_type, device_config, whitelist)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn destroy_dr_task(&self, connection_id: &str, uuid: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .destroy_dr_task(uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn introduce_pvs_site(
         &self,
         connection_id: &str,

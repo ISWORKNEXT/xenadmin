@@ -62,6 +62,7 @@
 - Add VM snapshot schedule create/edit/delete with frequency, day, retention and VM-membership validation.
 - Add read-only SR-IOV/tunnel discovery with PIF roles, network purposes and host-internal network classification.
 - Add PVS site/server/proxy/cache-storage create and remove actions with address, port and cache-size validation.
+- Add DR task create/destroy with NFS/iSCSI/HBA settings and SR whitelist validation.
 - Raise worker thread stack size so large inventory/pool-status futures do not overflow.
 - Add directory subject role assignment (add/remove) with internal-role/unknown-role guards and local-root protection.
 - Add AD authentication enable/disable with domain/service-account validation and confirmation guards.

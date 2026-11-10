@@ -768,6 +768,27 @@ pub struct SshCredentialDialog {
     pub error: Option<String>,
 }
 
+pub struct DrTaskDialog {
+    pub connection_id: String,
+    pub sr_type: String,
+    pub server: String,
+    pub serverpath: String,
+    pub target: String,
+    pub target_iqn: String,
+    pub whitelist: String,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct DrTaskDeleteConfirm {
+    pub connection_id: String,
+    pub uuid: String,
+    pub introduced_srs: Vec<String>,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct PvsSiteDialog {
     pub connection_id: String,
     pub name: String,
@@ -1251,6 +1272,8 @@ pub struct UiState {
     pub pvs_proxy_dialog: Option<PvsProxyDialog>,
     pub pvs_delete_confirm: Option<PvsDeleteConfirm>,
     pub pvs_vif_seq: u64,
+    pub dr_task_dialog: Option<DrTaskDialog>,
+    pub dr_task_delete_confirm: Option<DrTaskDeleteConfirm>,
     pub vmss_delete_confirm: Option<VmssDeleteConfirm>,
     pub ad_disable_dialog: Option<AdDisableDialog>,
     pub sr_probe_seq: u64,
@@ -1368,6 +1391,8 @@ impl Default for UiState {
             pvs_proxy_dialog: None,
             pvs_delete_confirm: None,
             pvs_vif_seq: 0,
+            dr_task_dialog: None,
+            dr_task_delete_confirm: None,
             vmss_delete_confirm: None,
             ad_disable_dialog: None,
             sr_probe_seq: 0,
@@ -1506,6 +1531,15 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenDrTaskDialog,
+    CloseDrTaskDialog,
+    SaveDrTaskDialog,
+    PromptDrTaskDestroy {
+        uuid: String,
+        introduced_srs: Vec<String>,
+    },
+    CancelDrTaskDestroy,
+    ConfirmDrTaskDestroy,
     OpenPvsSiteDialog,
     ClosePvsSiteDialog,
     SavePvsSiteDialog,

@@ -145,6 +145,16 @@ pub enum Command {
         seq: u64,
         connection_id: String,
     },
+    CreateDrTask {
+        connection_id: String,
+        sr_type: String,
+        device_config: Vec<(String, String)>,
+        whitelist: Vec<String>,
+    },
+    DestroyDrTask {
+        connection_id: String,
+        uuid: String,
+    },
     IntroducePvsSite {
         connection_id: String,
         name: String,
@@ -649,6 +659,10 @@ pub enum Event {
         action: String,
         result: Result<(), String>,
     },
+    DrChanged {
+        action: String,
+        result: Result<(), String>,
+    },
     PvsVifCatalog {
         seq: u64,
         result: Result<Vec<xen_core::pvs::PvsVif>, String>,
@@ -914,6 +928,30 @@ fn dispatch(
                     .await;
                 let _ = events.send(Event::SubjectRolesUpdated {
                     subject_uuid,
+                    result,
+                });
+            }
+            Command::CreateDrTask {
+                connection_id,
+                sr_type,
+                device_config,
+                whitelist,
+            } => {
+                let result = workspace
+                    .create_dr_task(&connection_id, sr_type, device_config, whitelist)
+                    .await;
+                let _ = events.send(Event::DrChanged {
+                    action: "create".into(),
+                    result,
+                });
+            }
+            Command::DestroyDrTask {
+                connection_id,
+                uuid,
+            } => {
+                let result = workspace.destroy_dr_task(&connection_id, &uuid).await;
+                let _ = events.send(Event::DrChanged {
+                    action: "destroy".into(),
                     result,
                 });
             }

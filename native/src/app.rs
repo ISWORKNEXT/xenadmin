@@ -813,6 +813,48 @@ impl App {
                         }
                     }
                 },
+                Event::DrChanged { action, result } => match result {
+                    Ok(()) => {
+                        self.state.dr_task_dialog = None;
+                        self.state.dr_task_delete_confirm = None;
+                        self.state.toasts.push(Toast::new(
+                            if action == "create" {
+                                "DR task created. Introduced SRs are now managed by the pool."
+                            } else {
+                                "DR task destroyed. Introduced SRs remain until forgotten."
+                            },
+                            ToastKind::Success,
+                        ));
+                        self.state.pool_status_state = LoadState::Idle;
+                        if matches!(
+                            self.state
+                                .object_tabs
+                                .get(self.state.active_tab)
+                                .map(|tab| &tab.key),
+                            Some(ObjectKey::PoolStatus { .. })
+                        ) {
+                            self.apply(vec![UiAction::LoadPoolStatus]);
+                        }
+                    }
+                    Err(message) => {
+                        let mut handled = false;
+                        if let Some(dialog) = self.state.dr_task_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(confirm) = self.state.dr_task_delete_confirm.as_mut() {
+                            confirm.submitting = false;
+                            confirm.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if !handled {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::PvsChanged { action, result } => match result {
                     Ok(()) => {
                         self.state.pvs_site_dialog = None;
@@ -2354,6 +2396,123 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::OpenDrTaskDialog => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.dr_task_dialog = Some(crate::state::DrTaskDialog {
+                        connection_id,
+                        sr_type: "nfs".into(),
+                        server: String::new(),
+                        serverpath: String::new(),
+                        target: String::new(),
+                        target_iqn: String::new(),
+                        whitelist: String::new(),
+                        acknowledged: false,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseDrTaskDialog => {
+                    if !self
+                        .state
+                        .dr_task_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.dr_task_dialog = None;
+                    }
+                }
+                UiAction::SaveDrTaskDialog => {
+                    let Some(dialog) = self.state.dr_task_dialog.as_mut() else {
+                        continue;
+                    };
+                    if !dialog.acknowledged {
+                        dialog.error = Some("Confirm that you understand this change.".into());
+                        continue;
+                    }
+                    let mut config = Vec::new();
+                    match dialog.sr_type.as_str() {
+                        "nfs" => {
+                            config.push(("server".into(), dialog.server.trim().to_owned()));
+                            config.push(("serverpath".into(), dialog.serverpath.trim().to_owned()));
+                        }
+                        "lvmoiscsi" => {
+                            config.push(("target".into(), dialog.target.trim().to_owned()));
+                            config.push(("targetIQN".into(), dialog.target_iqn.trim().to_owned()));
+                        }
+                        _ => {}
+                    }
+                    let whitelist: Vec<String> = dialog
+                        .whitelist
+                        .split([',', '\n'])
+                        .map(str::trim)
+                        .filter(|uuid| !uuid.is_empty())
+                        .map(str::to_owned)
+                        .collect();
+                    if let Err(error) =
+                        xen_core::dr::validate_dr_task(&dialog.sr_type, &config, &whitelist)
+                    {
+                        dialog.error = Some(error.to_string());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::CreateDrTask {
+                        connection_id: dialog.connection_id.clone(),
+                        sr_type: dialog.sr_type.clone(),
+                        device_config: config,
+                        whitelist,
+                    });
+                }
+                UiAction::PromptDrTaskDestroy {
+                    uuid,
+                    introduced_srs,
+                } => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.dr_task_delete_confirm = Some(crate::state::DrTaskDeleteConfirm {
+                        connection_id,
+                        uuid,
+                        introduced_srs,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CancelDrTaskDestroy => {
+                    if !self
+                        .state
+                        .dr_task_delete_confirm
+                        .as_ref()
+                        .is_some_and(|confirm| confirm.submitting)
+                    {
+                        self.state.dr_task_delete_confirm = None;
+                    }
+                }
+                UiAction::ConfirmDrTaskDestroy => {
+                    let Some(confirm) = self.state.dr_task_delete_confirm.as_mut() else {
+                        continue;
+                    };
+                    confirm.submitting = true;
+                    confirm.error = None;
+                    self.worker.send(Command::DestroyDrTask {
+                        connection_id: confirm.connection_id.clone(),
+                        uuid: confirm.uuid.clone(),
                     });
                 }
                 UiAction::OpenPvsSiteDialog => {

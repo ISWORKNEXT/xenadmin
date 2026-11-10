@@ -108,6 +108,12 @@ pub fn show(
     if state.pvs_delete_confirm.is_some() {
         pvs_delete_dialog(ctx, state, actions);
     }
+    if state.dr_task_dialog.is_some() {
+        dr_task_dialog(ctx, state, actions);
+    }
+    if state.dr_task_delete_confirm.is_some() {
+        dr_task_delete_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1025,6 +1031,247 @@ fn network_destroy(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<U
     }
     if close {
         actions.push(UiAction::CancelNetworkDestroy);
+    }
+}
+
+fn dr_task_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.dr_task_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("dr-task-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(600.0);
+            modal_title(
+                ui,
+                "Create disaster recovery task",
+                "Introduces unmanaged SRs discovered on shared storage into this pool.",
+            );
+            widgets::field_label(ui, "Storage type");
+            egui::ComboBox::from_id_salt("dr-task-type")
+                .selected_text(
+                    RichText::new(match dialog.sr_type.as_str() {
+                        "lvmoiscsi" => "iSCSI",
+                        "lvmohba" | "hba" => "HBA / FCoE",
+                        "lvmofcoe" => "FCoE",
+                        _ => "NFS",
+                    })
+                    .size(11.0),
+                )
+                .width(ui.available_width())
+                .show_ui(ui, |ui| {
+                    for (value, label) in [
+                        ("nfs", "NFS"),
+                        ("lvmoiscsi", "iSCSI"),
+                        ("lvmohba", "HBA"),
+                        ("lvmofcoe", "FCoE"),
+                        ("hba", "HBA (shared)"),
+                    ] {
+                        if ui
+                            .selectable_label(
+                                dialog.sr_type == value,
+                                RichText::new(label).size(11.0),
+                            )
+                            .clicked()
+                        {
+                            dialog.sr_type = value.into();
+                        }
+                    }
+                });
+            ui.add_space(8.0);
+            match dialog.sr_type.as_str() {
+                "nfs" => {
+                    ui.columns(2, |columns| {
+                        widgets::field_label(&mut columns[0], "NFS server");
+                        columns[0].add_enabled(
+                            !dialog.submitting,
+                            egui::TextEdit::singleline(&mut dialog.server)
+                                .char_limit(255)
+                                .margin(egui::Margin::symmetric(8, 5)),
+                        );
+                        widgets::field_label(&mut columns[1], "Server path");
+                        columns[1].add_enabled(
+                            !dialog.submitting,
+                            egui::TextEdit::singleline(&mut dialog.serverpath)
+                                .char_limit(255)
+                                .margin(egui::Margin::symmetric(8, 5)),
+                        );
+                    });
+                }
+                "lvmoiscsi" | "lvmofcoe" => {
+                    ui.columns(2, |columns| {
+                        widgets::field_label(&mut columns[0], "Target");
+                        columns[0].add_enabled(
+                            !dialog.submitting,
+                            egui::TextEdit::singleline(&mut dialog.target)
+                                .char_limit(255)
+                                .margin(egui::Margin::symmetric(8, 5)),
+                        );
+                        widgets::field_label(&mut columns[1], "Target IQN");
+                        columns[1].add_enabled(
+                            !dialog.submitting,
+                            egui::TextEdit::singleline(&mut dialog.target_iqn)
+                                .char_limit(255)
+                                .margin(egui::Margin::symmetric(8, 5)),
+                        );
+                    });
+                }
+                _ => {
+                    ui.label(
+                        RichText::new("HBA/FCoE storage is discovered from the host adapter.")
+                            .size(9.5)
+                            .color(muted_fg()),
+                    );
+                }
+            }
+            ui.add_space(8.0);
+            widgets::field_label(ui, "SR UUIDs to introduce (comma or newline separated)");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::multiline(&mut dialog.whitelist)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(3)
+                    .hint_text("11111111-2222-3333-4444-555555555555")
+                    .char_limit(4096)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.label(
+                RichText::new(
+                    "Use SR.probe or the storage's existing SR UUIDs. Only unmanaged SRs should be listed.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            ui.add_space(6.0);
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.acknowledged,
+                    RichText::new("I understand these SRs will be introduced into this pool")
+                        .size(10.0),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && dialog.acknowledged
+                                && !dialog.whitelist.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Creating…"
+                            } else {
+                                "Create DR task"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveDrTaskDialog);
+    }
+    if close {
+        actions.push(UiAction::CloseDrTaskDialog);
+    }
+}
+
+fn dr_task_delete_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut confirm = false;
+    let Some(dialog) = state.dr_task_delete_confirm.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("dr-task-delete-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(520.0);
+            modal_title(
+                ui,
+                "Destroy DR task",
+                "Stops managing this DR task. Introduced SRs stay in the pool until they are forgotten.",
+            );
+            ui.horizontal(|ui| {
+                widgets::dot(ui, amber(), 6.0);
+                ui.label(RichText::new(&dialog.uuid).monospace().size(9.5));
+            });
+            if !dialog.introduced_srs.is_empty() {
+                ui.label(
+                    RichText::new(format!(
+                        "Introduced SRs: {}",
+                        dialog.introduced_srs.join(", ")
+                    ))
+                    .size(9.5)
+                    .color(muted_fg()),
+                );
+            }
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting,
+                            egui::Button::new(
+                                RichText::new(if dialog.submitting {
+                                    "Destroying…"
+                                } else {
+                                    "Destroy DR task"
+                                })
+                                .size(11.0)
+                                .color(red()),
+                            )
+                            .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120))),
+                        )
+                        .clicked()
+                    {
+                        confirm = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if confirm {
+        actions.push(UiAction::ConfirmDrTaskDestroy);
+    }
+    if close {
+        actions.push(UiAction::CancelDrTaskDestroy);
     }
 }
 
