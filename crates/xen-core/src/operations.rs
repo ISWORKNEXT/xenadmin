@@ -1668,6 +1668,42 @@ impl Connection {
         Ok(vif_ref)
     }
 
+    /// Destroy an unattached VDI. Attached disks must be detached first.
+    pub async fn delete_vdi(&self, vdi_uuid: &str) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vdi_ref: String = self
+            .request("VDI.get_by_uuid", json!([self.session, vdi_uuid]))
+            .await?;
+        let vdi: Value = self
+            .request("VDI.get_record", json!([self.session, vdi_ref]))
+            .await?;
+        if vdi["uuid"].as_str() != Some(vdi_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        if !deletable_user_vdi(&vdi) {
+            return Err(ApiError::Xen(
+                "Only writable user disks can be deleted; ISO media and base disks are protected."
+                    .into(),
+            ));
+        }
+        let vbds = self.records("VBD").await?;
+        if vbds
+            .values()
+            .any(|vbd| vbd["VDI"].as_str() == Some(vdi_ref.as_str()))
+        {
+            return Err(ApiError::Xen(
+                "This disk is still attached to a VM. Detach it first.".into(),
+            ));
+        }
+        self.request::<Value>("VDI.destroy", json!([self.session, vdi_ref]))
+            .await?;
+        Ok(())
+    }
+
     /// Delete a VM and, optionally, the disks it owns. Owner VBDs are identified
     /// the same way as upstream XenAdmin: a VBD with an `owner` key in
     /// `other_config`. The suspended-image VDI is removed as well.
@@ -1812,6 +1848,10 @@ impl Connection {
 }
 
 const MAX_VM_DELAY: u64 = 7 * 24 * 60 * 60;
+
+fn deletable_user_vdi(vdi: &Value) -> bool {
+    text(vdi, "type") == "user" && vdi["read_only"].as_bool() != Some(true)
+}
 
 fn clean_tags(tags: Vec<String>) -> Result<Vec<String>, ApiError> {
     if tags.len() > 64 {
@@ -2033,6 +2073,19 @@ mod tests {
         );
         assert!(owner_vdis(&vbds, &json!({"suspend_VDI": "OpaqueRef:NULL"}), "vm").len() == 1);
     }
+    #[test]
+    fn only_writable_user_disks_are_deletable() {
+        assert!(deletable_user_vdi(
+            &json!({"type":"user","read_only":false})
+        ));
+        assert!(!deletable_user_vdi(
+            &json!({"type":"user","read_only":true})
+        ));
+        assert!(!deletable_user_vdi(
+            &json!({"type":"iso","read_only":false})
+        ));
+    }
+
     #[test]
     fn cleans_and_validates_tags() {
         let tags = clean_tags(vec![

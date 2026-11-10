@@ -47,6 +47,7 @@
 - Restore VBD/VDI/PBD/message/VIF/Bond/Certificate event classes so health data stays live.
 - Add VM HA restart priority, start/shutdown delay and host affinity editing with validation.
 - Add VM tag editing (deduplicated, validated) so XenSearch tag filters and grouping can be curated.
+- Add an SR user-disk inventory with attachment/size details and confirmed deletion of unattached writable disks.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

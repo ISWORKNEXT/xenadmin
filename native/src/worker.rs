@@ -119,6 +119,15 @@ pub enum Command {
         seq: u64,
         connection_id: String,
     },
+    SrVdis {
+        seq: u64,
+        connection_id: String,
+        sr_uuid: String,
+    },
+    DeleteVdi {
+        connection_id: String,
+        vdi_uuid: String,
+    },
     AttachVdi {
         connection_id: String,
         vm_uuid: String,
@@ -262,6 +271,14 @@ pub enum Event {
     VdiCatalog {
         seq: u64,
         result: Result<Vec<xen_core::vm::VdiSummary>, String>,
+    },
+    SrVdis {
+        seq: u64,
+        result: Result<Vec<xen_core::vm::SrVdi>, String>,
+    },
+    VdiDeleted {
+        vdi_uuid: String,
+        result: Result<(), String>,
     },
     VmHaUpdated {
         vm_uuid: String,
@@ -644,6 +661,21 @@ fn dispatch(
                     .change_cd(&connection_id, &vm_uuid, &vbd_uuid, iso_uuid)
                     .await;
                 let _ = events.send(Event::CdChanged { vm_uuid, result });
+            }
+            Command::SrVdis {
+                seq,
+                connection_id,
+                sr_uuid,
+            } => {
+                let result = workspace.sr_vdis(&connection_id, &sr_uuid).await;
+                let _ = events.send(Event::SrVdis { seq, result });
+            }
+            Command::DeleteVdi {
+                connection_id,
+                vdi_uuid,
+            } => {
+                let result = workspace.delete_vdi(&connection_id, &vdi_uuid).await;
+                let _ = events.send(Event::VdiDeleted { vdi_uuid, result });
             }
             Command::VdiCatalog { seq, connection_id } => {
                 let result = workspace.vdi_catalog(&connection_id).await;

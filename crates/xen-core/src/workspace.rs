@@ -592,6 +592,41 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn sr_vdis(
+        &self,
+        connection_id: &str,
+        sr_uuid: &str,
+    ) -> Result<Vec<crate::vm::SrVdi>, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !active
+            .snapshot
+            .read()
+            .await
+            .storage
+            .iter()
+            .any(|sr| sr.uuid == sr_uuid)
+        {
+            return Err("This storage repository is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .sr_vdis(sr_uuid)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub async fn delete_vdi(&self, connection_id: &str, vdi_uuid: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .delete_vdi(vdi_uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn set_vm_tags(
         &self,
         connection_id: &str,

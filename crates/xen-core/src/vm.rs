@@ -105,6 +105,18 @@ pub struct VdiSummary {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct SrVdi {
+    pub uuid: String,
+    pub name: String,
+    pub virtual_size: u64,
+    pub physical_utilisation: u64,
+    pub read_only: bool,
+    pub missing: bool,
+    pub vdi_type: String,
+    pub attached_to: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct VmSnapshot {
     pub uuid: String,
     pub name: String,
@@ -177,6 +189,54 @@ impl Connection {
                 .then(left.sr_name.cmp(&right.sr_name))
         });
         catalog.truncate(500);
+        Ok(catalog)
+    }
+
+    /// List VDIs in a storage repository with their attachment state.
+    pub async fn sr_vdis(&self, sr_uuid: &str) -> Result<Vec<SrVdi>, ApiError> {
+        let sr_ref: String = self
+            .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
+            .await?;
+        let sr: Value = self
+            .request("SR.get_record", json!([self.session, sr_ref]))
+            .await?;
+        if sr["uuid"].as_str() != Some(sr_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        let (vdis, vbds, vms) =
+            tokio::join!(self.records("VDI"), self.records("VBD"), self.records("VM"));
+        let (vdis, vbds, vms) = (vdis?, vbds?, vms?);
+        let mut attached: HashMap<&str, String> = HashMap::new();
+        for vbd in vbds.values() {
+            let Some(vdi) = vbd["VDI"].as_str() else {
+                continue;
+            };
+            let vm_ref = text(vbd, "VM");
+            let vm_name = vms
+                .get(vm_ref.as_str())
+                .map(|vm| text(vm, "name_label"))
+                .unwrap_or(vm_ref);
+            attached.entry(vdi).or_insert(vm_name);
+        }
+        let mut catalog: Vec<SrVdi> = vdis
+            .iter()
+            .filter(|(_, vdi)| text(vdi, "SR") == sr_ref && text(vdi, "type") == "user")
+            .map(|(reference, vdi)| SrVdi {
+                uuid: text(vdi, "uuid"),
+                name: text(vdi, "name_label"),
+                virtual_size: number(vdi, "virtual_size"),
+                physical_utilisation: number(vdi, "physical_utilisation"),
+                read_only: vdi["read_only"].as_bool().unwrap_or(false),
+                missing: vdi["missing"].as_bool().unwrap_or(false),
+                vdi_type: text(vdi, "type"),
+                attached_to: attached
+                    .get(reference.as_str())
+                    .cloned()
+                    .unwrap_or_default(),
+            })
+            .collect();
+        catalog.sort_by(|left, right| left.name.cmp(&right.name).then(left.uuid.cmp(&right.uuid)));
+        catalog.truncate(2000);
         Ok(catalog)
     }
 

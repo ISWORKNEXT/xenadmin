@@ -24,6 +24,7 @@ pub(crate) struct StartupOptions {
     pub vm: Option<String>,
     pub vm_tab: Option<crate::state::VmTab>,
     pub health: bool,
+    pub sr: Option<String>,
     pub search: Option<String>,
     pub group_by: Option<crate::config::GroupBy>,
     pub saved_search: Option<String>,
@@ -39,6 +40,7 @@ pub struct App {
     pending_vm: Option<String>,
     pending_vm_tab: Option<crate::state::VmTab>,
     pending_health: bool,
+    pending_sr: Option<String>,
 }
 
 impl App {
@@ -52,6 +54,7 @@ impl App {
             vm: startup_vm,
             vm_tab: startup_vm_tab,
             health: startup_health,
+            sr: startup_sr,
             search: startup_search,
             group_by: startup_group_by,
             saved_search: startup_saved_search,
@@ -135,6 +138,7 @@ impl App {
             pending_vm: startup_vm,
             pending_vm_tab: startup_vm_tab,
             pending_health: startup_health,
+            pending_sr: startup_sr,
         }
     }
 
@@ -551,6 +555,24 @@ impl App {
                             }
                         }
                     }
+                    if let Some(uuid) = self.pending_sr.clone() {
+                        let mut found = None;
+                        for connection in &self.workspace.connections {
+                            if let Some(inventory) = crate::state::connection_inventory(connection)
+                                && inventory.storage.iter().any(|sr| sr.uuid == uuid)
+                            {
+                                found = Some(ObjectKey::Storage {
+                                    connection_id: connection_id(connection).to_owned(),
+                                    sr_uuid: uuid.clone(),
+                                });
+                                break;
+                            }
+                        }
+                        if let Some(key) = found {
+                            self.pending_sr = None;
+                            self.open_object(key, None);
+                        }
+                    }
                     if self.pending_health
                         && let Some(connection_id) =
                             self.state.scope.connection_id().map(str::to_owned)
@@ -724,6 +746,54 @@ impl App {
                         if let Some(confirm) = self.state.sr_action_confirm.as_mut()
                             && confirm.sr_uuid == sr_uuid
                         {
+                            confirm.submitting = false;
+                            confirm.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
+                Event::SrVdis { seq, result } => {
+                    if seq == self.state.sr_vdis_seq {
+                        self.state.sr_vdis_loading = false;
+                        match result {
+                            Ok(vdis) => {
+                                self.state.sr_vdis = vdis;
+                                self.state.sr_vdis_error = None;
+                            }
+                            Err(message) => {
+                                self.state.sr_vdis = Vec::new();
+                                self.state.sr_vdis_error = Some(message);
+                            }
+                        }
+                    }
+                }
+                Event::VdiDeleted { vdi_uuid, result } => match result {
+                    Ok(()) => {
+                        if let Some(confirm) = self.state.vdi_delete_confirm.take() {
+                            self.state.sr_vdis_seq += 1;
+                            self.state.sr_vdis_loading = true;
+                            self.state.sr_vdis_sr = Some(confirm.sr_uuid.clone());
+                            self.worker.send(Command::SrVdis {
+                                seq: self.state.sr_vdis_seq,
+                                connection_id: confirm.connection_id,
+                                sr_uuid: confirm.sr_uuid,
+                            });
+                            self.state.toasts.push(Toast::new(
+                                format!("Deleted disk {}.", confirm.name),
+                                ToastKind::Success,
+                            ));
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new("Virtual disk deleted.", ToastKind::Success));
+                        }
+                        let _ = vdi_uuid;
+                    }
+                    Err(message) => {
+                        if let Some(confirm) = self.state.vdi_delete_confirm.as_mut() {
                             confirm.submitting = false;
                             confirm.error = Some(message);
                         } else {
@@ -1953,6 +2023,64 @@ impl App {
                         connection_id: confirm.connection_id.clone(),
                         host_uuid: confirm.host_uuid.clone(),
                         action: confirm.action,
+                    });
+                }
+                UiAction::LoadSrVdis {
+                    seq,
+                    connection_id,
+                    sr_uuid,
+                } => {
+                    self.worker.send(Command::SrVdis {
+                        seq,
+                        connection_id,
+                        sr_uuid,
+                    });
+                }
+                UiAction::PromptDeleteVdi {
+                    vdi_uuid,
+                    name,
+                    size,
+                } => {
+                    let Some(ObjectKey::Storage {
+                        connection_id,
+                        sr_uuid,
+                    }) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    self.state.vdi_delete_confirm = Some(crate::state::VdiDeleteConfirm {
+                        connection_id,
+                        sr_uuid,
+                        vdi_uuid,
+                        name,
+                        size,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CancelDeleteVdi => {
+                    if !self
+                        .state
+                        .vdi_delete_confirm
+                        .as_ref()
+                        .is_some_and(|confirm| confirm.submitting)
+                    {
+                        self.state.vdi_delete_confirm = None;
+                    }
+                }
+                UiAction::ConfirmDeleteVdi => {
+                    let Some(confirm) = self.state.vdi_delete_confirm.as_mut() else {
+                        continue;
+                    };
+                    confirm.submitting = true;
+                    confirm.error = None;
+                    self.worker.send(Command::DeleteVdi {
+                        connection_id: confirm.connection_id.clone(),
+                        vdi_uuid: confirm.vdi_uuid.clone(),
                     });
                 }
                 UiAction::OpenHaEdit => {

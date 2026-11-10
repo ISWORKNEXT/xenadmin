@@ -8,7 +8,7 @@ use xen_core::{
     host::{DataSection, HostDetails, InfoGroup},
     operations::{TaskStatus, VmAction},
     performance::HostPerformance,
-    vm::{VdiSummary, VmDetails, VmIso},
+    vm::{SrVdi, VdiSummary, VmDetails, VmIso},
     workspace::{ConnectionView, Operation, WorkspaceView},
     xapi::{ConnectionSettings, Host, Inventory, VirtualMachine},
 };
@@ -751,6 +751,16 @@ pub struct HostActionConfirm {
     pub error: Option<String>,
 }
 
+pub struct VdiDeleteConfirm {
+    pub connection_id: String,
+    pub sr_uuid: String,
+    pub vdi_uuid: String,
+    pub name: String,
+    pub size: u64,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct HaEditDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -891,6 +901,12 @@ pub struct UiState {
     pub disk_dialog: Option<DiskDialog>,
     pub attach_vdi_dialog: Option<AttachVdiDialog>,
     pub ha_edit_dialog: Option<HaEditDialog>,
+    pub sr_vdis: Vec<SrVdi>,
+    pub sr_vdis_sr: Option<String>,
+    pub sr_vdis_loading: bool,
+    pub sr_vdis_error: Option<String>,
+    pub sr_vdis_seq: u64,
+    pub vdi_delete_confirm: Option<VdiDeleteConfirm>,
     pub vdi_catalog_seq: u64,
     pub host_action_confirm: Option<HostActionConfirm>,
     pub snapshot_selection: HashSet<String>,
@@ -960,6 +976,12 @@ impl Default for UiState {
             disk_dialog: None,
             attach_vdi_dialog: None,
             ha_edit_dialog: None,
+            sr_vdis: Vec::new(),
+            sr_vdis_sr: None,
+            sr_vdis_loading: false,
+            sr_vdis_error: None,
+            sr_vdis_seq: 0,
+            vdi_delete_confirm: None,
             vdi_catalog_seq: 0,
             host_action_confirm: None,
             snapshot_selection: HashSet::new(),
@@ -1087,6 +1109,18 @@ pub enum UiAction {
     CancelHostAction,
     ConfirmHostAction,
     OpenAddDisk,
+    LoadSrVdis {
+        seq: u64,
+        connection_id: String,
+        sr_uuid: String,
+    },
+    PromptDeleteVdi {
+        vdi_uuid: String,
+        name: String,
+        size: u64,
+    },
+    CancelDeleteVdi,
+    ConfirmDeleteVdi,
     OpenHaEdit,
     CloseHaEdit,
     SaveHaEdit,

@@ -96,7 +96,7 @@
 
 ### 4. Storage
 
-- SR create/introduce/probe/repair/reattach/trim (scan/destroy มีแล้ว)
+- SR create/introduce/probe/repair/reattach/trim (scan/destroy + list/delete unattached VDI มีแล้ว)
 - PBD attach/detach, iSCSI IQN/LUN discovery
 - VDI create/destroy/attach/detach/resize/move/migrate
 - VBD create/plug/edit
@@ -173,7 +173,7 @@
 
 ### P1 — จัดการโครงสร้างพื้นฐาน
 
-8. Storage/VDI/VBD management (SR scan/destroy, VM disks มีแล้ว)
+8. Storage/VDI/VBD management (SR scan/destroy, VDI list/delete, VM disks มีแล้ว)
 9. Network/VIF/PIF/bond/VLAN/SR-IOV management
 10. Host maintenance workflow (enable/disable/power-on/evacuate/reboot/shutdown/PIF rescan มีแล้ว)
 11. Alerts + diagnostics + health check

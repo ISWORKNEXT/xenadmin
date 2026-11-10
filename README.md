@@ -38,7 +38,8 @@ default and a persisted dark-theme toggle.
   HA tab, and edit VM tags for XenSearch grouping/filtering.
 - Priority pool alerts from XenAPI message records, shown on the pool page with
   a dismiss action.
-- Storage repository scan/destroy actions and XenAPI network create/destroy.
+- Storage repository scan/destroy actions, a user-disk inventory per SR with
+  safe deletion of unattached writable disks, and XenAPI network create/destroy.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.
@@ -96,6 +97,7 @@ The executable is written to `target/release/xen-native`.
 --vm <vm-uuid>            open the VM detail tab after connecting
 --vm-tab general|performance|storage|network|ha|snapshots|console
 --health                  open the pool Health & diagnostics page
+--sr UUID                 open a storage repository page
 --search QUERY            prefill the VM/template search (e.g. power_state:running)
 --group-by none|connection|host|power|tag
 --saved-search NAME       apply a saved search on startup
