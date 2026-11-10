@@ -674,6 +674,46 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn set_vbd_mode(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        mode: &str,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .set_vbd_mode(vm_uuid, vbd_uuid, mode)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn set_vbd_plugged(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        plugged: bool,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .set_vbd_plugged(vm_uuid, vbd_uuid, plugged)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn set_vbd_bootable(
         &self,
         connection_id: &str,

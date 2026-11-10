@@ -1131,6 +1131,14 @@ pub enum UiAction {
         vbd_uuid: String,
         bootable: bool,
     },
+    SetVbdMode {
+        vbd_uuid: String,
+        mode: String,
+    },
+    SetVbdPlugged {
+        vbd_uuid: String,
+        plugged: bool,
+    },
     ApplySavedSearch(usize),
     DeleteSavedSearch(usize),
     EditSavedSearch(usize),

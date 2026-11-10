@@ -1057,6 +1057,9 @@ impl App {
                         "add_cd" => "CD/DVD drive added.",
                         "attach" => "Virtual disk attached.",
                         "bootable" => "Boot flag updated.",
+                        "mode" => "Disk mode updated.",
+                        "plug" => "Disk plugged.",
+                        "unplug" => "Disk unplugged.",
                         "resize" => "Virtual disk resized.",
                         "remove" => "Virtual disk removed.",
                         _ => "Virtual disk updated.",
@@ -2217,6 +2220,44 @@ impl App {
                         vm_uuid: dialog.vm_uuid.clone(),
                         vdi_uuid,
                         bootable: dialog.bootable,
+                    });
+                }
+                UiAction::SetVbdMode { vbd_uuid, mode } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.worker.send(Command::SetVbdMode {
+                        connection_id,
+                        vm_uuid,
+                        vbd_uuid,
+                        mode,
+                    });
+                }
+                UiAction::SetVbdPlugged { vbd_uuid, plugged } => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    self.worker.send(Command::SetVbdPlugged {
+                        connection_id,
+                        vm_uuid,
+                        vbd_uuid,
+                        plugged,
                     });
                 }
                 UiAction::SetVbdBootable { vbd_uuid, bootable } => {

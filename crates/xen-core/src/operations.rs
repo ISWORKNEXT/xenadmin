@@ -1206,6 +1206,116 @@ impl Connection {
         Ok(())
     }
 
+    /// Change a data VBD between read-only and read-write while the VM is halted.
+    pub async fn set_vbd_mode(
+        &self,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        mode: &str,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        if !valid_vbd_mode(mode) {
+            return Err(ApiError::Xen("Disk mode must be RO or RW.".into()));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["power_state"].as_str() != Some("Halted") {
+            return Err(ApiError::Xen(
+                "Shut down the VM before changing a disk mode.".into(),
+            ));
+        }
+        let vbd_ref: String = self
+            .request("VBD.get_by_uuid", json!([self.session, vbd_uuid]))
+            .await?;
+        let vbd: Value = self
+            .request("VBD.get_record", json!([self.session, vbd_ref]))
+            .await?;
+        if vbd["uuid"].as_str() != Some(vbd_uuid)
+            || vbd["VM"].as_str() != Some(vm_ref.as_str())
+            || text(&vbd, "type") != "Disk"
+        {
+            return Err(ApiError::Xen(
+                "Only a data disk attached to this VM can change mode.".into(),
+            ));
+        }
+        if mode == "RW" {
+            let vdi_ref = text(&vbd, "VDI");
+            if !vdi_ref.is_empty() && vdi_ref != "OpaqueRef:NULL" {
+                let vdi: Value = self
+                    .request("VDI.get_record", json!([self.session, vdi_ref]))
+                    .await?;
+                if vdi["read_only"].as_bool() == Some(true) {
+                    return Err(ApiError::Xen(
+                        "This disk is read-only media and cannot be attached read-write.".into(),
+                    ));
+                }
+            }
+        }
+        if text(&vbd, "mode") == mode {
+            return Ok(());
+        }
+        self.request::<Value>("VBD.set_mode", json!([self.session, vbd_ref, mode]))
+            .await?;
+        Ok(())
+    }
+
+    /// Hot-plug or unplug a data disk from a running VM.
+    pub async fn set_vbd_plugged(
+        &self,
+        vm_uuid: &str,
+        vbd_uuid: &str,
+        plugged: bool,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let vm_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, vm_uuid]))
+            .await?;
+        let vm: Value = self
+            .request("VM.get_record", json!([self.session, vm_ref]))
+            .await?;
+        if vm["power_state"].as_str() != Some("Running") {
+            return Err(ApiError::Xen(
+                "Start the VM before plugging or unplugging a disk.".into(),
+            ));
+        }
+        let vbd_ref: String = self
+            .request("VBD.get_by_uuid", json!([self.session, vbd_uuid]))
+            .await?;
+        let vbd: Value = self
+            .request("VBD.get_record", json!([self.session, vbd_ref]))
+            .await?;
+        if vbd["uuid"].as_str() != Some(vbd_uuid)
+            || vbd["VM"].as_str() != Some(vm_ref.as_str())
+            || text(&vbd, "type") != "Disk"
+        {
+            return Err(ApiError::Xen(
+                "Only a data disk attached to this VM can be plugged or unplugged.".into(),
+            ));
+        }
+        if vbd["currently_attached"].as_bool().unwrap_or(false) == plugged {
+            return Ok(());
+        }
+        let method = if plugged {
+            "Async.VBD.plug"
+        } else {
+            "Async.VBD.unplug"
+        };
+        self.async_task(method, json!([self.session, vbd_ref]))
+            .await
+    }
+
     pub async fn set_vbd_bootable(
         &self,
         vm_uuid: &str,
@@ -1849,6 +1959,10 @@ impl Connection {
 
 const MAX_VM_DELAY: u64 = 7 * 24 * 60 * 60;
 
+fn valid_vbd_mode(mode: &str) -> bool {
+    matches!(mode, "RO" | "RW")
+}
+
 fn deletable_user_vdi(vdi: &Value) -> bool {
     text(vdi, "type") == "user" && vdi["read_only"].as_bool() != Some(true)
 }
@@ -2073,6 +2187,15 @@ mod tests {
         );
         assert!(owner_vdis(&vbds, &json!({"suspend_VDI": "OpaqueRef:NULL"}), "vm").len() == 1);
     }
+    #[test]
+    fn disk_mode_validation_is_strict() {
+        assert!(valid_vbd_mode("RO"));
+        assert!(valid_vbd_mode("RW"));
+        assert!(!valid_vbd_mode("ro"));
+        assert!(!valid_vbd_mode("read-only"));
+        assert!(!valid_vbd_mode(""));
+    }
+
     #[test]
     fn only_writable_user_disks_are_deletable() {
         assert!(deletable_user_vdi(

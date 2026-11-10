@@ -72,7 +72,7 @@
 
 - New VM wizard, fast create, create from snapshot (create from template มีแล้ว)
 - boot options อื่น, disk move ระหว่าง SR
-- disk move ระหว่าง SR (attach existing VDI, add/resize/remove มีแล้ว)
+- disk move ระหว่าง SR (attach, RO/RW mode, hot-plug/unplug มีแล้ว)
 - VIF edit network/locking mode (create/delete/plug/unplug มีแล้ว)
 - HA restart priority, startup options, other_config
 - XenStore data/keys, VM logs

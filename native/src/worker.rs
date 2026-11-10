@@ -140,6 +140,18 @@ pub enum Command {
         vbd_uuid: String,
         bootable: bool,
     },
+    SetVbdMode {
+        connection_id: String,
+        vm_uuid: String,
+        vbd_uuid: String,
+        mode: String,
+    },
+    SetVbdPlugged {
+        connection_id: String,
+        vm_uuid: String,
+        vbd_uuid: String,
+        plugged: bool,
+    },
     UpdateVmHa {
         connection_id: String,
         vm_uuid: String,
@@ -715,6 +727,36 @@ fn dispatch(
                     )
                     .await;
                 let _ = events.send(Event::VmHaUpdated { vm_uuid, result });
+            }
+            Command::SetVbdMode {
+                connection_id,
+                vm_uuid,
+                vbd_uuid,
+                mode,
+            } => {
+                let result = workspace
+                    .set_vbd_mode(&connection_id, &vm_uuid, &vbd_uuid, &mode)
+                    .await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: "mode".into(),
+                    result,
+                });
+            }
+            Command::SetVbdPlugged {
+                connection_id,
+                vm_uuid,
+                vbd_uuid,
+                plugged,
+            } => {
+                let result = workspace
+                    .set_vbd_plugged(&connection_id, &vm_uuid, &vbd_uuid, plugged)
+                    .await;
+                let _ = events.send(Event::DiskChanged {
+                    vm_uuid,
+                    action: if plugged { "plug" } else { "unplug" }.into(),
+                    result,
+                });
             }
             Command::SetVbdBootable {
                 connection_id,
