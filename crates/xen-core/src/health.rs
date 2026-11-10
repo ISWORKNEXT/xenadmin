@@ -238,6 +238,16 @@ fn storage(raw: &RawInventory) -> DiagnosticCheck {
             severity = max_severity(severity, Severity::Warning);
         }
     }
+    if let Some(pool) = raw.pools.values().next() {
+        let default_sr = text(pool, "default_SR");
+        if default_sr.is_empty()
+            || default_sr == "OpaqueRef:NULL"
+            || !raw.storage.contains_key(&default_sr)
+        {
+            details.push("Pool default SR is not configured or unavailable.".into());
+            severity = max_severity(severity, Severity::Warning);
+        }
+    }
     check(
         "storage",
         "Storage health",
@@ -254,13 +264,28 @@ fn storage(raw: &RawInventory) -> DiagnosticCheck {
 fn network(raw: &RawInventory) -> DiagnosticCheck {
     let mut details = Vec::new();
     let mut severity = Severity::Ok;
+    for bond in raw.bonds.values() {
+        let links_up = number(bond, "links_up");
+        let slaves = bond["slaves"].as_array().map_or(0, Vec::len) as u64;
+        if slaves > 0 && links_up < slaves {
+            details.push(format!(
+                "Bond {} has {links_up}/{slaves} links up.",
+                text(bond, "uuid")
+            ));
+            severity = max_severity(severity, Severity::Warning);
+        }
+    }
     if raw.pifs.is_empty() {
         return check(
             "network",
             "Network health",
-            Severity::Info,
-            "PIF data is not reported by this host.",
-            Vec::new(),
+            severity,
+            if details.is_empty() {
+                "PIF data is not reported by this host.".into()
+            } else {
+                format!("{} network issue(s).", details.len())
+            },
+            details,
         );
     }
     let mut management_hosts = std::collections::HashSet::new();
@@ -285,6 +310,10 @@ fn network(raw: &RawInventory) -> DiagnosticCheck {
                 text(pif, "device")
             ));
             severity = Severity::Critical;
+        }
+        if number(pif, "VLAN") > 0 && pif["currently_attached"].as_bool() == Some(false) {
+            details.push(format!("VLAN PIF {} is not attached", text(pif, "device")));
+            severity = max_severity(severity, Severity::Warning);
         }
     }
     for (host_ref, host) in &raw.hosts {
@@ -344,7 +373,7 @@ fn guest_tools(raw: &RawInventory) -> DiagnosticCheck {
         let guest_ref = text(vm, "guest_metrics");
         if guest_ref.is_empty() || guest_ref == "OpaqueRef:NULL" {
             details.push(format!("{name}: guest tools/metrics are not reporting"));
-            severity = max_severity(severity, Severity::Info);
+            severity = max_severity(severity, Severity::Warning);
             continue;
         }
         let Some(guest) = raw.guest_metrics.get(&guest_ref) else {
@@ -427,13 +456,34 @@ fn ha(raw: &RawInventory) -> DiagnosticCheck {
         .filter(|host| host["enabled"].as_bool().unwrap_or(true))
         .count() as u64;
     let failures = number(pool, "ha_host_failures_to_tolerate");
-    let statefiles = pool["ha_statefiles"].as_array().map_or(0, Vec::len);
+    let statefiles = pool["ha_statefiles"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     let overcommitted = pool["ha_overcommitted"].as_bool().unwrap_or(false);
     let mut details = Vec::new();
     let mut severity = Severity::Ok;
-    if statefiles == 0 {
+    if statefiles.is_empty() {
         details.push("No HA statefile is configured.".into());
         severity = Severity::Critical;
+    }
+    for statefile in &statefiles {
+        let Some(reference) = statefile.as_str() else {
+            continue;
+        };
+        let Some(vdi) = raw.vdis.get(reference) else {
+            details.push(format!("HA statefile VDI {reference} is missing."));
+            severity = Severity::Critical;
+            continue;
+        };
+        let sr = raw.storage.get(&text(vdi, "SR"));
+        if sr.is_none_or(|sr| sr["PBDs"].as_array().is_none_or(Vec::is_empty)) {
+            details.push(format!(
+                "HA statefile {} has no usable storage repository.",
+                text(vdi, "name_label")
+            ));
+            severity = Severity::Critical;
+        }
     }
     if overcommitted {
         details.push("HA is overcommitted for the current host capacity.".into());
@@ -634,7 +684,7 @@ mod tests {
         );
         raw.pools.insert(
             "p".into(),
-            json!({"ha_enabled":true,"ha_statefiles":["sf"],"ha_host_failures_to_tolerate":0,"ha_overcommitted":false}),
+            json!({"ha_enabled":true,"ha_statefiles":["vdi"],"default_SR":"sr","ha_host_failures_to_tolerate":0,"ha_overcommitted":false}),
         );
         raw.storage.insert(
             "sr".into(),
@@ -686,6 +736,52 @@ mod tests {
                 .checks
                 .iter()
                 .any(|check| check.id == "vm-disks" && !check.details.is_empty())
+        );
+    }
+
+    #[test]
+    fn detects_missing_ha_statefile_degraded_bond_and_no_default_sr() {
+        let mut raw = base();
+        raw.pools.get_mut("p").unwrap()["ha_statefiles"] = json!(["missing"]);
+        raw.pools.get_mut("p").unwrap()["default_SR"] = json!("OpaqueRef:NULL");
+        raw.bonds.insert(
+            "bond".into(),
+            json!({"uuid":"bond-uuid","links_up":1,"slaves":["pif1","pif2"]}),
+        );
+        raw.pifs.insert(
+            "pif1".into(),
+            json!({"host":"h1","device":"eth0","management":true,"currently_attached":true,"VLAN":-1}),
+        );
+        let report = evaluate(&raw);
+        let ha = report.checks.iter().find(|check| check.id == "ha").unwrap();
+        assert_eq!(ha.severity, Severity::Critical);
+        assert!(
+            ha.details
+                .iter()
+                .any(|detail| detail.contains("statefile VDI"))
+        );
+        let storage = report
+            .checks
+            .iter()
+            .find(|check| check.id == "storage")
+            .unwrap();
+        assert!(
+            storage
+                .details
+                .iter()
+                .any(|detail| detail.contains("default SR"))
+        );
+        let network = report
+            .checks
+            .iter()
+            .find(|check| check.id == "network")
+            .unwrap();
+        assert_eq!(network.severity, Severity::Warning);
+        assert!(
+            network
+                .details
+                .iter()
+                .any(|detail| detail.contains("links up"))
         );
     }
 

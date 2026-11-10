@@ -41,6 +41,7 @@
 - Add VM/template grouping by connection/host/power/tag and persistent editable named searches.
 - Add VBD slot, multiple-bootable, CD media type and read-only disk consistency diagnostics.
 - Add XenSearch boolean AND/OR/NOT operators with parentheses, precedence and implicit AND.
+- Expand health checks for HA statefile VDIs, missing guest metrics, default SR and degraded bonds/VLAN PIFs.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

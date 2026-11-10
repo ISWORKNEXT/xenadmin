@@ -265,6 +265,7 @@ impl Connection {
             pbds,
             guest_metrics,
             pifs,
+            bonds,
         ) = tokio::join!(
             self.records("pool"),
             self.records("host"),
@@ -278,7 +279,8 @@ impl Connection {
             self.records("VDI"),
             self.records("PBD"),
             self.records("VM_guest_metrics"),
-            self.records("PIF")
+            self.records("PIF"),
+            self.records("Bond")
         );
         Ok(RawInventory {
             pools: pools?,
@@ -296,6 +298,7 @@ impl Connection {
             pbds: pbds.unwrap_or_default(),
             guest_metrics: guest_metrics.unwrap_or_default(),
             pifs: pifs.unwrap_or_default(),
+            bonds: bonds.unwrap_or_default(),
         })
     }
 
@@ -331,6 +334,7 @@ pub struct RawInventory {
     pub(crate) pbds: HashMap<String, Value>,
     pub(crate) guest_metrics: HashMap<String, Value>,
     pub(crate) pifs: HashMap<String, Value>,
+    pub(crate) bonds: HashMap<String, Value>,
 }
 
 impl RawInventory {
@@ -357,6 +361,7 @@ impl RawInventory {
                 "pbd" => &mut self.pbds,
                 "vm_guest_metrics" => &mut self.guest_metrics,
                 "pif" => &mut self.pifs,
+                "bond" => &mut self.bonds,
                 _ => continue,
             };
             if operation == "del" {

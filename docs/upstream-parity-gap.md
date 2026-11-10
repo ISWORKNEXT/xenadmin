@@ -139,7 +139,7 @@
 ### 8. Monitoring และบริการ
 
 - Typed alerts + AlertSummary actions
-- Health diagnostics 9 checks (alerts/hosts/storage/network/pool HA/guest tools/broken disks/VBD-CD) มีแล้ว; 34 checks เต็มยังไม่มี
+- Health diagnostics 9 checks incl. HA statefiles, default SR, bonds/VLANs, guest metrics, VBD/CD (34 checks เต็มยังไม่มี)
 - Performance alerts (Perfmon)
 - VM RRD, graph customization, event overlays
 - Status reports (client/server), logs
