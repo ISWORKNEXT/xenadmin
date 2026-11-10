@@ -686,6 +686,15 @@ impl ConsoleState {
     }
 }
 
+pub struct SnapshotDeleteConfirm {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub vm_name: String,
+    pub snapshots: Vec<(String, String)>,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct HostActionConfirm {
     pub connection_id: String,
     pub host_uuid: String,
@@ -806,6 +815,8 @@ pub struct UiState {
     pub vif_confirm: Option<VifConfirm>,
     pub disk_dialog: Option<DiskDialog>,
     pub host_action_confirm: Option<HostActionConfirm>,
+    pub snapshot_selection: HashSet<String>,
+    pub snapshot_confirm: Option<SnapshotDeleteConfirm>,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -864,6 +875,8 @@ impl Default for UiState {
             vif_confirm: None,
             disk_dialog: None,
             host_action_confirm: None,
+            snapshot_selection: HashSet::new(),
+            snapshot_confirm: None,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -952,6 +965,9 @@ pub enum UiAction {
         connection_id: String,
         message_uuid: String,
     },
+    PromptDeleteSnapshots,
+    CloseSnapshotDelete,
+    ConfirmSnapshotDelete,
     PromptHostAction {
         host_uuid: String,
         host_name: String,

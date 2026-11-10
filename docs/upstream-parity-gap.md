@@ -51,7 +51,7 @@
 | Coordinator | handle `HOST_IS_SLAVE` และสลับไป master | redirect ไป master อัตโนมัติ ระหว่าง login/reconnect | ต้องมี network ไปถึง master |
 | VM start | `start_on` / `resume_on`, `assert_can_boot_here`, ตรวจ CD/ISO/SR ที่ broken, HA | `start_on` / `resume_on` + host picker + missing-VDI/SR preflight + `assert_can_boot_here` | ยังไม่ตรวจ HA/ลึกเท่า upstream |
 | Snapshot revert | คืน power state และ start/resume บน host เดิม | revert + start/resume อัตโนมัติเมื่อ snapshot ถ่ายตอน Running | ยังไม่เลือก host เดิมแบบเจาะจง |
-| Snapshot delete | เลือก snapshots และลบ VBD/VDI ที่เป็นเจ้าของ | ลบ snapshot เดี่ยว หรือลบ snapshots ทั้งหมดพร้อม VM; ยังเลือกบาง snapshot ไม่ได้ | ถ้าต้องการเก็บ snapshot บางรายการต้องลบเองก่อน |
+| Snapshot delete | เลือก snapshots และลบ VBD/VDI ที่เป็นเจ้าของ | เลือกหลาย snapshot ด้วย checkbox หรือลบทั้งหมดพร้อม VM พร้อม owner disk cleanup | เทียบเท่าฟังก์ชันหลัก |
 | Clone | ตั้งชื่อ + description | ตั้งชื่อเท่านั้น | description ไม่ตรง |
 | Template provisioning | New VM wizard: เลือก CPU/RAM/disk/SR/network, fast clone | clone + provision disks ตาม template, ใช้ค่าเดิมของ template | ยังไม่มี wizard ปรับ CPU/RAM/disk/network ตอนสร้าง |
 | Host details | General/NIC/Network/Storage/GPU/USB/Performance/Alerts/HA เต็ม | read-only subset + warnings | ข้อมูลไม่ครบ, แก้ไขไม่ได้ |
@@ -167,7 +167,7 @@
 
 1. **HA precheck** ก่อน start (missing VDI/SR + `assert_can_boot_here` มีแล้ว)
 2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, boot options อื่น
-3. **Bulk snapshot selection** (revert คืน power state แล้ว)
+3. **Embedded RDP/SSH console** (revert และ bulk snapshot มีแล้ว)
 4. **Console SSH/text + embedded RDP** (external RDP และ clipboard มีแล้ว)
 5. **Diagnostics + health check** (alerts พื้นฐานและ host actions มีแล้ว)
 

@@ -632,6 +632,39 @@ impl App {
                         .toasts
                         .push(Toast::new(message, ToastKind::Error)),
                 },
+                Event::SnapshotsDeleted { vm_uuid, result } => match result {
+                    Ok(count) => {
+                        if self
+                            .state
+                            .snapshot_confirm
+                            .as_ref()
+                            .is_some_and(|confirm| confirm.vm_uuid == vm_uuid)
+                        {
+                            self.state.snapshot_confirm = None;
+                        }
+                        self.state.snapshot_selection.clear();
+                        self.state.toasts.push(Toast::new(
+                            format!(
+                                "Deleted {count} snapshot{}.",
+                                if count == 1 { "" } else { "s" }
+                            ),
+                            ToastKind::Success,
+                        ));
+                        self.apply(vec![UiAction::ReloadVmDetails]);
+                    }
+                    Err(message) => {
+                        if let Some(confirm) = self.state.snapshot_confirm.as_mut()
+                            && confirm.vm_uuid == vm_uuid
+                        {
+                            confirm.submitting = false;
+                            confirm.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::HostActionFinished {
                     host_uuid,
                     action,
@@ -1466,6 +1499,76 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::PromptDeleteSnapshots => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let Some((connection, vm)) = find_vm(&self.workspace, &connection_id, &vm_uuid)
+                    else {
+                        continue;
+                    };
+                    let Some(inventory) = crate::state::connection_inventory(connection) else {
+                        continue;
+                    };
+                    let snapshots: Vec<(String, String)> = inventory
+                        .snapshots
+                        .iter()
+                        .filter(|snapshot| {
+                            snapshot.snapshot_of == vm.reference
+                                && self.state.snapshot_selection.contains(&snapshot.uuid)
+                        })
+                        .map(|snapshot| (snapshot.uuid.clone(), snapshot.name.clone()))
+                        .collect();
+                    if snapshots.is_empty() {
+                        self.state.toasts.push(Toast::new(
+                            "Select at least one snapshot to delete.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    }
+                    self.state.snapshot_confirm = Some(crate::state::SnapshotDeleteConfirm {
+                        connection_id,
+                        vm_uuid,
+                        vm_name: vm.name.clone(),
+                        snapshots,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseSnapshotDelete => {
+                    if !self
+                        .state
+                        .snapshot_confirm
+                        .as_ref()
+                        .is_some_and(|confirm| confirm.submitting)
+                    {
+                        self.state.snapshot_confirm = None;
+                    }
+                }
+                UiAction::ConfirmSnapshotDelete => {
+                    let Some(confirm) = self.state.snapshot_confirm.as_mut() else {
+                        continue;
+                    };
+                    confirm.submitting = true;
+                    confirm.error = None;
+                    self.worker.send(Command::DeleteSnapshots {
+                        connection_id: confirm.connection_id.clone(),
+                        vm_uuid: confirm.vm_uuid.clone(),
+                        snapshot_uuids: confirm
+                            .snapshots
+                            .iter()
+                            .map(|(uuid, _)| uuid.clone())
+                            .collect(),
                     });
                 }
                 UiAction::DismissAlert {

@@ -129,7 +129,7 @@ pub fn show(
                 ha(ui, &details);
             }
         }
-        VmTab::Snapshots => snapshots(ui, workspace, connection, vm, read_only, actions),
+        VmTab::Snapshots => snapshots(ui, state, workspace, connection, vm, read_only, actions),
         VmTab::Console => console(ui, state, &connection_id, &vm_uuid, vm, actions),
     }
 }
@@ -1948,6 +1948,7 @@ fn ha(ui: &mut Ui, details: &VmDetails) {
 
 fn snapshots(
     ui: &mut Ui,
+    state: &mut UiState,
     workspace: &WorkspaceView,
     connection: &xen_core::workspace::ConnectionView,
     vm: &xen_core::xapi::VirtualMachine,
@@ -1956,26 +1957,6 @@ fn snapshots(
 ) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            widgets::section_title(ui, "Disk snapshots", None);
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let count = connection_inventory(connection)
-                    .map(|inventory| {
-                        inventory
-                            .snapshots
-                            .iter()
-                            .filter(|snapshot| snapshot.snapshot_of == vm.reference)
-                            .count()
-                    })
-                    .unwrap_or(0);
-                ui.label(
-                    RichText::new(format!("{count} snapshots"))
-                        .size(9.5)
-                        .color(dim_fg()),
-                );
-            });
-        });
-        ui.add_space(4.0);
         let Some(inventory) = connection_inventory(connection) else {
             return;
         };
@@ -1984,6 +1965,63 @@ fn snapshots(
             .iter()
             .filter(|snapshot| snapshot.snapshot_of == vm.reference)
             .collect();
+        let available: std::collections::HashSet<&str> =
+            snapshots.iter().map(|snapshot| snapshot.uuid.as_str()).collect();
+        state
+            .snapshot_selection
+            .retain(|uuid| available.contains(uuid.as_str()));
+
+        ui.horizontal(|ui| {
+            widgets::section_title(ui, "Disk snapshots", None);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let selected = state.snapshot_selection.len();
+                if ui
+                    .add_enabled(
+                        !read_only && selected > 0,
+                        egui::Button::new(
+                            RichText::new(if selected > 0 {
+                                format!("Delete selected ({selected})")
+                            } else {
+                                "Delete selected".into()
+                            })
+                            .size(10.5)
+                            .color(if selected > 0 { red() } else { dim_fg() }),
+                        ),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptDeleteSnapshots);
+                }
+                let all_selected = !snapshots.is_empty()
+                    && snapshots
+                        .iter()
+                        .all(|snapshot| state.snapshot_selection.contains(&snapshot.uuid));
+                let mut select_all = all_selected;
+                if ui
+                    .add_enabled(
+                        !snapshots.is_empty(),
+                        egui::Checkbox::new(&mut select_all, RichText::new("Select all").size(9.5)),
+                    )
+                    .changed()
+                {
+                    if select_all {
+                        for snapshot in &snapshots {
+                            state.snapshot_selection.insert(snapshot.uuid.clone());
+                        }
+                    } else {
+                        for snapshot in &snapshots {
+                            state.snapshot_selection.remove(&snapshot.uuid);
+                        }
+                    }
+                }
+                ui.label(
+                    RichText::new(format!("{} snapshots", snapshots.len()))
+                        .size(9.5)
+                        .color(dim_fg()),
+                );
+            });
+        });
+        ui.add_space(4.0);
         if snapshots.is_empty() {
             ui.label(
                 RichText::new("No snapshots for this VM.")
@@ -1993,6 +2031,20 @@ fn snapshots(
         }
         for snapshot in &snapshots {
             ui.horizontal(|ui| {
+                let mut checked = state.snapshot_selection.contains(&snapshot.uuid);
+                if ui
+                    .add_enabled(
+                        !read_only,
+                        egui::Checkbox::without_text(&mut checked),
+                    )
+                    .changed()
+                {
+                    if checked {
+                        state.snapshot_selection.insert(snapshot.uuid.clone());
+                    } else {
+                        state.snapshot_selection.remove(&snapshot.uuid);
+                    }
+                }
                 widgets::dot(ui, purple(), 6.0);
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
@@ -2022,6 +2074,17 @@ fn snapshots(
                     );
                 });
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !read_only,
+                            egui::Button::new(RichText::new("Delete").size(10.0).color(red())),
+                        )
+                        .clicked()
+                    {
+                        state.snapshot_selection.clear();
+                        state.snapshot_selection.insert(snapshot.uuid.clone());
+                        actions.push(UiAction::PromptDeleteSnapshots);
+                    }
                     let allowed = action_allowed(
                         workspace,
                         connection_id(connection),

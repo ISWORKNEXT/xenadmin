@@ -57,6 +57,11 @@ pub enum Command {
         connection_id: String,
         message_uuid: String,
     },
+    DeleteSnapshots {
+        connection_id: String,
+        vm_uuid: String,
+        snapshot_uuids: Vec<String>,
+    },
     VmDetails {
         seq: u64,
         connection_id: String,
@@ -184,6 +189,10 @@ pub enum Event {
     },
     AlertDismissed {
         result: Result<(), String>,
+    },
+    SnapshotsDeleted {
+        vm_uuid: String,
+        result: Result<usize, String>,
     },
     VmDetails {
         seq: u64,
@@ -418,6 +427,16 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::HostDetails { seq, result });
+            }
+            Command::DeleteSnapshots {
+                connection_id,
+                vm_uuid,
+                snapshot_uuids,
+            } => {
+                let result = workspace
+                    .delete_snapshots(&connection_id, &vm_uuid, snapshot_uuids)
+                    .await;
+                let _ = events.send(Event::SnapshotsDeleted { vm_uuid, result });
             }
             Command::DismissAlert {
                 connection_id,

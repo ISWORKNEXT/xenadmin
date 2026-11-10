@@ -372,6 +372,56 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn delete_snapshots(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        snapshot_uuids: Vec<String>,
+    ) -> Result<usize, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        let snapshot = active.snapshot.read().await;
+        let parent_ref = snapshot
+            .vms
+            .iter()
+            .chain(&snapshot.templates)
+            .find(|vm| vm.uuid == vm_uuid)
+            .map(|vm| vm.reference.clone())
+            .ok_or("The parent virtual machine is not present in this connection.")?;
+        let selected: std::collections::HashSet<&str> =
+            snapshot_uuids.iter().map(String::as_str).collect();
+        let targets: Vec<String> = snapshot
+            .snapshots
+            .iter()
+            .filter(|candidate| {
+                candidate.snapshot_of == parent_ref && selected.contains(candidate.uuid.as_str())
+            })
+            .map(|candidate| candidate.uuid.clone())
+            .collect();
+        drop(snapshot);
+        if targets.is_empty() {
+            return Err("No matching snapshots were selected.".into());
+        }
+        let mut deleted = 0usize;
+        let mut failure = None;
+        for uuid in targets {
+            match active.connection.destroy_vm(&uuid, true, false).await {
+                Ok(()) => deleted += 1,
+                Err(error) => {
+                    failure.get_or_insert_with(|| error.to_string());
+                }
+            }
+        }
+        let refresh = refresh_inventory_cache(&active).await;
+        if let Some(error) = failure {
+            return Err(format!(
+                "Deleted {deleted} snapshot(s), but at least one failed: {error}"
+            ));
+        }
+        refresh?;
+        Ok(deleted)
+    }
+
     pub async fn dismiss_alert(
         &self,
         connection_id: &str,

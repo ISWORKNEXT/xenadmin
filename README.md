@@ -19,7 +19,8 @@ default and a persisted dark-theme toggle.
   a chosen host), clean
   shutdown/reboot, force shutdown/reboot, pause, unpause, suspend, resume,
   clone, disk snapshot, snapshot revert/delete (restoring a running snapshot's
-  power state) and delete VM with owned-disk and optional snapshot cleanup.
+  power state), bulk snapshot selection/deletion and delete VM with owned-disk
+  and optional snapshot cleanup.
 - Create a VM from a template: clone, provision declared disks, refresh the
   inventory and track progress in Activity & tasks.
 - Edit a VM's name, description and HVM boot order at any time; change vCPUs and

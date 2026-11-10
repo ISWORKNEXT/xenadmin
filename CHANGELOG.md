@@ -28,6 +28,7 @@
 - Add host administration actions: enable/disable, evacuate, restart toolstack, reboot and shutdown behind confirmation.
 - Read guest IPv4 addresses from guest metrics and launch an external xfreerdp session from the console tab.
 - Collect priority XenAPI message records into pool alerts and allow dismissing them.
+- Add checkbox selection, select-all and confirmed bulk deletion in the VM Snapshots tab.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

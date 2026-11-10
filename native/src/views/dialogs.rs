@@ -36,6 +36,9 @@ pub fn show(
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
+    if state.snapshot_confirm.is_some() {
+        snapshot_delete(ctx, state, actions);
+    }
     if state.vif_dialog.is_some() {
         vif_dialog(ctx, state, actions);
     }
@@ -554,6 +557,93 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
     }
     if close {
         actions.push(UiAction::CloseVmEdit);
+    }
+}
+
+fn snapshot_delete(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut delete = false;
+    let Some(dialog) = state.snapshot_confirm.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("snapshot-delete-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(500.0);
+            modal_title(
+                ui,
+                "Delete snapshots",
+                &format!(
+                    "{} snapshot{} from {}",
+                    dialog.snapshots.len(),
+                    if dialog.snapshots.len() == 1 { "" } else { "s" },
+                    dialog.vm_name
+                ),
+            );
+            egui::ScrollArea::vertical()
+                .max_height(220.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for (_, name) in &dialog.snapshots {
+                        ui.horizontal(|ui| {
+                            widgets::dot(ui, purple(), 6.0);
+                            ui.label(RichText::new(name).size(11.0));
+                        });
+                    }
+                });
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(
+                    "Snapshot disks owned by these snapshots are deleted. This cannot be undone.",
+                )
+                .size(9.5)
+                .color(red()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting,
+                            egui::Button::new(
+                                RichText::new(if dialog.submitting {
+                                    "Deleting…"
+                                } else {
+                                    "Delete snapshots"
+                                })
+                                .size(11.0)
+                                .color(red()),
+                            )
+                            .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120))),
+                        )
+                        .clicked()
+                    {
+                        delete = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if delete {
+        actions.push(UiAction::ConfirmSnapshotDelete);
+    }
+    if close {
+        actions.push(UiAction::CloseSnapshotDelete);
     }
 }
 

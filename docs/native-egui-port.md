@@ -28,7 +28,7 @@ dependency.
 | Storage | Implemented | Capacity, usage bars, shared/local, hidden/tools/udev SR filtering |
 | Networks | Implemented | Bridge, MTU, PIF/VIF counts; internal `xenapi` bridge filtered |
 | Activity & tasks | Implemented | Progress, error code, cancel, “check again”; host tasks from all clients via events |
-| VM detail | Implemented | General, Performance, Storage, Network, HA and Snapshots tabs; revert with power restore, delete VM/snapshot and template provisioning |
+| VM detail | Implemented | General, Performance, Storage, Network, HA and Snapshots tabs; revert with power restore, bulk snapshot deletion, delete VM/snapshot and template provisioning |
 | Action review | Implemented | Exact targets, clone/snapshot name, force/revert warnings |
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
 | Host actions | Implemented | Enable/disable, evacuate, restart toolstack, reboot, shutdown with confirmation |
