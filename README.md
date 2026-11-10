@@ -9,6 +9,11 @@ left (pools → hosts, virtual machines, templates, storage, networks) and
 visual language is new: a custom undecorated title bar, a white/light theme by
 default and a persisted dark-theme toggle.
 
+## Handover
+
+See [`HANDOVER.md`](HANDOVER.md) for the full delivery notes, architecture,
+verification results, release history and remaining lab-dependent work.
+
 ## Releases
 
 GitHub Actions builds and publishes Linux and Windows packages for every `v*`

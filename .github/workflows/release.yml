@@ -53,7 +53,7 @@ jobs:
           NAME="xen-desktop-${GITHUB_REF_NAME}-${TARGET}"
           mkdir -p "release-assets/${NAME}"
           cp "target/release/${BINARY}" "release-assets/${NAME}/xen-desktop"
-          cp README.md docs/native-egui-port.md "release-assets/${NAME}/"
+          cp README.md HANDOVER.md docs/native-egui-port.md "release-assets/${NAME}/"
           cat > "release-assets/${NAME}/RUN.txt" <<'EOF'
           Xen Desktop (Linux x86_64)
 
@@ -77,7 +77,7 @@ jobs:
           NAME="xen-desktop-${GITHUB_REF_NAME}-${TARGET}"
           mkdir -p "release-assets/${NAME}"
           cp "target/release/${BINARY}" "release-assets/${NAME}/xen-desktop.exe"
-          cp README.md docs/native-egui-port.md "release-assets/${NAME}/"
+          cp README.md HANDOVER.md docs/native-egui-port.md "release-assets/${NAME}/"
           cat > "release-assets/${NAME}/RUN.txt" <<'EOF'
           Xen Desktop (Windows x86_64)
 
