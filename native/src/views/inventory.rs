@@ -822,9 +822,16 @@ pub fn storage(
             if let Some(id) = state.scope.connection_id()
                 && find_connection(workspace, id)
                     .is_some_and(|connection| !is_read_only(connection))
-                && ui.add(widgets::primary_button("Create storage")).clicked()
             {
-                actions.push(UiAction::OpenSrCreate);
+                if ui
+                    .add(egui::Button::new(RichText::new("Probe storage").size(10.5)))
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenSrProbe);
+                }
+                if ui.add(widgets::primary_button("Create storage")).clicked() {
+                    actions.push(UiAction::OpenSrCreate);
+                }
             }
         });
     });

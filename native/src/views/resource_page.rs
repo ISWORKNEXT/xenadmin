@@ -81,6 +81,16 @@ pub fn storage(
                     });
                     ui.close();
                 }
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection) && sr.pbd_count > 0,
+                        egui::Button::new(RichText::new("Repair storage attachments").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::RepairSr);
+                    ui.close();
+                }
                 ui.separator();
                 if ui
                     .add_enabled(
@@ -328,6 +338,130 @@ pub fn storage(
                                 vdi_uuid: vdi.uuid.clone(),
                                 name: vdi.name.clone(),
                                 size: vdi.virtual_size,
+                            });
+                        }
+                    });
+                });
+            });
+    });
+
+    ui.add_space(8.0);
+    if state.pbd_catalog_sr.as_deref() != Some(sr.uuid.as_str()) {
+        state.pbd_catalog = Vec::new();
+        state.pbd_catalog_error = None;
+        state.pbd_catalog_sr = Some(sr.uuid.clone());
+        state.pbd_catalog_loading = true;
+        state.pbd_catalog_seq += 1;
+        actions.push(UiAction::LoadPbdCatalog {
+            seq: state.pbd_catalog_seq,
+            connection_id: connection_id.clone(),
+            sr_uuid: sr.uuid.clone(),
+        });
+    }
+    theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new("Storage attachments (PBDs)")
+                    .size(15.0)
+                    .strong(),
+            );
+            widgets::badge(ui, state.pbd_catalog.len().to_string(), muted_fg());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add(egui::Button::new(RichText::new("Refresh").size(10.0)))
+                    .clicked()
+                {
+                    state.pbd_catalog_sr = None;
+                }
+            });
+        });
+        ui.add_space(4.0);
+        if state.pbd_catalog_loading {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(
+                    RichText::new("Loading storage attachments…")
+                        .size(10.5)
+                        .color(muted_fg()),
+                );
+            });
+            return;
+        }
+        if let Some(error) = &state.pbd_catalog_error {
+            ui.label(RichText::new(error).size(10.0).color(red()));
+            return;
+        }
+        if state.pbd_catalog.is_empty() {
+            ui.label(
+                RichText::new("No PBDs. Use Reattach storage repository to create one.")
+                    .size(10.5)
+                    .color(dim_fg()),
+            );
+            return;
+        }
+        TableBuilder::new(ui)
+            .id_salt("sr-pbds")
+            .striped(true)
+            .cell_layout(Layout::left_to_right(Align::Center))
+            .column(Column::remainder().at_least(160.0))
+            .column(Column::initial(220.0))
+            .column(Column::exact(80.0))
+            .column(Column::exact(90.0))
+            .header(26.0, |mut header| {
+                for title in ["Host", "Location", "Attached", "Actions"] {
+                    header.col(|ui| {
+                        ui.label(RichText::new(title).size(9.5).color(muted_fg()));
+                    });
+                }
+            })
+            .body(|body| {
+                body.rows(28.0, state.pbd_catalog.len(), |mut row| {
+                    let pbd = &state.pbd_catalog[row.index()];
+                    row.col(|ui| {
+                        ui.add(
+                            egui::Label::new(RichText::new(&pbd.host_name).size(10.5)).truncate(),
+                        );
+                    });
+                    row.col(|ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(if pbd.location.is_empty() {
+                                    "—"
+                                } else {
+                                    &pbd.location
+                                })
+                                .monospace()
+                                .size(9.0)
+                                .color(muted_fg()),
+                            )
+                            .truncate(),
+                        );
+                    });
+                    row.col(|ui| {
+                        ui.label(
+                            RichText::new(if pbd.attached { "Yes" } else { "No" })
+                                .size(9.5)
+                                .color(if pbd.attached { green() } else { dim_fg() }),
+                        );
+                    });
+                    row.col(|ui| {
+                        if is_read_only(connection) {
+                            ui.label(RichText::new("—").size(9.5).color(dim_fg()));
+                        } else if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(if pbd.attached { "Unplug" } else { "Plug" })
+                                        .size(9.5),
+                                )
+                                .small(),
+                            )
+                            .clicked()
+                        {
+                            actions.push(UiAction::SetPbdPlugged {
+                                connection_id: connection_id.clone(),
+                                pbd_uuid: pbd.uuid.clone(),
+                                plugged: !pbd.attached,
                             });
                         }
                     });

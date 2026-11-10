@@ -2488,7 +2488,10 @@ async fn wait_task(connection: &Connection, reference: &str) -> Result<(), ApiEr
     wait_task_value(connection, reference).await.map(|_| ())
 }
 
-async fn wait_task_value(connection: &Connection, reference: &str) -> Result<Value, ApiError> {
+pub(crate) async fn wait_task_value(
+    connection: &Connection,
+    reference: &str,
+) -> Result<Value, ApiError> {
     for _ in 0..7200 {
         let task = connection.task_record(reference).await?;
         match task.status {

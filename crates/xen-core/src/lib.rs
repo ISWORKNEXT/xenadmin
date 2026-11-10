@@ -4,6 +4,7 @@ pub mod host;
 pub mod network;
 pub mod operations;
 pub mod performance;
+pub mod storage;
 pub mod transport;
 pub mod vm;
 pub mod workspace;

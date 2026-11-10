@@ -111,6 +111,26 @@ pub enum Command {
         mtu: u64,
         autoplug: bool,
     },
+    PbdCatalog {
+        seq: u64,
+        connection_id: String,
+        sr_uuid: String,
+    },
+    SetPbdPlugged {
+        connection_id: String,
+        pbd_uuid: String,
+        plugged: bool,
+    },
+    RepairSr {
+        connection_id: String,
+        sr_uuid: String,
+    },
+    ProbeSr {
+        seq: u64,
+        connection_id: String,
+        host_uuid: String,
+        location: String,
+    },
     DeleteSnapshots {
         connection_id: String,
         vm_uuid: String,
@@ -326,6 +346,21 @@ pub enum Event {
     },
     PifChanged {
         result: Result<(), String>,
+    },
+    PbdCatalog {
+        seq: u64,
+        result: Result<Vec<xen_core::storage::PbdSummary>, String>,
+    },
+    PbdChanged {
+        result: Result<(), String>,
+    },
+    SrRepaired {
+        sr_uuid: String,
+        result: Result<usize, String>,
+    },
+    SrProbed {
+        seq: u64,
+        result: Result<xen_core::storage::SrProbe, String>,
     },
     VmDetails {
         seq: u64,
@@ -611,6 +646,42 @@ fn dispatch(
                     action,
                     result,
                 });
+            }
+            Command::PbdCatalog {
+                seq,
+                connection_id,
+                sr_uuid,
+            } => {
+                let result = workspace.pbd_catalog(&connection_id, &sr_uuid).await;
+                let _ = events.send(Event::PbdCatalog { seq, result });
+            }
+            Command::SetPbdPlugged {
+                connection_id,
+                pbd_uuid,
+                plugged,
+            } => {
+                let result = workspace
+                    .set_pbd_plugged(&connection_id, &pbd_uuid, plugged)
+                    .await;
+                let _ = events.send(Event::PbdChanged { result });
+            }
+            Command::RepairSr {
+                connection_id,
+                sr_uuid,
+            } => {
+                let result = workspace.repair_sr(&connection_id, &sr_uuid).await;
+                let _ = events.send(Event::SrRepaired { sr_uuid, result });
+            }
+            Command::ProbeSr {
+                seq,
+                connection_id,
+                host_uuid,
+                location,
+            } => {
+                let result = workspace
+                    .probe_sr(&connection_id, &host_uuid, &location)
+                    .await;
+                let _ = events.send(Event::SrProbed { seq, result });
             }
             Command::PifCatalog { seq, connection_id } => {
                 let result = workspace.pif_catalog(&connection_id).await;

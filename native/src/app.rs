@@ -764,6 +764,83 @@ impl App {
                         }
                     }
                 },
+                Event::PbdCatalog { seq, result } => {
+                    if seq == self.state.pbd_catalog_seq {
+                        self.state.pbd_catalog_loading = false;
+                        match result {
+                            Ok(pbds) => {
+                                self.state.pbd_catalog = pbds;
+                                self.state.pbd_catalog_error = None;
+                            }
+                            Err(message) => {
+                                self.state.pbd_catalog = Vec::new();
+                                self.state.pbd_catalog_error = Some(message);
+                            }
+                        }
+                    }
+                }
+                Event::PbdChanged { result } => match result {
+                    Ok(()) => {
+                        self.state.toasts.push(Toast::new(
+                            "Storage attachment updated.",
+                            ToastKind::Success,
+                        ));
+                        self.state.pbd_catalog_sr = None;
+                    }
+                    Err(message) => self
+                        .state
+                        .toasts
+                        .push(Toast::new(message, ToastKind::Error)),
+                },
+                Event::SrRepaired { sr_uuid, result } => match result {
+                    Ok(repaired) => {
+                        if repaired == 0 {
+                            self.state.toasts.push(Toast::new(
+                                "All storage attachments are already plugged.",
+                                ToastKind::Info,
+                            ));
+                        } else {
+                            self.state.toasts.push(Toast::new(
+                                format!("Repaired {repaired} storage attachment(s)."),
+                                ToastKind::Success,
+                            ));
+                        }
+                        if self
+                            .state
+                            .object_tabs
+                            .get(self.state.active_tab)
+                            .is_some_and(|tab| {
+                                matches!(
+                                    &tab.key,
+                                    ObjectKey::Storage { sr_uuid: current, .. } if current == &sr_uuid
+                                )
+                            })
+                        {
+                            self.state.pbd_catalog_sr = None;
+                        }
+                    }
+                    Err(message) => self
+                        .state
+                        .toasts
+                        .push(Toast::new(message, ToastKind::Error)),
+                },
+                Event::SrProbed { seq, result } => {
+                    if seq == self.state.sr_probe_seq
+                        && let Some(dialog) = self.state.sr_probe_dialog.as_mut()
+                    {
+                        dialog.submitting = false;
+                        match result {
+                            Ok(probe) => {
+                                dialog.error = None;
+                                dialog.result = Some(probe);
+                            }
+                            Err(message) => {
+                                dialog.result = None;
+                                dialog.error = Some(message);
+                            }
+                        }
+                    }
+                }
                 Event::PifCatalog { seq, result } => {
                     if seq == self.state.pif_catalog_seq {
                         self.state.pif_catalog_loading = false;
@@ -1891,6 +1968,111 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::LoadPbdCatalog {
+                    seq,
+                    connection_id,
+                    sr_uuid,
+                } => {
+                    self.worker.send(Command::PbdCatalog {
+                        seq,
+                        connection_id,
+                        sr_uuid,
+                    });
+                }
+                UiAction::SetPbdPlugged {
+                    connection_id,
+                    pbd_uuid,
+                    plugged,
+                } => {
+                    self.worker.send(Command::SetPbdPlugged {
+                        connection_id,
+                        pbd_uuid,
+                        plugged,
+                    });
+                }
+                UiAction::RepairSr => {
+                    let Some(ObjectKey::Storage {
+                        connection_id,
+                        sr_uuid,
+                    }) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    self.worker.send(Command::RepairSr {
+                        connection_id,
+                        sr_uuid,
+                    });
+                }
+                UiAction::OpenSrProbe => {
+                    let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
+                    else {
+                        self.state.toasts.push(Toast::new(
+                            "Select a pool before probing storage.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    let hosts: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .hosts
+                                    .iter()
+                                    .map(|host| (host.uuid.clone(), host.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    if hosts.is_empty() {
+                        continue;
+                    }
+                    self.state.sr_probe_dialog = Some(crate::state::SrProbeDialog {
+                        connection_id,
+                        host_uuid: hosts.first().map(|(uuid, _)| uuid.clone()),
+                        hosts,
+                        location: String::new(),
+                        submitting: false,
+                        error: None,
+                        result: None,
+                    });
+                }
+                UiAction::CloseSrProbe => {
+                    if !self
+                        .state
+                        .sr_probe_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.sr_probe_dialog = None;
+                    }
+                }
+                UiAction::SaveSrProbe => {
+                    let Some(dialog) = self.state.sr_probe_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(host_uuid) = dialog.host_uuid.clone() else {
+                        dialog.error = Some("Select a host.".into());
+                        continue;
+                    };
+                    if dialog.location.trim().is_empty() {
+                        dialog.error = Some("Enter a host path to probe.".into());
+                        continue;
+                    }
+                    self.state.sr_probe_seq += 1;
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    dialog.result = None;
+                    self.worker.send(Command::ProbeSr {
+                        seq: self.state.sr_probe_seq,
+                        connection_id: dialog.connection_id.clone(),
+                        host_uuid,
+                        location: dialog.location.trim().to_owned(),
                     });
                 }
                 UiAction::LoadPifCatalog { seq, connection_id } => {

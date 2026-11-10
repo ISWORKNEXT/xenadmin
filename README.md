@@ -42,9 +42,10 @@ default and a persisted dark-theme toggle.
   HA tab, and edit VM tags for XenSearch grouping/filtering.
 - Priority pool alerts from XenAPI message records, shown on the pool page with
   a dismiss action.
-- Storage repository create (host-local file-backed), reattach, detach, scan,
-  TRIM and destroy actions, a user-disk inventory per SR with safe deletion of
-  unattached writable disks, and XenAPI network create/destroy.
+- Storage repository create (host-local file-backed), probe, repair, reattach,
+  detach, scan, TRIM and destroy actions, PBD plug/unplug, a user-disk inventory
+  per SR with safe deletion of unattached writable disks, and XenAPI network
+  create/destroy.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.

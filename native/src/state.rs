@@ -9,6 +9,7 @@ use xen_core::{
     network::PifSummary,
     operations::{TaskStatus, VmAction},
     performance::HostPerformance,
+    storage::{PbdSummary, SrProbe},
     vm::{SrVdi, VdiSummary, VmDetails, VmIso},
     workspace::{ConnectionView, Operation, WorkspaceView},
     xapi::{ConnectionSettings, Host, Inventory, VirtualMachine},
@@ -697,6 +698,16 @@ impl ConsoleState {
     }
 }
 
+pub struct SrProbeDialog {
+    pub connection_id: String,
+    pub hosts: Vec<(String, String)>,
+    pub host_uuid: Option<String>,
+    pub location: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+    pub result: Option<SrProbe>,
+}
+
 pub struct BondCreateDialog {
     pub connection_id: String,
     pub name: String,
@@ -981,6 +992,13 @@ pub struct UiState {
     pub pif_catalog_loading: bool,
     pub pif_catalog_error: Option<String>,
     pub pif_catalog_seq: u64,
+    pub pbd_catalog: Vec<PbdSummary>,
+    pub pbd_catalog_sr: Option<String>,
+    pub pbd_catalog_loading: bool,
+    pub pbd_catalog_error: Option<String>,
+    pub pbd_catalog_seq: u64,
+    pub sr_probe_dialog: Option<SrProbeDialog>,
+    pub sr_probe_seq: u64,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
     pub query: String,
     pub group_by: GroupBy,
@@ -1066,6 +1084,13 @@ impl Default for UiState {
             pif_catalog_loading: false,
             pif_catalog_error: None,
             pif_catalog_seq: 0,
+            pbd_catalog: Vec::new(),
+            pbd_catalog_sr: None,
+            pbd_catalog_loading: false,
+            pbd_catalog_error: None,
+            pbd_catalog_seq: 0,
+            sr_probe_dialog: None,
+            sr_probe_seq: 0,
             network_destroy_confirm: None,
             query: String::new(),
             group_by: GroupBy::None,
@@ -1158,6 +1183,20 @@ pub enum UiAction {
         connection_id: String,
         message_uuid: String,
     },
+    LoadPbdCatalog {
+        seq: u64,
+        connection_id: String,
+        sr_uuid: String,
+    },
+    SetPbdPlugged {
+        connection_id: String,
+        pbd_uuid: String,
+        plugged: bool,
+    },
+    RepairSr,
+    OpenSrProbe,
+    CloseSrProbe,
+    SaveSrProbe,
     LoadPifCatalog {
         seq: u64,
         connection_id: String,

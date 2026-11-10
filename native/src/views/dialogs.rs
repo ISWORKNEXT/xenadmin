@@ -57,6 +57,9 @@ pub fn show(
     if state.vlan_create_dialog.is_some() {
         vlan_create_dialog(ctx, state, actions);
     }
+    if state.sr_probe_dialog.is_some() {
+        sr_probe_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1280,6 +1283,146 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn sr_probe_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut probe = false;
+    let Some(dialog) = state.sr_probe_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("sr-probe-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(620.0);
+            modal_title(
+                ui,
+                "Probe storage path",
+                "Asks the host storage backend what SR records exist at a path.",
+            );
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "Host");
+                let host_label = dialog
+                    .host_uuid
+                    .as_ref()
+                    .and_then(|uuid| dialog.hosts.iter().find(|(id, _)| id == uuid))
+                    .map(|(_, name)| name.as_str())
+                    .unwrap_or("Select a host");
+                egui::ComboBox::from_id_salt("sr-probe-host")
+                    .selected_text(RichText::new(host_label).size(11.0))
+                    .width(columns[0].available_width())
+                    .show_ui(&mut columns[0], |ui| {
+                        for (uuid, name) in &dialog.hosts {
+                            if ui
+                                .selectable_label(
+                                    dialog.host_uuid.as_deref() == Some(uuid.as_str()),
+                                    RichText::new(name).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.host_uuid = Some(uuid.clone());
+                            }
+                        }
+                    });
+                widgets::field_label(&mut columns[1], "Location on host");
+                columns[1].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.location)
+                        .hint_text("/var/tmp/xen-storage")
+                        .char_limit(255)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+            });
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            if let Some(result) = &dialog.result {
+                ui.add_space(8.0);
+                if result.found.is_empty() {
+                    ui.label(
+                        RichText::new("No SR records were found at this path.")
+                            .size(10.5)
+                            .color(muted_fg()),
+                    );
+                    if !result.raw.trim().is_empty() {
+                        ui.label(
+                            RichText::new(result.raw.chars().take(300).collect::<String>())
+                                .monospace()
+                                .size(8.5)
+                                .color(dim_fg()),
+                        );
+                    }
+                } else {
+                    for probed in &result.found {
+                        ui.horizontal(|ui| {
+                            widgets::dot(ui, accent(), 6.0);
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(if probed.name.is_empty() {
+                                        "(unnamed SR)"
+                                    } else {
+                                        &probed.name
+                                    })
+                                    .size(11.0)
+                                    .strong(),
+                                );
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} · {} · {} · {}",
+                                        probed.uuid,
+                                        probed.sr_type,
+                                        probed.content_type,
+                                        crate::format::bytes(probed.physical_size)
+                                    ))
+                                    .monospace()
+                                    .size(8.5)
+                                    .color(dim_fg()),
+                                );
+                            });
+                        });
+                    }
+                }
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Close").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting
+                                && !dialog.location.trim().is_empty()
+                                && dialog.host_uuid.is_some(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Probing…"
+                            } else {
+                                "Probe"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        probe = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if probe {
+        actions.push(UiAction::SaveSrProbe);
+    }
+    if close {
+        actions.push(UiAction::CloseSrProbe);
     }
 }
 
