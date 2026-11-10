@@ -23,7 +23,8 @@ default and a persisted dark-theme toggle.
 - VM detail page with general information and snapshots.
 - Host detail page: General, CPU/memory, Performance, Networking, Storage,
   Hardware, Updates, Certificates, Health.
-- Host RRD charts for 15 minutes, 1 hour and 24 hours, with gap handling.
+- Host performance graphs with all CPU cores in one chart, plus memory and
+  network graphs, for 15 minutes, 1 hour or 24 hours, with gap handling.
 - Light/white theme by default; dark theme toggle persisted in `ui.json`.
 - Adjustable UI scale (110% by default) from the title bar or with `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`.
 - Keyboard navigation: `Ctrl+K` tree search, `F5` refresh, `Ctrl+W` close tab.

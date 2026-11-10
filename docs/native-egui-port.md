@@ -31,7 +31,7 @@ dependency.
 | VM detail | Implemented | Status, configuration, snapshots, revert, start/shutdown/more actions |
 | Action review | Implemented | Exact targets, clone/snapshot name, force/revert warnings |
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
-| Host performance | Implemented | 15 min / 1 h / 24 h, metric search, 12 charts per page, gap handling |
+| Host performance | Implemented | Upstream-style CPU (all cores), memory and network graphs with legends; 15 min / 1 h / 24 h, search, remaining metrics and gap handling |
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
 | Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |
 | Themes | Implemented | Light/white theme by default with a persisted dark toggle |
@@ -86,9 +86,10 @@ contacted in this native UI work.
   minimize/maximize/close controls.
 - **Light theme default.** The white palette is the first-run default; the
   title-bar toggle persists the choice in `ui.json`.
-- **Charts.** A small painter-based line chart replaces the planned RRD chart
-  component; each XenAPI data source gets its own bordered card, axes use compact
-  units and gaps are not connected.
+- **Charts.** Host performance follows the upstream default graph model: one
+  CPU graph with all cores, one memory graph and one network graph, each with a
+  colored legend. Remaining XenAPI data sources keep their own bordered cards;
+  axes use compact units and gaps are not connected.
 
 ## Pending
 

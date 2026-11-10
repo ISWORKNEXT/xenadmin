@@ -567,16 +567,16 @@ fn metrics(
                 format::timestamp(start),
                 format::timestamp(end)
             ))
-            .size(9.5)
+            .size(10.0)
             .color(muted_fg()),
         );
-        ui.label(RichText::new("·").size(9.5).color(dim_fg()));
+        ui.label(RichText::new("·").size(10.0).color(dim_fg()));
         ui.label(
             RichText::new(format!(
                 "{step}s sample interval · {} metrics",
                 series.len()
             ))
-            .size(9.5)
+            .size(10.0)
             .color(muted_fg()),
         );
     });
@@ -590,87 +590,394 @@ fn metrics(
     }
     ui.add_space(4.0);
     ui.scope(|ui| {
-        ui.set_width(280.0);
+        ui.set_width(300.0);
         widgets::search_field(ui, &mut state.perf_query, "Search performance metrics…");
     });
     let needle = state.perf_query.trim().to_lowercase();
-    let filtered: Vec<&MetricSeries> = series
+    let matches = |metric: &MetricSeries| {
+        needle.is_empty()
+            || metric.name.to_lowercase().contains(&needle)
+            || pretty_metric_name(&metric.name)
+                .to_lowercase()
+                .contains(&needle)
+    };
+
+    let cpu: Vec<&MetricSeries> = series
         .iter()
-        .filter(|metric| needle.is_empty() || metric.name.to_lowercase().contains(&needle))
+        .filter(|metric| is_cpu_core(&metric.name) && matches(metric))
         .collect();
-    let total = filtered.len();
-    let page_count = total.div_ceil(METRIC_PAGE).max(1);
-    if state.perf_page >= page_count {
-        state.perf_page = page_count - 1;
+    let memory: Vec<&MetricSeries> = series
+        .iter()
+        .filter(|metric| is_memory_metric(&metric.name) && matches(metric))
+        .collect();
+    let network: Vec<&MetricSeries> = series
+        .iter()
+        .filter(|metric| is_network_metric(&metric.name) && matches(metric))
+        .collect();
+    let used: std::collections::HashSet<&str> = cpu
+        .iter()
+        .chain(&memory)
+        .chain(&network)
+        .map(|metric| metric.name.as_str())
+        .collect();
+    let other: Vec<&MetricSeries> = series
+        .iter()
+        .filter(|metric| !used.contains(metric.name.as_str()) && matches(metric))
+        .collect();
+
+    let mut graph_count = 0;
+    for (title, group) in [
+        ("CPU Performance", cpu),
+        ("Memory Performance", memory),
+        ("Network Performance", network),
+    ] {
+        if group.is_empty() {
+            continue;
+        }
+        multi_chart(ui, title, &group, start, end, step);
+        ui.add_space(10.0);
+        graph_count += 1;
     }
-    let page = state.perf_page;
-    let page_series: Vec<&MetricSeries> = filtered
-        .iter()
-        .skip(page * METRIC_PAGE)
-        .take(METRIC_PAGE)
-        .copied()
-        .collect();
-    let gap = 10.0;
-    let chart_width = ((ui.available_width() - gap) / 2.0).max(220.0);
-    for chunk in page_series.chunks(2) {
-        ui.scope(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            ui.horizontal_top(|ui| {
-                ui.allocate_ui_with_layout(
-                    Vec2::new(chart_width, 0.0),
-                    Layout::top_down(Align::LEFT),
-                    |ui| {
-                        ui.set_width(chart_width);
-                        chart(ui, chunk[0], start, end, step);
-                    },
-                );
-                if chunk.len() > 1 {
-                    ui.add_space(gap);
+
+    if !other.is_empty() {
+        ui.add_space(2.0);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Other host metrics").size(14.0).strong());
+            widgets::badge(ui, other.len().to_string(), muted_fg());
+        });
+        ui.label(
+            RichText::new("One card per remaining data source.")
+                .size(10.0)
+                .color(dim_fg()),
+        );
+        ui.add_space(6.0);
+        let total = other.len();
+        let page_count = total.div_ceil(METRIC_PAGE).max(1);
+        if state.perf_page >= page_count {
+            state.perf_page = page_count - 1;
+        }
+        let page = state.perf_page;
+        let page_series: Vec<&MetricSeries> = other
+            .iter()
+            .skip(page * METRIC_PAGE)
+            .take(METRIC_PAGE)
+            .copied()
+            .collect();
+        let gap = 10.0;
+        let chart_width = ((ui.available_width() - gap) / 2.0).max(220.0);
+        for chunk in page_series.chunks(2) {
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.horizontal_top(|ui| {
                     ui.allocate_ui_with_layout(
                         Vec2::new(chart_width, 0.0),
                         Layout::top_down(Align::LEFT),
                         |ui| {
                             ui.set_width(chart_width);
-                            chart(ui, chunk[1], start, end, step);
+                            chart(ui, chunk[0], start, end, step);
                         },
+                    );
+                    if chunk.len() > 1 {
+                        ui.add_space(gap);
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(chart_width, 0.0),
+                            Layout::top_down(Align::LEFT),
+                            |ui| {
+                                ui.set_width(chart_width);
+                                chart(ui, chunk[1], start, end, step);
+                            },
+                        );
+                    }
+                });
+            });
+            ui.add_space(gap);
+        }
+        if total > METRIC_PAGE {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(format!(
+                        "{}–{} of {total} metrics",
+                        page * METRIC_PAGE + 1,
+                        ((page + 1) * METRIC_PAGE).min(total)
+                    ))
+                    .size(9.5)
+                    .color(dim_fg()),
+                );
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            page + 1 < page_count,
+                            egui::Button::new(RichText::new("Next").size(10.0)),
+                        )
+                        .clicked()
+                    {
+                        state.perf_page += 1;
+                    }
+                    if ui
+                        .add_enabled(
+                            page > 0,
+                            egui::Button::new(RichText::new("Previous").size(10.0)),
+                        )
+                        .clicked()
+                    {
+                        state.perf_page -= 1;
+                    }
+                });
+            });
+        }
+    }
+
+    if graph_count == 0 && other.is_empty() {
+        widgets::empty_state(
+            ui,
+            "No metrics match the search",
+            "Clear the search or select another range.",
+        );
+    }
+}
+
+fn is_cpu_core(name: &str) -> bool {
+    name.strip_prefix("cpu").is_some_and(|rest| {
+        !rest.is_empty() && rest.chars().all(|character| character.is_ascii_digit())
+    })
+}
+
+fn is_memory_metric(name: &str) -> bool {
+    matches!(
+        name,
+        "memory_total_kib" | "memory_free_kib" | "memory" | "memory_internal_free"
+    )
+}
+
+fn is_network_metric(name: &str) -> bool {
+    name.starts_with("pif_") || name.starts_with("vif_")
+}
+
+fn graph_color(index: usize) -> egui::Color32 {
+    const COLORS: [egui::Color32; 10] = [
+        egui::Color32::from_rgb(37, 99, 235),
+        egui::Color32::from_rgb(16, 145, 100),
+        egui::Color32::from_rgb(217, 119, 6),
+        egui::Color32::from_rgb(124, 92, 214),
+        egui::Color32::from_rgb(204, 60, 60),
+        egui::Color32::from_rgb(14, 116, 144),
+        egui::Color32::from_rgb(180, 83, 9),
+        egui::Color32::from_rgb(22, 163, 74),
+        egui::Color32::from_rgb(147, 51, 234),
+        egui::Color32::from_rgb(100, 116, 139),
+    ];
+    COLORS[index % COLORS.len()]
+}
+
+fn metric_value_text(unit: &str, value: f64) -> String {
+    if unit == "%" {
+        format!("{value:.2} %")
+    } else if unit == "B" {
+        format::bytes(value.max(0.0) as u64)
+    } else if unit.is_empty() {
+        format_axis(value)
+    } else {
+        format!("{} {}", format_axis(value), unit)
+    }
+}
+
+fn latest_value(series: &MetricSeries) -> Option<f64> {
+    series.points.iter().rev().find_map(|point| point.value)
+}
+
+fn point_at(series: &MetricSeries, time: u64) -> Option<&xen_core::performance::MetricPoint> {
+    series
+        .points
+        .iter()
+        .filter(|point| point.value.is_some())
+        .min_by_key(|point| point.timestamp.abs_diff(time))
+}
+
+fn multi_chart(
+    ui: &mut Ui,
+    title: &str,
+    series: &[&MetricSeries],
+    start: u64,
+    end: u64,
+    step: u64,
+) {
+    theme::card_frame()
+        .inner_margin(Margin::symmetric(12, 10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(title).size(15.0).strong());
+                widgets::badge(ui, format!("{} series", series.len()), muted_fg());
+            });
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                for (index, metric) in series.iter().enumerate() {
+                    let color = graph_color(index);
+                    let (swatch, _) = ui.allocate_exact_size(Vec2::new(14.0, 3.0), Sense::hover());
+                    ui.painter()
+                        .rect_filled(swatch, egui::CornerRadius::same(2), color);
+                    let value = latest_value(metric)
+                        .map(|value| metric_value_text(&metric.unit, value))
+                        .unwrap_or_else(|| "No sample".into());
+                    ui.label(
+                        RichText::new(format!("{}  {value}", pretty_metric_name(&metric.name)))
+                            .size(10.0)
+                            .color(muted_fg()),
                     );
                 }
             });
-        });
-        ui.add_space(gap);
-    }
-    if total > METRIC_PAGE {
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(format!(
-                    "{}–{} of {total} metrics",
-                    page * METRIC_PAGE + 1,
-                    ((page + 1) * METRIC_PAGE).min(total)
-                ))
-                .size(9.0)
-                .color(dim_fg()),
+            ui.add_space(6.0);
+
+            let width = ui.available_width().max(320.0);
+            let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 210.0), Sense::hover());
+            let painter = ui.painter();
+            painter.rect_filled(rect, egui::CornerRadius::same(8), panel_2());
+            painter.rect_stroke(
+                rect,
+                egui::CornerRadius::same(8),
+                Stroke::new(1.0, border_soft()),
+                egui::StrokeKind::Inside,
             );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui
-                    .add_enabled(
-                        page + 1 < page_count,
-                        egui::Button::new(RichText::new("Next").size(9.5)),
-                    )
-                    .clicked()
-                {
-                    state.perf_page += 1;
+
+            let values: Vec<f64> = series
+                .iter()
+                .flat_map(|metric| metric.points.iter().filter_map(|point| point.value))
+                .collect();
+            if values.is_empty() {
+                painter.text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "No numeric samples available",
+                    egui::FontId::proportional(10.5),
+                    dim_fg(),
+                );
+                return;
+            }
+            let percent = series.first().is_some_and(|metric| metric.unit == "%");
+            let min = values.iter().copied().fold(f64::INFINITY, f64::min);
+            let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            let low = if percent {
+                0.0
+            } else {
+                min - (max - min).max(1.0) * 0.12
+            };
+            let high = if percent {
+                (max * 1.08).clamp(1.0, 100.0)
+            } else {
+                max + (max - min).max(1.0) * 0.12
+            };
+            let plot = egui::Rect::from_min_max(
+                egui::pos2(rect.left() + 52.0, rect.top() + 12.0),
+                egui::pos2(rect.right() - 10.0, rect.bottom() - 22.0),
+            );
+            let x = |time: u64| {
+                plot.left()
+                    + ((time.saturating_sub(start)) as f32
+                        / (end.saturating_sub(start)).max(1) as f32)
+                        * plot.width()
+            };
+            let y =
+                |value: f64| plot.bottom() - ((value - low) / (high - low)) as f32 * plot.height();
+
+            for fraction in [0.0, 0.5, 1.0] {
+                let value = low + fraction * (high - low);
+                let py = y(value);
+                painter.hline(plot.x_range(), py, Stroke::new(1.0, border_soft()));
+                painter.text(
+                    egui::pos2(plot.left() - 6.0, py),
+                    egui::Align2::RIGHT_CENTER,
+                    if percent {
+                        format!("{value:.0}%")
+                    } else {
+                        format_axis(value)
+                    },
+                    egui::FontId::monospace(9.0),
+                    dim_fg(),
+                );
+            }
+
+            for (index, metric) in series.iter().enumerate() {
+                let color = graph_color(index);
+                let mut segment = Vec::new();
+                let mut previous_time = 0u64;
+                for point in &metric.points {
+                    let Some(value) = point.value else {
+                        flush_colored(painter, &mut segment, color);
+                        continue;
+                    };
+                    let contiguous = segment.is_empty()
+                        || step == 0
+                        || point.timestamp.saturating_sub(previous_time) <= step.saturating_mul(2);
+                    if !contiguous {
+                        flush_colored(painter, &mut segment, color);
+                    }
+                    segment.push(egui::pos2(x(point.timestamp), y(value)));
+                    previous_time = point.timestamp;
                 }
-                if ui
-                    .add_enabled(
-                        page > 0,
-                        egui::Button::new(RichText::new("Previous").size(9.5)),
-                    )
-                    .clicked()
-                {
-                    state.perf_page -= 1;
+                flush_colored(painter, &mut segment, color);
+            }
+
+            painter.text(
+                egui::pos2(plot.left(), rect.bottom() - 8.0),
+                egui::Align2::LEFT_BOTTOM,
+                format::clock(start),
+                egui::FontId::monospace(9.0),
+                dim_fg(),
+            );
+            painter.text(
+                egui::pos2(plot.right(), rect.bottom() - 8.0),
+                egui::Align2::RIGHT_BOTTOM,
+                format::clock(end),
+                egui::FontId::monospace(9.0),
+                dim_fg(),
+            );
+
+            if let Some(pointer) = response.hover_pos()
+                && plot.contains(pointer)
+            {
+                let fraction =
+                    ((pointer.x - plot.left()) / plot.width().max(1.0)).clamp(0.0, 1.0) as f64;
+                let target = start as f64 + fraction * (end.saturating_sub(start)) as f64;
+                let nearest_time = series
+                    .iter()
+                    .flat_map(|metric| metric.points.iter().filter(|point| point.value.is_some()))
+                    .min_by_key(|point| (point.timestamp as f64 - target).abs() as u64)
+                    .map(|point| point.timestamp);
+                if let Some(time) = nearest_time {
+                    let px = x(time);
+                    painter.vline(px, plot.y_range(), Stroke::new(1.0, with_alpha(fg(), 100)));
+                    for (index, metric) in series.iter().enumerate() {
+                        if let Some(point) = point_at(metric, time)
+                            && let Some(value) = point.value
+                        {
+                            painter.circle_filled(
+                                egui::pos2(px, y(value)),
+                                2.8,
+                                graph_color(index),
+                            );
+                        }
+                    }
+                    painter.text(
+                        egui::pos2(plot.right() - 2.0, rect.top() + 6.0),
+                        egui::Align2::RIGHT_TOP,
+                        format::short_time(time),
+                        egui::FontId::monospace(9.0),
+                        fg(),
+                    );
                 }
-            });
+            }
         });
+}
+
+fn flush_colored(painter: &egui::Painter, segment: &mut Vec<egui::Pos2>, color: egui::Color32) {
+    if segment.len() > 1 {
+        painter.add(egui::Shape::line(
+            std::mem::take(segment),
+            Stroke::new(1.5, color),
+        ));
+    } else {
+        segment.clear();
     }
 }
 
@@ -903,6 +1210,18 @@ fn pretty_metric_name(name: &str) -> String {
                 && let Some(index) = rest.find("-avg-freq")
             {
                 return format!("CPU {} frequency", &rest[..index]);
+            }
+            if let Some(rest) = name.strip_prefix("cpu")
+                && !rest.is_empty()
+                && rest.chars().all(|character| character.is_ascii_digit())
+            {
+                return format!("CPU {rest}");
+            }
+            if let Some(rest) = name.strip_prefix("pif_") {
+                return format!("PIF {}", rest.replace('_', " "));
+            }
+            if let Some(rest) = name.strip_prefix("vif_") {
+                return format!("VIF {}", rest.replace('_', " "));
             }
             let generic = name.replace('_', " ");
             let mut chars = generic.chars();
