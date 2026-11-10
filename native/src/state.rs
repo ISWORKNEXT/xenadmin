@@ -238,10 +238,11 @@ pub enum ActionKind {
     Clone,
     Snapshot,
     Revert,
+    Destroy,
 }
 
 impl ActionKind {
-    pub const MENU: [ActionKind; 11] = [
+    pub const MENU: [ActionKind; 12] = [
         ActionKind::Start,
         ActionKind::Shutdown,
         ActionKind::Reboot,
@@ -253,6 +254,7 @@ impl ActionKind {
         ActionKind::Clone,
         ActionKind::ForceShutdown,
         ActionKind::ForceReboot,
+        ActionKind::Destroy,
     ];
 
     pub const BULK: [ActionKind; 4] = [
@@ -276,6 +278,7 @@ impl ActionKind {
             ActionKind::Clone => "clone",
             ActionKind::Snapshot => "snapshot",
             ActionKind::Revert => "revert",
+            ActionKind::Destroy => "destroy",
         }
     }
 
@@ -293,13 +296,17 @@ impl ActionKind {
             ActionKind::Clone => "Clone",
             ActionKind::Snapshot => "Take snapshot",
             ActionKind::Revert => "Revert snapshot",
+            ActionKind::Destroy => "Delete",
         }
     }
 
     pub fn destructive(self) -> bool {
         matches!(
             self,
-            ActionKind::ForceShutdown | ActionKind::ForceReboot | ActionKind::Revert
+            ActionKind::ForceShutdown
+                | ActionKind::ForceReboot
+                | ActionKind::Revert
+                | ActionKind::Destroy
         )
     }
 
@@ -307,7 +314,7 @@ impl ActionKind {
         matches!(self, ActionKind::Clone | ActionKind::Snapshot)
     }
 
-    pub fn to_action(self, name: &str) -> VmAction {
+    pub fn to_action(self, name: &str, delete_disks: bool, delete_snapshots: bool) -> VmAction {
         match self {
             ActionKind::Start => VmAction::Start,
             ActionKind::Shutdown => VmAction::Shutdown,
@@ -325,6 +332,10 @@ impl ActionKind {
                 name: name.trim().to_owned(),
             },
             ActionKind::Revert => VmAction::Revert,
+            ActionKind::Destroy => VmAction::Destroy {
+                delete_disks,
+                delete_snapshots,
+            },
         }
     }
 }
@@ -372,6 +383,8 @@ pub struct Intent {
     pub kind: ActionKind,
     pub targets: Vec<(String, String)>,
     pub name: String,
+    pub delete_disks: bool,
+    pub delete_snapshots: bool,
 }
 
 #[derive(Clone)]

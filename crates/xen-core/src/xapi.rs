@@ -23,6 +23,8 @@ pub enum ApiError {
     Unsupported,
     #[error("{0}")]
     Xen(String),
+    #[error("{1}")]
+    XenCode(String, String),
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -129,9 +131,25 @@ impl Connection {
                 "RBAC_PERMISSION_DENIED" => {
                     "Your account does not have permission to read this resource."
                 }
+                "HANDLE_INVALID" => {
+                    "The object no longer exists on the host. Refresh and try again."
+                }
+                "VM_BAD_POWER_STATE" => {
+                    "The VM is not in the power state required for this operation."
+                }
+                "VM_HAS_SNAPSHOTS" => {
+                    "The VM still has snapshots. Delete them before deleting the VM."
+                }
+                "VM_IS_DEFAULT_TEMPLATE" => "The default template cannot be deleted.",
+                "VDI_IN_USE" => "The disk is still attached to a VM and cannot be deleted.",
+                "OPERATION_NOT_ALLOWED" => {
+                    "The host does not allow this operation in the object's current state."
+                }
+                "SR_FULL" => "The storage repository does not have enough free space.",
+                "HOST_OFFLINE" => "The host is offline. Reconnect it and try again.",
                 _ => "The XenAPI request failed.",
             };
-            return Err(ApiError::Xen(message.into()));
+            return Err(ApiError::XenCode(error.message, message.into()));
         }
         serde_json::from_value(response.result).map_err(|_| ApiError::Protocol)
     }

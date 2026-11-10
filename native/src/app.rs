@@ -327,6 +327,45 @@ impl App {
         }
     }
 
+    /// Close object tabs whose object disappeared after a refresh or a delete.
+    /// Offline connections are skipped so stale tabs survive a temporary outage.
+    fn prune_missing_tabs(&mut self) {
+        let mut missing = Vec::new();
+        for (index, tab) in self.state.object_tabs.iter().enumerate().skip(1) {
+            let gone = match &tab.key {
+                ObjectKey::Vm {
+                    connection_id,
+                    vm_uuid,
+                } => find_connection(&self.workspace, connection_id)
+                    .and_then(crate::state::connection_inventory)
+                    .is_some_and(|inventory| !inventory.vms.iter().any(|vm| vm.uuid == *vm_uuid)),
+                ObjectKey::Template {
+                    connection_id,
+                    vm_uuid,
+                } => find_connection(&self.workspace, connection_id)
+                    .and_then(crate::state::connection_inventory)
+                    .is_some_and(|inventory| {
+                        !inventory.templates.iter().any(|vm| vm.uuid == *vm_uuid)
+                    }),
+                ObjectKey::Snapshot {
+                    connection_id,
+                    vm_uuid,
+                } => find_connection(&self.workspace, connection_id)
+                    .and_then(crate::state::connection_inventory)
+                    .is_some_and(|inventory| {
+                        !inventory.snapshots.iter().any(|vm| vm.uuid == *vm_uuid)
+                    }),
+                _ => false,
+            };
+            if gone {
+                missing.push(index);
+            }
+        }
+        for index in missing.into_iter().rev() {
+            self.close_tab(index);
+        }
+    }
+
     fn close_tab(&mut self, index: usize) {
         if index == 0 || index >= self.state.object_tabs.len() {
             return;
@@ -385,6 +424,7 @@ impl App {
                 Event::Workspace(workspace) => {
                     self.workspace = workspace;
                     self.state.loaded = true;
+                    self.prune_missing_tabs();
                     if let Some(id) = self.state.pending_scope.clone()
                         && find_connection(&self.workspace, &id).is_some_and(|connection| {
                             !matches!(
@@ -433,26 +473,34 @@ impl App {
                         let mut found = None;
                         for connection in &self.workspace.connections {
                             if let Some(inventory) = crate::state::connection_inventory(connection)
-                                && inventory
-                                    .vms
-                                    .iter()
-                                    .chain(&inventory.templates)
-                                    .chain(&inventory.snapshots)
-                                    .any(|vm| vm.uuid == uuid)
                             {
-                                found = Some(connection_id(connection).to_owned());
-                                break;
+                                let id = connection_id(connection).to_owned();
+                                if inventory.vms.iter().any(|vm| vm.uuid == uuid) {
+                                    found = Some(ObjectKey::Vm {
+                                        connection_id: id,
+                                        vm_uuid: uuid.clone(),
+                                    });
+                                    break;
+                                }
+                                if inventory.templates.iter().any(|vm| vm.uuid == uuid) {
+                                    found = Some(ObjectKey::Template {
+                                        connection_id: id,
+                                        vm_uuid: uuid.clone(),
+                                    });
+                                    break;
+                                }
+                                if inventory.snapshots.iter().any(|vm| vm.uuid == uuid) {
+                                    found = Some(ObjectKey::Snapshot {
+                                        connection_id: id,
+                                        vm_uuid: uuid.clone(),
+                                    });
+                                    break;
+                                }
                             }
                         }
-                        if let Some(connection_id) = found {
+                        if let Some(key) = found {
                             self.pending_vm = None;
-                            self.open_object(
-                                ObjectKey::Vm {
-                                    connection_id,
-                                    vm_uuid: uuid,
-                                },
-                                None,
-                            );
+                            self.open_object(key, None);
                             if let Some(tab) = self.pending_vm_tab.take() {
                                 self.apply(vec![UiAction::SetVmTab(tab)]);
                             }
@@ -699,13 +747,8 @@ impl App {
                     self.worker.send(Command::Remove { connection_id: id });
                 }
                 UiAction::OpenVm(connection_id, vm_uuid) => {
-                    self.open_object(
-                        ObjectKey::Vm {
-                            connection_id,
-                            vm_uuid,
-                        },
-                        None,
-                    );
+                    let key = vm_object_key(&self.workspace, &connection_id, &vm_uuid);
+                    self.open_object(key, None);
                 }
                 UiAction::Propose(kind, targets) => {
                     let first_name = targets
@@ -726,13 +769,19 @@ impl App {
                         kind,
                         targets,
                         name,
+                        delete_disks: true,
+                        delete_snapshots: false,
                     });
                 }
                 UiAction::SubmitIntent => {
                     let Some(intent) = self.state.intent.take() else {
                         continue;
                     };
-                    let action = intent.kind.to_action(&intent.name);
+                    let action = intent.kind.to_action(
+                        &intent.name,
+                        intent.delete_disks,
+                        intent.delete_snapshots,
+                    );
                     let count = intent.targets.len();
                     for (connection_id, vm_uuid) in intent.targets {
                         self.worker.send(Command::Action {
@@ -933,6 +982,30 @@ impl eframe::App for App {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.worker.shutdown();
+    }
+}
+
+fn vm_object_key(workspace: &WorkspaceView, connection_id: &str, vm_uuid: &str) -> ObjectKey {
+    let inventory =
+        find_connection(workspace, connection_id).and_then(crate::state::connection_inventory);
+    let (connection_id, vm_uuid) = (connection_id.to_owned(), vm_uuid.to_owned());
+    if inventory.is_some_and(|inventory| inventory.templates.iter().any(|vm| vm.uuid == vm_uuid)) {
+        ObjectKey::Template {
+            connection_id,
+            vm_uuid,
+        }
+    } else if inventory
+        .is_some_and(|inventory| inventory.snapshots.iter().any(|vm| vm.uuid == vm_uuid))
+    {
+        ObjectKey::Snapshot {
+            connection_id,
+            vm_uuid,
+        }
+    } else {
+        ObjectKey::Vm {
+            connection_id,
+            vm_uuid,
+        }
     }
 }
 

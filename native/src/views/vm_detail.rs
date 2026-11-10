@@ -240,9 +240,31 @@ fn action_bar(
 ) {
     if is_template {
         ui.horizontal(|ui| {
-            ui.add_enabled(false, widgets::primary_button("New VM from template"));
+            let can_clone = action_allowed(workspace, connection_id, vm, "clone");
+            if ui
+                .add_enabled(can_clone, widgets::primary_button("New VM from template"))
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Clone,
+                    vec![(connection_id.to_owned(), vm_uuid.to_owned())],
+                ));
+            }
+            let can_delete = action_allowed(workspace, connection_id, vm, "destroy");
+            if ui
+                .add_enabled(
+                    can_delete,
+                    egui::Button::new(RichText::new("Delete template…").size(11.0)),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Destroy,
+                    vec![(connection_id.to_owned(), vm_uuid.to_owned())],
+                ));
+            }
             ui.label(
-                RichText::new("Template provisioning is still being migrated.")
+                RichText::new("Creating a VM copies the template's configuration and disks.")
                     .size(10.0)
                     .color(dim_fg()),
             );
@@ -253,20 +275,38 @@ fn action_bar(
         return;
     }
     if is_snapshot {
-        let allowed = action_allowed(workspace, connection_id, vm, ActionKind::Revert.operation());
-        if ui
-            .add_enabled(allowed, widgets::primary_button("Revert to this snapshot"))
-            .clicked()
-        {
-            actions.push(UiAction::Propose(
-                ActionKind::Revert,
-                vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-            ));
-        }
+        ui.horizontal(|ui| {
+            let allowed =
+                action_allowed(workspace, connection_id, vm, ActionKind::Revert.operation());
+            if ui
+                .add_enabled(allowed, widgets::primary_button("Revert to this snapshot"))
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Revert,
+                    vec![(connection_id.to_owned(), vm_uuid.to_owned())],
+                ));
+            }
+            let can_delete = action_allowed(workspace, connection_id, vm, "destroy");
+            if ui
+                .add_enabled(
+                    can_delete,
+                    egui::Button::new(RichText::new("Delete snapshot…").size(11.0).color(red())),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Destroy,
+                    vec![(connection_id.to_owned(), vm_uuid.to_owned())],
+                ));
+            }
+        });
         ui.label(
-            RichText::new("Revert replaces the parent VM's disk state.")
-                .size(10.0)
-                .color(dim_fg()),
+            RichText::new(
+                "Revert replaces the parent VM's disk state. Deleting a snapshot frees its disks.",
+            )
+            .size(10.0)
+            .color(dim_fg()),
         );
         return;
     }

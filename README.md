@@ -16,7 +16,10 @@ default and a persisted dark-theme toggle.
 - Infrastructure tree with search, context menus and object tabs.
 - Pool overview page with hosts, storage, networks and VM summary.
 - VM lifecycle: start, clean shutdown/reboot, force shutdown/reboot, pause,
-  unpause, suspend, resume, clone, disk snapshot and snapshot revert.
+  unpause, suspend, resume, clone, disk snapshot, snapshot revert/delete and
+  delete VM with owned-disk and optional snapshot cleanup.
+- Create a VM from a template: clone, provision declared disks, refresh the
+  inventory and track progress in Activity & tasks.
 - Bulk actions with an explicit target review dialog.
 - XenAPI task progress, failure, success, cancellation and “check again” for
   interrupted tasks without resubmitting the mutation.

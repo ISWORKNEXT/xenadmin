@@ -228,6 +228,9 @@ fn intent(
         })
         .collect();
     let count = intent.targets.len();
+    let has_vm_target = intent.targets.iter().any(|(connection_id, vm_uuid)| {
+        find_vm(workspace, connection_id, vm_uuid).is_some_and(|(_, vm)| vm.kind == "vm")
+    });
     let response = egui::Modal::new(egui::Id::unique("intent-modal"))
         .frame(theme::modal_frame())
         .show(ctx, |ui| {
@@ -281,7 +284,45 @@ fn intent(
                     .color(amber()),
                 );
             }
-            if intent.kind.destructive() && intent.kind != crate::state::ActionKind::Revert {
+            if intent.kind == crate::state::ActionKind::Destroy {
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(
+                        "The object is removed from the host. This cannot be undone.",
+                    )
+                    .size(9.5)
+                    .color(red()),
+                );
+                ui.add_space(4.0);
+                ui.checkbox(
+                    &mut intent.delete_disks,
+                    RichText::new("Delete attached disks owned by this object")
+                        .size(10.0),
+                );
+                ui.label(
+                    RichText::new(
+                        "Disks shared with another VM are never removed.",
+                    )
+                    .size(9.0)
+                    .color(dim_fg()),
+                );
+                if has_vm_target {
+                    ui.add_space(4.0);
+                    ui.checkbox(
+                        &mut intent.delete_snapshots,
+                        RichText::new("Delete snapshots of this VM").size(10.0),
+                    );
+                    ui.label(
+                        RichText::new(
+                            "Snapshots left behind stay in the Snapshots list and keep their disks.",
+                        )
+                        .size(9.0)
+                        .color(dim_fg()),
+                    );
+                }
+            } else if intent.kind.destructive()
+                && intent.kind != crate::state::ActionKind::Revert
+            {
                 ui.add_space(8.0);
                 ui.label(
                     RichText::new(

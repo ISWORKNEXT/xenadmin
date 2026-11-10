@@ -31,11 +31,13 @@
 | เลือก pool coordinator | connection manager | ต้องเลือก coordinator เอง; ถ้าต่อ member จะได้ error `HOST_IS_SLAVE` |
 | Inventory พื้นฐาน | pool/host/VM/template/snapshot/SR/network | เทียบเท่าข้อมูลหลัก |
 | VM power actions | start/shutdown/reboot/force/pause/unpause/suspend/resume | เทียบเท่าคำสั่งหลัก |
-| Clone | `VM.clone` + set description | clone ได้ แต่ตั้งชื่อเท่านั้น |
-| Snapshot | create/revert | create/revert ได้ |
+| Clone | `VM.clone` + set description | clone VM/template ได้, ตั้งชื่อได้, ยังไม่ตั้ง description |
+| Template provisioning | New VM from template + provision disks | clone + provision (`VM.provision`) + ล้าง `other_config.disks` |
+| Snapshot | create/revert/delete | create/revert/delete + cleanup VBD/VDI ที่เป็นเจ้าของ |
+| Destroy VM | destroy + เลือกลบ disks/snapshots | destroy + ลบ owner VBD/VDI, suspend VDI และ snapshots ทั้งหมด (เลือกได้) |
 | Task progress/cancel | AsyncAction + task polling | มี progress/cancel/check again |
 | Host read-only details | General/NIC/storage/GPU/USB/updates/certs/alerts/performance | มี subset ที่ redact แล้ว |
-| Host RRD | host + VM series | host series เท่านั้น |
+| Host RRD | host + VM series | host + VM series (RRD updates) |
 | Multi-pool | ConnectionsManager | หลาย pool พร้อมกัน, dedupe ด้วย pool UUID |
 | Read-only | ใช้ RBAC เป็นหลัก | per-connection + บังคับ production 10.100.1.11 (ส่วนเพิ่มของเรา) |
 
@@ -48,11 +50,11 @@
 | Coordinator | handle `HOST_IS_SLAVE` และสลับไป master | แจ้งให้ผู้ใช้ไปต่อ coordinator เอง | ต้อง reconnect ด้วยมือ |
 | VM start | `start_on` / `resume_on`, `assert_can_boot_here`, ตรวจ CD/ISO/SR ที่ broken, HA | `VM.start` / `VM.resume` แบบไม่ระบุ host | start อาจล้มเหลวเพราะ CD/SR โดยไม่แจ้งล่วงหน้า; เลือก host ไม่ได้ |
 | Snapshot revert | คืน power state และ start/resume บน host เดิม | revert อย่างเดียว ไม่คืน power state | ต้อง start เองหลัง revert |
-| Snapshot delete | ลบ VBD/VDI ที่ snapshot เป็นเจ้าของ | ไม่มีคำสั่งลบ snapshot | disk ค้างและจัดการไม่ได้ |
+| Snapshot delete | เลือก snapshots และลบ VBD/VDI ที่เป็นเจ้าของ | ลบ snapshot เดี่ยว หรือลบ snapshots ทั้งหมดพร้อม VM; ยังเลือกบาง snapshot ไม่ได้ | ถ้าต้องการเก็บ snapshot บางรายการต้องลบเองก่อน |
 | Clone | ตั้งชื่อ + description | ตั้งชื่อเท่านั้น | description ไม่ตรง |
-| Template provisioning | New VM from template / fast clone | ปฏิเสธ template ด้วยข้อความ "still being migrated" | สร้าง VM ใหม่ไม่ได้ |
+| Template provisioning | New VM wizard: เลือก CPU/RAM/disk/SR/network, fast clone | clone + provision disks ตาม template, ใช้ค่าเดิมของ template | ยังไม่มี wizard ปรับ CPU/RAM/disk/network ตอนสร้าง |
 | Host details | General/NIC/Network/Storage/GPU/USB/Performance/Alerts/HA เต็ม | read-only subset + warnings | ข้อมูลไม่ครบ, แก้ไขไม่ได้ |
-| Performance | host + VM RRD, ช่วง 5s/1m/1h/1d, custom graphs, server-time offset | host only, 15m/1h/24h, graph คงที่ | ดู metric ของ VM ไม่ได้, จัดกราฟเองไม่ได้ |
+| Performance | host + VM RRD, ช่วง 5s/1m/1h/1d, custom graphs, server-time offset | host + VM RRD, 15m/1h/24h, graph คงที่ | จัดกราฟเองไม่ได้, ช่วงเวลาไม่ครบ |
 | Alerts | typed alerts + diagnostics checks | host `message` records เท่านั้น | ไม่มี health diagnostics/alert actions |
 | Tasks | task ของ host + AsyncAction หลายสถานะ | เฉพาะ task ที่เราส่ง, เก็บใน memory | ไม่เห็น task จาก client อื่น; task ค้างใน memory |
 | Errors | 774 friendly errors + RBAC errors | 5 mapped messages + generic | ข้อความ error ไม่ละเอียด |
@@ -67,7 +69,7 @@
 
 ### 1. VM provisioning และการแก้ไข VM
 
-- New VM wizard, fast create, create from template/snapshot
+- New VM wizard, fast create, create from snapshot (create from template มีแล้ว)
 - แก้ CPU/memory, boot order/options, ISO/CD drive
 - VBD/disk attach, resize, move, detach
 - VIF create/edit/plug/unplug, VIF locking
@@ -79,8 +81,7 @@
 
 ### 2. VM lifecycle ที่ยังขาด
 
-- Destroy VM/template
-- Delete snapshot และ cleanup VBD/VDI
+- เลือกลบ snapshot บางรายการตอนลบ VM (ตอนนี้ลบทั้งหมดหรือไม่ลบเลย)
 - Clone/copy/migrate ภายใน pool และข้าม pool
 - Export/import XVA/OVF และ appliance
 - Snapshot as template, new VM from snapshot, export snapshot
@@ -166,10 +167,9 @@
 1. **Event stream + cache generation** (`event.from("*")`, token, resync) แทน polling; ลด load และได้ข้อมูลสด
 2. **Heartbeat/reconnect/coordinator failover** (heartbeat 15s, duplicate session, `HOST_IS_SLAVE`)
 3. **VM start semantics**: `start_on`/`resume_on`, `assert_can_boot_here`, broken CD/ISO/SR precheck
-4. **Snapshot delete + cleanup** และ revert ที่คืน power state
-5. **Destroy VM** และ **New VM from template**
-6. **แก้ VM พื้นฐาน**: CPU/memory, ISO/CD, boot order
-7. **Console VNC**
+4. **แก้ VM พื้นฐาน**: CPU/memory, ISO/CD, boot order
+5. **Revert ที่คืน power state** และ bulk snapshot selection
+6. **Console VNC**
 
 ### P1 — จัดการโครงสร้างพื้นฐาน
 

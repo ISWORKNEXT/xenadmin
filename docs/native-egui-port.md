@@ -28,7 +28,7 @@ dependency.
 | Storage | Implemented | Capacity, usage bars, shared/local, hidden/tools/udev SR filtering |
 | Networks | Implemented | Bridge, MTU, PIF/VIF counts; internal `xenapi` bridge filtered |
 | Activity & tasks | Implemented | Progress, error code, cancel, “check again” without resubmission |
-| VM detail | Implemented | General, Performance, Storage, Network, HA and Snapshots tabs; revert and VM actions |
+| VM detail | Implemented | General, Performance, Storage, Network, HA and Snapshots tabs; revert, delete VM/snapshot and template provisioning |
 | Action review | Implemented | Exact targets, clone/snapshot name, force/revert warnings |
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
 | Host performance | Implemented | Upstream-style CPU (all cores), memory and network graphs with legends; 15 min / 1 h / 24 h, search, remaining metrics and gap handling |

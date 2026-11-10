@@ -367,6 +367,18 @@ impl Workspace {
         vm_uuid: String,
         action: VmAction,
     ) -> Result<Operation, String> {
+        if let VmAction::Destroy {
+            delete_disks,
+            delete_snapshots,
+        } = action
+        {
+            return self
+                .start_destroy(connection_id, vm_uuid, delete_disks, delete_snapshots)
+                .await;
+        }
+        if let VmAction::Clone { name } = action {
+            return self.start_clone(connection_id, vm_uuid, name).await;
+        }
         let active = self.active(&connection_id).await?;
         let lease = active.lifecycle.clone().read_owned().await;
         // Reserve before sending, including while the initial HTTP request is in flight.
@@ -430,6 +442,192 @@ impl Workspace {
             {
                 active.busy_vms.lock().await.remove(&vm_uuid);
             }
+            drop(lease);
+        });
+        Ok(record)
+    }
+
+    async fn start_clone(
+        self: &Arc<Self>,
+        connection_id: String,
+        vm_uuid: String,
+        name: String,
+    ) -> Result<Operation, String> {
+        let active = self.active(&connection_id).await?;
+        let lease = active.lifecycle.clone().read_owned().await;
+        if !active.busy_vms.lock().await.insert(vm_uuid.clone()) {
+            return Err("A task is already active for this object.".into());
+        }
+        let snapshot = active.snapshot.read().await;
+        let object = snapshot
+            .vms
+            .iter()
+            .chain(&snapshot.templates)
+            .chain(&snapshot.snapshots)
+            .find(|vm| vm.uuid == vm_uuid)
+            .map(|vm| vm.name.clone());
+        let connection_name = display_name(&active.connection.settings, &snapshot.pool_name);
+        drop(snapshot);
+        let Some(object_name) = object else {
+            active.busy_vms.lock().await.remove(&vm_uuid);
+            return Err("Object is not present in this connection. Refresh the inventory.".into());
+        };
+        if active.connection.settings.read_only {
+            active.busy_vms.lock().await.remove(&vm_uuid);
+            return Err(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            );
+        }
+        let record = Operation {
+            id: Uuid::now_v7().to_string(),
+            connection_id,
+            connection_name,
+            vm_uuid: vm_uuid.clone(),
+            object_name,
+            action: "Clone".into(),
+            status: TaskStatus::Running,
+            progress: 0.0,
+            message: String::new(),
+            can_cancel: false,
+            started_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        };
+        let task_id = record.id.clone();
+        self.tasks.lock().await.insert(
+            task_id.clone(),
+            TrackedTask {
+                record: record.clone(),
+                remote_ref: String::new(),
+            },
+        );
+        let workspace = self.clone();
+        let active_for_task = active.clone();
+        tokio::spawn(async move {
+            let result = active_for_task.connection.clone_vm(&vm_uuid, &name).await;
+            let result = match result {
+                Ok(new_uuid) => match active_for_task.connection.inventory().await {
+                    Ok(snapshot) => {
+                        *active_for_task.snapshot.write().await = snapshot;
+                        *active_for_task.error.write().await = None;
+                        Ok(format!("Created VM {name} ({new_uuid})."))
+                    }
+                    Err(error) => Err(format!(
+                        "Clone succeeded, but the inventory refresh failed: {error}"
+                    )),
+                },
+                Err(error) => Err(error.to_string()),
+            };
+            if let Some(task) = workspace.tasks.lock().await.get_mut(&task_id) {
+                task.record.progress = 1.0;
+                match result {
+                    Ok(message) => {
+                        task.record.status = TaskStatus::Succeeded;
+                        task.record.message = message;
+                    }
+                    Err(message) => {
+                        task.record.status = TaskStatus::Failed;
+                        task.record.message = message;
+                    }
+                }
+            }
+            active_for_task.busy_vms.lock().await.remove(&vm_uuid);
+            drop(lease);
+        });
+        Ok(record)
+    }
+
+    async fn start_destroy(
+        self: &Arc<Self>,
+        connection_id: String,
+        vm_uuid: String,
+        delete_disks: bool,
+        delete_snapshots: bool,
+    ) -> Result<Operation, String> {
+        let active = self.active(&connection_id).await?;
+        let lease = active.lifecycle.clone().read_owned().await;
+        if !active.busy_vms.lock().await.insert(vm_uuid.clone()) {
+            return Err("A task is already active for this object.".into());
+        }
+        let snapshot = active.snapshot.read().await;
+        let object = snapshot
+            .vms
+            .iter()
+            .chain(&snapshot.templates)
+            .chain(&snapshot.snapshots)
+            .find(|vm| vm.uuid == vm_uuid)
+            .map(|vm| vm.name.clone());
+        let connection_name = display_name(&active.connection.settings, &snapshot.pool_name);
+        drop(snapshot);
+        let Some(object_name) = object else {
+            active.busy_vms.lock().await.remove(&vm_uuid);
+            return Err("Object is not present in this connection. Refresh the inventory.".into());
+        };
+        if active.connection.settings.read_only {
+            active.busy_vms.lock().await.remove(&vm_uuid);
+            return Err(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            );
+        }
+        let record = Operation {
+            id: Uuid::now_v7().to_string(),
+            connection_id,
+            connection_name,
+            vm_uuid: vm_uuid.clone(),
+            object_name,
+            action: "Delete".into(),
+            status: TaskStatus::Running,
+            progress: 0.0,
+            message: String::new(),
+            can_cancel: false,
+            started_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        };
+        let task_id = record.id.clone();
+        self.tasks.lock().await.insert(
+            task_id.clone(),
+            TrackedTask {
+                record: record.clone(),
+                remote_ref: String::new(),
+            },
+        );
+        let workspace = self.clone();
+        let active_for_task = active.clone();
+        tokio::spawn(async move {
+            let result = active_for_task
+                .connection
+                .destroy_vm(&vm_uuid, delete_disks, delete_snapshots)
+                .await;
+            let result = match result {
+                Ok(()) => match active_for_task.connection.inventory().await {
+                    Ok(snapshot) => {
+                        *active_for_task.snapshot.write().await = snapshot;
+                        *active_for_task.error.write().await = None;
+                        Ok(())
+                    }
+                    Err(error) => Err(format!(
+                        "Deleted, but the inventory refresh failed: {error}"
+                    )),
+                },
+                Err(error) => Err(error.to_string()),
+            };
+            if let Some(task) = workspace.tasks.lock().await.get_mut(&task_id) {
+                task.record.progress = 1.0;
+                match result {
+                    Ok(()) => {
+                        task.record.status = TaskStatus::Succeeded;
+                        task.record.message = "Object deleted.".into();
+                    }
+                    Err(message) => {
+                        task.record.status = TaskStatus::Failed;
+                        task.record.message = message;
+                    }
+                }
+            }
+            active_for_task.busy_vms.lock().await.remove(&vm_uuid);
             drop(lease);
         });
         Ok(record)
