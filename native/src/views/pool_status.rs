@@ -89,9 +89,9 @@ fn render(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_on
         wlb_card(&mut columns[1], status, actions, read_only);
     });
     ui.add_space(8.0);
-    pvs_card(ui, status);
+    vmss_card(ui, status, actions, read_only);
     ui.add_space(8.0);
-    vmss_card(ui, status);
+    pvs_card(ui, status);
     ui.add_space(8.0);
     dr_card(ui, status);
 }
@@ -427,12 +427,23 @@ fn pvs_card(ui: &mut Ui, status: &PoolStatus) {
     });
 }
 
-fn vmss_card(ui: &mut Ui, status: &PoolStatus) {
+fn vmss_card(ui: &mut Ui, status: &PoolStatus, actions: &mut Vec<UiAction>, read_only: bool) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             widgets::section_title(ui, "VM snapshot schedules", None);
             widgets::badge(ui, status.vmss.len().to_string(), purple());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(
+                        !read_only,
+                        egui::Button::new(RichText::new("New schedule…").size(10.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenVmssCreate);
+                }
+            });
         });
         ui.add_space(4.0);
         if status.vmss.is_empty() {
@@ -451,8 +462,9 @@ fn vmss_card(ui: &mut Ui, status: &PoolStatus) {
             .column(Column::exact(70.0))
             .column(Column::remainder().at_least(220.0))
             .column(Column::exact(80.0))
+            .column(Column::exact(120.0))
             .header(26.0, |mut header| {
-                for title in ["Name", "Enabled", "Schedule", "Retained"] {
+                for title in ["Name", "Enabled", "Schedule", "Retained", "Actions"] {
                     header.col(|ui| {
                         ui.label(RichText::new(title).size(9.5).color(muted_fg()));
                     });
@@ -502,6 +514,35 @@ fn vmss_card(ui: &mut Ui, status: &PoolStatus) {
                                 .monospace()
                                 .size(9.5),
                         );
+                    });
+                    row.col(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 4.0;
+                            if ui
+                                .add_enabled(
+                                    !read_only,
+                                    egui::Button::new(RichText::new("Edit").size(9.5)).small(),
+                                )
+                                .clicked()
+                            {
+                                actions.push(UiAction::OpenVmssEdit(schedule.uuid.clone()));
+                            }
+                            if ui
+                                .add_enabled(
+                                    !read_only,
+                                    egui::Button::new(
+                                        RichText::new("Delete").size(9.5).color(red()),
+                                    )
+                                    .small(),
+                                )
+                                .clicked()
+                            {
+                                actions.push(UiAction::PromptVmssDelete {
+                                    uuid: schedule.uuid.clone(),
+                                    name: schedule.name.clone(),
+                                });
+                            }
+                        });
                     });
                 });
             });

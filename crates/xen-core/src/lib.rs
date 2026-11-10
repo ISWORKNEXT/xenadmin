@@ -10,5 +10,6 @@ pub mod pool_status;
 pub mod storage;
 pub mod transport;
 pub mod vm;
+pub mod vmss;
 pub mod workspace;
 pub mod xapi;

@@ -768,6 +768,32 @@ pub struct SshCredentialDialog {
     pub error: Option<String>,
 }
 
+pub struct VmssDialog {
+    pub connection_id: String,
+    pub uuid: Option<String>,
+    pub name: String,
+    pub description: String,
+    pub snapshot_type: String,
+    pub frequency: String,
+    pub minute: String,
+    pub hour: String,
+    pub days: HashSet<String>,
+    pub retained: String,
+    pub enabled: bool,
+    pub vms: Vec<(String, String)>,
+    pub selected_vms: HashSet<String>,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct VmssDeleteConfirm {
+    pub connection_id: String,
+    pub uuid: String,
+    pub name: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct HaEnableDialog {
     pub connection_id: String,
     pub srs: Vec<(String, String)>,
@@ -1158,6 +1184,8 @@ pub struct UiState {
     pub ha_enable_dialog: Option<HaEnableDialog>,
     pub pool_confirm: Option<PoolConfirm>,
     pub wlb_config_dialog: Option<WlbConfigDialog>,
+    pub vmss_dialog: Option<VmssDialog>,
+    pub vmss_delete_confirm: Option<VmssDeleteConfirm>,
     pub ad_disable_dialog: Option<AdDisableDialog>,
     pub sr_probe_seq: u64,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
@@ -1267,6 +1295,8 @@ impl Default for UiState {
             ha_enable_dialog: None,
             pool_confirm: None,
             wlb_config_dialog: None,
+            vmss_dialog: None,
+            vmss_delete_confirm: None,
             ad_disable_dialog: None,
             sr_probe_seq: 0,
             network_destroy_confirm: None,
@@ -1404,6 +1434,16 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenVmssCreate,
+    OpenVmssEdit(String),
+    CloseVmssDialog,
+    SaveVmssDialog,
+    PromptVmssDelete {
+        uuid: String,
+        name: String,
+    },
+    CancelVmssDelete,
+    ConfirmVmssDelete,
     OpenHaEnable,
     CloseHaEnable,
     SaveHaEnable,

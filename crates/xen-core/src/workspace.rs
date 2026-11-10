@@ -391,6 +391,79 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_vmss(
+        &self,
+        connection_id: &str,
+        name: String,
+        description: String,
+        snapshot_type: String,
+        schedule: crate::vmss::VmssSchedule,
+        retained_snapshots: u64,
+        enabled: bool,
+        vm_uuids: Vec<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_vmss(
+                &name,
+                &description,
+                &snapshot_type,
+                &schedule,
+                retained_snapshots,
+                enabled,
+                vm_uuids,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_vmss(
+        &self,
+        connection_id: &str,
+        uuid: &str,
+        name: String,
+        description: String,
+        snapshot_type: String,
+        schedule: crate::vmss::VmssSchedule,
+        retained_snapshots: u64,
+        enabled: bool,
+        vm_uuids: Vec<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .update_vmss(
+                uuid,
+                &name,
+                &description,
+                &snapshot_type,
+                &schedule,
+                retained_snapshots,
+                enabled,
+                vm_uuids,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn delete_vmss(&self, connection_id: &str, uuid: &str) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .delete_vmss(uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn enable_ha(
         &self,
         connection_id: &str,

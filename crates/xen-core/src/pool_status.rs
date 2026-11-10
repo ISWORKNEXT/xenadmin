@@ -91,6 +91,9 @@ pub struct VmssStatus {
     pub frequency: String,
     pub retained_snapshots: u64,
     pub schedule: String,
+    pub minute: u8,
+    pub hour: u8,
+    pub days: Vec<String>,
     pub last_run_time: String,
     pub vms: Vec<String>,
 }
@@ -255,6 +258,18 @@ impl Connection {
                 frequency: field(schedule, "frequency"),
                 retained_snapshots: number(schedule, "retained_snapshots"),
                 schedule: schedule_label(&schedule["schedule"]),
+                minute: schedule_number(&schedule["schedule"], "min"),
+                hour: schedule_number(&schedule["schedule"], "hour"),
+                days: schedule["schedule"]["days"]
+                    .as_str()
+                    .map(|days| {
+                        days.split(',')
+                            .map(str::trim)
+                            .filter(|day| !day.is_empty())
+                            .map(str::to_lowercase)
+                            .collect()
+                    })
+                    .unwrap_or_default(),
                 last_run_time: field(schedule, "last_run_time"),
                 vms: schedule["VMs"]
                     .as_array()
@@ -347,6 +362,14 @@ fn number(record: &Value, key: &str) -> u64 {
         .unwrap_or(0)
 }
 
+fn schedule_number(schedule: &Value, key: &str) -> u8 {
+    schedule[key]
+        .as_str()
+        .and_then(|value| value.parse().ok())
+        .or_else(|| schedule[key].as_u64().map(|value| value as u8))
+        .unwrap_or(0)
+}
+
 fn schedule_label(schedule: &Value) -> String {
     let Some(schedule) = schedule.as_object() else {
         return String::new();
@@ -413,6 +436,22 @@ mod tests {
         );
         assert_eq!(schedule_label(&json!({})), "");
         assert_eq!(schedule_label(&Value::Null), "");
+    }
+
+    #[test]
+    fn schedule_fields_are_parsed_for_editing() {
+        let schedule = json!({"hour": "3", "min": "15", "days": "Monday,Friday"});
+        assert_eq!(schedule_number(&schedule, "hour"), 3);
+        assert_eq!(schedule_number(&schedule, "min"), 15);
+        assert_eq!(schedule_number(&schedule, "missing"), 0);
+        assert_eq!(
+            schedule["days"].as_str().map(|days| days
+                .split(',')
+                .map(str::trim)
+                .map(str::to_lowercase)
+                .collect::<Vec<_>>()),
+            Some(vec!["monday".to_string(), "friday".to_string()])
+        );
     }
 
     #[test]

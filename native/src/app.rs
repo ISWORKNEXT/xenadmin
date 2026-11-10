@@ -813,6 +813,48 @@ impl App {
                         }
                     }
                 },
+                Event::VmssChanged { action, result } => match result {
+                    Ok(()) => {
+                        self.state.vmss_dialog = None;
+                        self.state.vmss_delete_confirm = None;
+                        let message = match action.as_str() {
+                            "create" => "Snapshot schedule created.",
+                            "update" => "Snapshot schedule updated.",
+                            _ => "Snapshot schedule deleted.",
+                        };
+                        self.state
+                            .toasts
+                            .push(Toast::new(message, ToastKind::Success));
+                        self.state.pool_status_state = LoadState::Idle;
+                        if matches!(
+                            self.state
+                                .object_tabs
+                                .get(self.state.active_tab)
+                                .map(|tab| &tab.key),
+                            Some(ObjectKey::PoolStatus { .. })
+                        ) {
+                            self.apply(vec![UiAction::LoadPoolStatus]);
+                        }
+                    }
+                    Err(message) => {
+                        let mut handled = false;
+                        if let Some(dialog) = self.state.vmss_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(confirm) = self.state.vmss_delete_confirm.as_mut() {
+                            confirm.submitting = false;
+                            confirm.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if !handled {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::PoolActionFinished { action, result } => match result {
                     Ok(()) => {
                         self.state.ha_enable_dialog = None;
@@ -2230,6 +2272,225 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::OpenVmssCreate => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let vms: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .vms
+                                    .iter()
+                                    .map(|vm| (vm.uuid.clone(), vm.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    self.state.vmss_dialog = Some(crate::state::VmssDialog {
+                        connection_id,
+                        uuid: None,
+                        name: String::new(),
+                        description: String::new(),
+                        snapshot_type: "snapshot".into(),
+                        frequency: "daily".into(),
+                        minute: "0".into(),
+                        hour: "2".into(),
+                        days: HashSet::new(),
+                        retained: "7".into(),
+                        enabled: true,
+                        vms,
+                        selected_vms: HashSet::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::OpenVmssEdit(uuid) => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let LoadState::Ready(status) = &self.state.pool_status_state else {
+                        continue;
+                    };
+                    let Some(policy) = status.vmss.iter().find(|policy| policy.uuid == uuid) else {
+                        continue;
+                    };
+                    let vms: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .vms
+                                    .iter()
+                                    .map(|vm| (vm.uuid.clone(), vm.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    let selected_vms: HashSet<String> = policy
+                        .vms
+                        .iter()
+                        .filter_map(|name| {
+                            vms.iter()
+                                .find(|(_, candidate)| candidate == name)
+                                .map(|(uuid, _)| uuid.clone())
+                        })
+                        .collect();
+                    self.state.vmss_dialog = Some(crate::state::VmssDialog {
+                        connection_id,
+                        uuid: Some(policy.uuid.clone()),
+                        name: policy.name.clone(),
+                        description: policy.description.clone(),
+                        snapshot_type: if policy.schedule_type.is_empty() {
+                            "snapshot".into()
+                        } else {
+                            policy.schedule_type.clone()
+                        },
+                        frequency: if policy.frequency.is_empty() {
+                            "daily".into()
+                        } else {
+                            policy.frequency.clone()
+                        },
+                        minute: policy.minute.to_string(),
+                        hour: policy.hour.to_string(),
+                        days: policy.days.iter().cloned().collect(),
+                        retained: policy.retained_snapshots.to_string(),
+                        enabled: policy.enabled,
+                        vms,
+                        selected_vms,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseVmssDialog => {
+                    if !self
+                        .state
+                        .vmss_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.vmss_dialog = None;
+                    }
+                }
+                UiAction::SaveVmssDialog => {
+                    let Some(dialog) = self.state.vmss_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(minute) = dialog.minute.trim().parse::<u8>().ok() else {
+                        dialog.error = Some("Enter a whole-number minute (0–59).".into());
+                        continue;
+                    };
+                    let Some(hour) = dialog.hour.trim().parse::<u8>().ok() else {
+                        dialog.error = Some("Enter a whole-number hour (0–23).".into());
+                        continue;
+                    };
+                    let Some(retained) = dialog.retained.trim().parse::<u64>().ok() else {
+                        dialog.error = Some("Enter a whole-number snapshot retention.".into());
+                        continue;
+                    };
+                    if dialog.frequency == "weekly" && dialog.days.is_empty() {
+                        dialog.error =
+                            Some("Select at least one day for a weekly schedule.".into());
+                        continue;
+                    }
+                    if dialog.name.trim().is_empty() {
+                        dialog.error = Some("Enter a schedule name.".into());
+                        continue;
+                    }
+                    let schedule = xen_core::vmss::VmssSchedule {
+                        frequency: dialog.frequency.clone(),
+                        minute,
+                        hour,
+                        days: if dialog.frequency == "weekly" {
+                            dialog.days.iter().cloned().collect()
+                        } else {
+                            Vec::new()
+                        },
+                    };
+                    let connection_id = dialog.connection_id.clone();
+                    let uuid = dialog.uuid.clone();
+                    let name = dialog.name.trim().to_owned();
+                    let description = dialog.description.clone();
+                    let snapshot_type = dialog.snapshot_type.clone();
+                    let enabled = dialog.enabled;
+                    let vm_uuids: Vec<String> = dialog.selected_vms.iter().cloned().collect();
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    if let Some(uuid) = uuid {
+                        self.worker.send(Command::UpdateVmss {
+                            connection_id,
+                            uuid,
+                            name,
+                            description,
+                            snapshot_type,
+                            schedule,
+                            retained_snapshots: retained,
+                            enabled,
+                            vm_uuids,
+                        });
+                    } else {
+                        self.worker.send(Command::CreateVmss {
+                            connection_id,
+                            name,
+                            description,
+                            snapshot_type,
+                            schedule,
+                            retained_snapshots: retained,
+                            enabled,
+                            vm_uuids,
+                        });
+                    }
+                }
+                UiAction::PromptVmssDelete { uuid, name } => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.vmss_delete_confirm = Some(crate::state::VmssDeleteConfirm {
+                        connection_id,
+                        uuid,
+                        name,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CancelVmssDelete => {
+                    if !self
+                        .state
+                        .vmss_delete_confirm
+                        .as_ref()
+                        .is_some_and(|confirm| confirm.submitting)
+                    {
+                        self.state.vmss_delete_confirm = None;
+                    }
+                }
+                UiAction::ConfirmVmssDelete => {
+                    let Some(confirm) = self.state.vmss_delete_confirm.as_mut() else {
+                        continue;
+                    };
+                    confirm.submitting = true;
+                    confirm.error = None;
+                    self.worker.send(Command::DeleteVmss {
+                        connection_id: confirm.connection_id.clone(),
+                        uuid: confirm.uuid.clone(),
                     });
                 }
                 UiAction::OpenHaEnable => {

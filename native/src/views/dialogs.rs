@@ -87,6 +87,12 @@ pub fn show(
     if state.pool_confirm.is_some() {
         pool_confirm_dialog(ctx, state, actions);
     }
+    if state.vmss_dialog.is_some() {
+        vmss_dialog(ctx, state, actions);
+    }
+    if state.vmss_delete_confirm.is_some() {
+        vmss_delete_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1004,6 +1010,325 @@ fn network_destroy(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<U
     }
     if close {
         actions.push(UiAction::CancelNetworkDestroy);
+    }
+}
+
+fn vmss_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.vmss_dialog.as_mut() else {
+        return;
+    };
+    let editing = dialog.uuid.is_some();
+    let response = egui::Modal::new(egui::Id::unique("vmss-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(640.0);
+            modal_title(
+                ui,
+                if editing {
+                    "Edit snapshot schedule"
+                } else {
+                    "New snapshot schedule"
+                },
+                "Scheduled snapshots are taken automatically and pruned to the retention count.",
+            );
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "Name");
+                columns[0].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.name)
+                        .char_limit(255)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                widgets::field_label(&mut columns[1], "Snapshot type");
+                egui::ComboBox::from_id_salt("vmss-type")
+                    .selected_text(
+                        RichText::new(match dialog.snapshot_type.as_str() {
+                            "checkpoint" => "Checkpoint",
+                            _ => "Disk snapshot",
+                        })
+                        .size(11.0),
+                    )
+                    .width(columns[1].available_width())
+                    .show_ui(&mut columns[1], |ui| {
+                        for (value, label) in
+                            [("snapshot", "Disk snapshot"), ("checkpoint", "Checkpoint")]
+                        {
+                            if ui
+                                .selectable_label(
+                                    dialog.snapshot_type == value,
+                                    RichText::new(label).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.snapshot_type = value.into();
+                            }
+                        }
+                    });
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Description");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::multiline(&mut dialog.description)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(2)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            ui.columns(3, |columns| {
+                widgets::field_label(&mut columns[0], "Frequency");
+                egui::ComboBox::from_id_salt("vmss-frequency")
+                    .selected_text(
+                        RichText::new(match dialog.frequency.as_str() {
+                            "hourly" => "Hourly",
+                            "weekly" => "Weekly",
+                            _ => "Daily",
+                        })
+                        .size(11.0),
+                    )
+                    .width(columns[0].available_width())
+                    .show_ui(&mut columns[0], |ui| {
+                        for (value, label) in
+                            [("hourly", "Hourly"), ("daily", "Daily"), ("weekly", "Weekly")]
+                        {
+                            if ui
+                                .selectable_label(
+                                    dialog.frequency == value,
+                                    RichText::new(label).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.frequency = value.into();
+                            }
+                        }
+                    });
+                if dialog.frequency != "hourly" {
+                    widgets::field_label(&mut columns[1], "Hour (0–23)");
+                    columns[1].add_enabled(
+                        !dialog.submitting,
+                        egui::TextEdit::singleline(&mut dialog.hour)
+                            .char_limit(2)
+                            .margin(egui::Margin::symmetric(8, 5)),
+                    );
+                }
+                widgets::field_label(
+                    &mut columns[2],
+                    if dialog.frequency == "hourly" {
+                        "Minute (0–59)"
+                    } else {
+                        "Minute (0–59) · at"
+                    },
+                );
+                columns[2].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.minute)
+                        .char_limit(2)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+            });
+            if dialog.frequency == "weekly" {
+                ui.add_space(6.0);
+                widgets::field_label(ui, "Days");
+                ui.horizontal_wrapped(|ui| {
+                    for day in [
+                        "monday",
+                        "tuesday",
+                        "wednesday",
+                        "thursday",
+                        "friday",
+                        "saturday",
+                        "sunday",
+                    ] {
+                        let mut checked = dialog.days.contains(day);
+                        let label = {
+                            let mut chars = day.chars();
+                            chars.next().map(|first| first.to_uppercase().collect::<String>())
+                                .unwrap_or_default()
+                                + chars.as_str()
+                        };
+                        if ui
+                            .add_enabled(
+                                !dialog.submitting,
+                                egui::Checkbox::new(&mut checked, RichText::new(label).size(10.0)),
+                            )
+                            .changed()
+                        {
+                            if checked {
+                                dialog.days.insert(day.into());
+                            } else {
+                                dialog.days.remove(day);
+                            }
+                        }
+                    }
+                });
+            }
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "Snapshots to retain");
+                columns[0].add_enabled(
+                    !dialog.submitting,
+                    egui::TextEdit::singleline(&mut dialog.retained)
+                        .char_limit(4)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                widgets::field_label(&mut columns[1], "Enabled");
+                columns[1].add_enabled(
+                    !dialog.submitting,
+                    egui::Checkbox::new(
+                        &mut dialog.enabled,
+                        RichText::new("Run this schedule").size(10.5),
+                    ),
+                );
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Virtual machines");
+            if dialog.vms.is_empty() {
+                ui.label(
+                    RichText::new("No virtual machines are available in this pool.")
+                        .size(10.0)
+                        .color(amber()),
+                );
+            }
+            egui::ScrollArea::vertical()
+                .max_height(150.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for (uuid, name) in &dialog.vms {
+                        let mut checked = dialog.selected_vms.contains(uuid);
+                        if ui
+                            .add_enabled(
+                                !dialog.submitting,
+                                egui::Checkbox::new(&mut checked, RichText::new(name).size(10.5)),
+                            )
+                            .changed()
+                        {
+                            if checked {
+                                dialog.selected_vms.insert(uuid.clone());
+                            } else {
+                                dialog.selected_vms.remove(uuid);
+                            }
+                        }
+                    }
+                });
+            ui.label(
+                RichText::new(
+                    "A schedule only runs after it is enabled and has at least one VM. Existing VMs keep their other settings.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && !dialog.name.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Saving…"
+                            } else if editing {
+                                "Save schedule"
+                            } else {
+                                "Create schedule"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveVmssDialog);
+    }
+    if close {
+        actions.push(UiAction::CloseVmssDialog);
+    }
+}
+
+fn vmss_delete_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut confirm = false;
+    let Some(dialog) = state.vmss_delete_confirm.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("vmss-delete-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(500.0);
+            modal_title(
+                ui,
+                "Delete snapshot schedule",
+                "The schedule is removed and member VMs no longer take scheduled snapshots. Existing snapshots are kept.",
+            );
+            ui.horizontal(|ui| {
+                widgets::dot(ui, red(), 6.0);
+                ui.label(RichText::new(&dialog.name).size(11.5).strong());
+            });
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting,
+                            egui::Button::new(
+                                RichText::new(if dialog.submitting {
+                                    "Deleting…"
+                                } else {
+                                    "Delete schedule"
+                                })
+                                .size(11.0)
+                                .color(red()),
+                            )
+                            .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120))),
+                        )
+                        .clicked()
+                    {
+                        confirm = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if confirm {
+        actions.push(UiAction::ConfirmVmssDelete);
+    }
+    if close {
+        actions.push(UiAction::CancelVmssDelete);
     }
 }
 

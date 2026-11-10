@@ -145,6 +145,31 @@ pub enum Command {
         seq: u64,
         connection_id: String,
     },
+    CreateVmss {
+        connection_id: String,
+        name: String,
+        description: String,
+        snapshot_type: String,
+        schedule: xen_core::vmss::VmssSchedule,
+        retained_snapshots: u64,
+        enabled: bool,
+        vm_uuids: Vec<String>,
+    },
+    UpdateVmss {
+        connection_id: String,
+        uuid: String,
+        name: String,
+        description: String,
+        snapshot_type: String,
+        schedule: xen_core::vmss::VmssSchedule,
+        retained_snapshots: u64,
+        enabled: bool,
+        vm_uuids: Vec<String>,
+    },
+    DeleteVmss {
+        connection_id: String,
+        uuid: String,
+    },
     EnableHa {
         connection_id: String,
         heartbeat_sr_uuids: Vec<String>,
@@ -572,6 +597,10 @@ pub enum Event {
         action: String,
         result: Result<(), String>,
     },
+    VmssChanged {
+        action: String,
+        result: Result<(), String>,
+    },
     Failed {
         context: String,
         message: String,
@@ -830,6 +859,72 @@ fn dispatch(
                     .await;
                 let _ = events.send(Event::SubjectRolesUpdated {
                     subject_uuid,
+                    result,
+                });
+            }
+            Command::CreateVmss {
+                connection_id,
+                name,
+                description,
+                snapshot_type,
+                schedule,
+                retained_snapshots,
+                enabled,
+                vm_uuids,
+            } => {
+                let result = workspace
+                    .create_vmss(
+                        &connection_id,
+                        name,
+                        description,
+                        snapshot_type,
+                        schedule,
+                        retained_snapshots,
+                        enabled,
+                        vm_uuids,
+                    )
+                    .await;
+                let _ = events.send(Event::VmssChanged {
+                    action: "create".into(),
+                    result,
+                });
+            }
+            Command::UpdateVmss {
+                connection_id,
+                uuid,
+                name,
+                description,
+                snapshot_type,
+                schedule,
+                retained_snapshots,
+                enabled,
+                vm_uuids,
+            } => {
+                let result = workspace
+                    .update_vmss(
+                        &connection_id,
+                        &uuid,
+                        name,
+                        description,
+                        snapshot_type,
+                        schedule,
+                        retained_snapshots,
+                        enabled,
+                        vm_uuids,
+                    )
+                    .await;
+                let _ = events.send(Event::VmssChanged {
+                    action: "update".into(),
+                    result,
+                });
+            }
+            Command::DeleteVmss {
+                connection_id,
+                uuid,
+            } => {
+                let result = workspace.delete_vmss(&connection_id, &uuid).await;
+                let _ = events.send(Event::VmssChanged {
+                    action: "delete".into(),
                     result,
                 });
             }
