@@ -813,6 +813,38 @@ impl App {
                         }
                     }
                 },
+                Event::SubjectRolesUpdated {
+                    subject_uuid,
+                    result,
+                } => match result {
+                    Ok(()) => {
+                        if self
+                            .state
+                            .user_role_dialog
+                            .as_ref()
+                            .is_some_and(|dialog| dialog.subject_uuid == subject_uuid)
+                        {
+                            self.state.user_role_dialog = None;
+                        }
+                        self.state
+                            .toasts
+                            .push(Toast::new("Subject roles updated.", ToastKind::Success));
+                        self.state.auth_state = LoadState::Idle;
+                        self.apply(vec![UiAction::LoadAuth]);
+                    }
+                    Err(message) => {
+                        if let Some(dialog) = self.state.user_role_dialog.as_mut()
+                            && dialog.subject_uuid == subject_uuid
+                        {
+                            dialog.submitting = false;
+                            dialog.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::PoolStatus { seq, result } => {
                     if seq == self.state.pool_status_seq {
                         self.state.pool_status_state = match result {
@@ -2033,6 +2065,72 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::OpenUserRoles(subject_uuid) => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let LoadState::Ready(info) = &self.state.auth_state else {
+                        continue;
+                    };
+                    let Some(user) = info.users.iter().find(|user| user.uuid == subject_uuid)
+                    else {
+                        continue;
+                    };
+                    if user.local_root {
+                        continue;
+                    }
+                    let selected: HashSet<String> = user
+                        .roles
+                        .iter()
+                        .filter_map(|name| {
+                            info.roles
+                                .iter()
+                                .find(|role| role.name == *name || role.uuid == *name)
+                                .map(|role| role.uuid.clone())
+                        })
+                        .collect();
+                    self.state.user_role_dialog = Some(crate::state::UserRoleDialog {
+                        connection_id,
+                        subject_uuid,
+                        identifier: user.identifier.clone(),
+                        display_name: user.display_name.clone(),
+                        selected,
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseUserRoles => {
+                    if !self
+                        .state
+                        .user_role_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.user_role_dialog = None;
+                    }
+                }
+                UiAction::SaveUserRoles => {
+                    let Some(dialog) = self.state.user_role_dialog.as_mut() else {
+                        continue;
+                    };
+                    if dialog.selected.is_empty() {
+                        dialog.error = Some("A subject must keep at least one role.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::SetSubjectRoles {
+                        connection_id: dialog.connection_id.clone(),
+                        subject_uuid: dialog.subject_uuid.clone(),
+                        roles: dialog.selected.iter().cloned().collect(),
                     });
                 }
                 UiAction::LoadPoolStatus => {

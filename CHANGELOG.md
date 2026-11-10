@@ -57,6 +57,7 @@
 - Add a read-only Authentication & RBAC page with redacted external-auth config, subjects and public roles.
 - Add SR introduce/forget for file-backed storage with UUID/type/content/shared validation.
 - Add a read-only Pool status page for HA, WLB, PVS, VMSS snapshot schedules and DR tasks.
+- Add directory subject role assignment (add/remove) with internal-role/unknown-role guards and local-root protection.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

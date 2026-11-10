@@ -63,6 +63,9 @@ pub fn show(
     if state.sr_probe_dialog.is_some() {
         sr_probe_dialog(ctx, state, actions);
     }
+    if state.user_role_dialog.is_some() {
+        user_roles_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1289,6 +1292,104 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn user_roles_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let roles = match &state.auth_state {
+        crate::state::LoadState::Ready(info) => info.roles.clone(),
+        _ => Vec::new(),
+    };
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.user_role_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("user-roles-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(540.0);
+            modal_title(
+                ui,
+                "Assign subject roles",
+                "Changes apply immediately to the selected directory subject.",
+            );
+            ui.label(
+                RichText::new(format!("{} · {}", dialog.identifier, dialog.display_name))
+                    .size(11.0)
+                    .strong(),
+            );
+            ui.add_space(8.0);
+            egui::ScrollArea::vertical()
+                .max_height(260.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for role in &roles {
+                        let mut checked = dialog.selected.contains(&role.uuid);
+                        if ui
+                            .add_enabled(
+                                !dialog.submitting,
+                                egui::Checkbox::new(
+                                    &mut checked,
+                                    RichText::new(&role.name).size(10.5),
+                                ),
+                            )
+                            .on_hover_text(&role.description)
+                            .changed()
+                        {
+                            if checked {
+                                dialog.selected.insert(role.uuid.clone());
+                            } else {
+                                dialog.selected.remove(&role.uuid);
+                            }
+                        }
+                    }
+                });
+            ui.label(
+                RichText::new("At least one role is required. Local root cannot be changed here.")
+                    .size(9.0)
+                    .color(dim_fg()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && !dialog.selected.is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Saving…"
+                            } else {
+                                "Save roles"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveUserRoles);
+    }
+    if close {
+        actions.push(UiAction::CloseUserRoles);
     }
 }
 

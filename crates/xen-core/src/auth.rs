@@ -54,6 +54,60 @@ impl AuthInfo {
 }
 
 impl Connection {
+    pub async fn set_subject_roles(
+        &self,
+        subject_uuid: &str,
+        requested_roles: Vec<String>,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let subject_ref: String = self
+            .request(
+                "Subject.get_by_uuid",
+                serde_json::json!([self.session, subject_uuid]),
+            )
+            .await?;
+        let subject: Value = self
+            .request(
+                "Subject.get_record",
+                serde_json::json!([self.session, subject_ref]),
+            )
+            .await?;
+        if subject["uuid"].as_str() != Some(subject_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        let roles = self.records("role").await?;
+        let desired = resolve_role_refs(&requested_roles, &roles)?;
+        let current: Vec<String> = subject["roles"]
+            .as_array()
+            .map(|refs| {
+                refs.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let (add, remove) = role_diff(&current, &desired);
+        for role in add {
+            self.request::<Value>(
+                "Subject.add_to_roles",
+                serde_json::json!([self.session, subject_ref, role]),
+            )
+            .await?;
+        }
+        for role in remove {
+            self.request::<Value>(
+                "Subject.remove_from_roles",
+                serde_json::json!([self.session, subject_ref, role]),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
     pub async fn auth_info(&self) -> Result<AuthInfo, ApiError> {
         let (pools, hosts, subjects, roles) = tokio::join!(
             self.records("pool"),
@@ -148,6 +202,53 @@ impl Connection {
             ext_auth_cache_enabled,
         })
     }
+}
+
+fn resolve_role_refs(
+    requested: &[String],
+    roles: &HashMap<String, Value>,
+) -> Result<Vec<String>, ApiError> {
+    let mut resolved = Vec::new();
+    for requested in requested {
+        let requested = requested.trim();
+        let Some((reference, role)) = roles.iter().find(|(reference, role)| {
+            role["uuid"].as_str() == Some(requested)
+                || role["name_label"].as_str() == Some(requested)
+                || reference.as_str() == requested
+        }) else {
+            return Err(ApiError::Xen(format!(
+                "Unknown role '{requested}'. Refresh and choose a role from the list."
+            )));
+        };
+        if role["is_internal"].as_bool() == Some(true) {
+            return Err(ApiError::Xen(
+                "Internal permission records cannot be assigned as roles.".into(),
+            ));
+        }
+        if !resolved.contains(reference) {
+            resolved.push(reference.clone());
+        }
+    }
+    if resolved.is_empty() {
+        return Err(ApiError::Xen(
+            "A subject must keep at least one role.".into(),
+        ));
+    }
+    Ok(resolved)
+}
+
+fn role_diff(current: &[String], desired: &[String]) -> (Vec<String>, Vec<String>) {
+    let add = desired
+        .iter()
+        .filter(|role| !current.contains(role))
+        .cloned()
+        .collect();
+    let remove = current
+        .iter()
+        .filter(|role| !desired.contains(role))
+        .cloned()
+        .collect();
+    (add, remove)
 }
 
 fn parse_subjects(
@@ -262,6 +363,37 @@ mod tests {
         assert_eq!(users[0].email, "alice@example.test");
         assert_eq!(users[0].roles, vec!["vm-operator"]);
         assert!(!users[0].local_root);
+    }
+
+    #[test]
+    fn role_resolution_accepts_uuid_and_name_and_rejects_internal_or_unknown() {
+        let roles = HashMap::from([
+            (
+                "role-ref".to_owned(),
+                json!({"uuid":"role-uuid","name_label":"vm-operator","is_internal":false}),
+            ),
+            (
+                "perm-ref".to_owned(),
+                json!({"uuid":"perm-uuid","name_label":"vm.get_record","is_internal":true}),
+            ),
+        ]);
+        let resolved = resolve_role_refs(&["role-uuid".into()], &roles).unwrap();
+        assert_eq!(resolved, vec!["role-ref"]);
+        let resolved = resolve_role_refs(&["vm-operator".into()], &roles).unwrap();
+        assert_eq!(resolved, vec!["role-ref"]);
+        assert!(resolve_role_refs(&["missing".into()], &roles).is_err());
+        assert!(resolve_role_refs(&["vm.get_record".into()], &roles).is_err());
+        assert!(resolve_role_refs(&[], &roles).is_err());
+    }
+
+    #[test]
+    fn role_diff_adds_and_removes_only_changes() {
+        let (add, remove) = role_diff(&["a".into(), "b".into()], &["b".into(), "c".into()]);
+        assert_eq!(add, vec!["c"]);
+        assert_eq!(remove, vec!["a"]);
+        let (add, remove) = role_diff(&["a".into()], &["a".into()]);
+        assert!(add.is_empty());
+        assert!(remove.is_empty());
     }
 
     #[test]

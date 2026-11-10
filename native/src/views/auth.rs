@@ -90,7 +90,7 @@ pub fn show(
             ui.add_space(8.0);
             config_card(ui, info);
             ui.add_space(8.0);
-            users_card(ui, &info.users);
+            users_card(ui, &info.users, actions);
             ui.add_space(8.0);
             roles_card(ui, &info.roles);
         }
@@ -216,7 +216,7 @@ fn config_card(ui: &mut Ui, info: &AuthInfo) {
     });
 }
 
-fn users_card(ui: &mut Ui, users: &[AuthUser]) {
+fn users_card(ui: &mut Ui, users: &[AuthUser], actions: &mut Vec<UiAction>) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
@@ -240,8 +240,9 @@ fn users_card(ui: &mut Ui, users: &[AuthUser]) {
             .column(Column::remainder().at_least(150.0))
             .column(Column::initial(180.0))
             .column(Column::remainder().at_least(160.0))
+            .column(Column::exact(100.0))
             .header(26.0, |mut header| {
-                for title in ["Identifier", "Display name", "Email", "Roles"] {
+                for title in ["Identifier", "Display name", "Email", "Roles", "Actions"] {
                     header.col(|ui| {
                         ui.label(RichText::new(title).size(9.5).color(muted_fg()));
                     });
@@ -298,6 +299,16 @@ fn users_card(ui: &mut Ui, users: &[AuthUser]) {
                             )
                             .truncate(),
                         );
+                    });
+                    row.col(|ui| {
+                        if user.local_root {
+                            ui.label(RichText::new("Protected").size(9.0).color(amber()));
+                        } else if ui
+                            .add(egui::Button::new(RichText::new("Edit roles").size(9.5)).small())
+                            .clicked()
+                        {
+                            actions.push(UiAction::OpenUserRoles(user.uuid.clone()));
+                        }
                     });
                 });
             });

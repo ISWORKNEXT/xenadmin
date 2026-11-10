@@ -706,6 +706,16 @@ impl ConsoleState {
     }
 }
 
+pub struct UserRoleDialog {
+    pub connection_id: String,
+    pub subject_uuid: String,
+    pub identifier: String,
+    pub display_name: String,
+    pub selected: HashSet<String>,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct SrProbeDialog {
     pub connection_id: String,
     pub hosts: Vec<(String, String)>,
@@ -1016,6 +1026,7 @@ pub struct UiState {
     pub pbd_catalog_error: Option<String>,
     pub pbd_catalog_seq: u64,
     pub sr_probe_dialog: Option<SrProbeDialog>,
+    pub user_role_dialog: Option<UserRoleDialog>,
     pub sr_probe_seq: u64,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
     pub query: String,
@@ -1113,6 +1124,7 @@ impl Default for UiState {
             pbd_catalog_error: None,
             pbd_catalog_seq: 0,
             sr_probe_dialog: None,
+            user_role_dialog: None,
             sr_probe_seq: 0,
             network_destroy_confirm: None,
             query: String::new(),
@@ -1249,6 +1261,9 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenUserRoles(String),
+    CloseUserRoles,
+    SaveUserRoles,
     OpenSrIntroduce,
     CloseSrIntroduce,
     SaveSrIntroduce,

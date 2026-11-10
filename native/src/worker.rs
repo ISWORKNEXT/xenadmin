@@ -145,6 +145,11 @@ pub enum Command {
         seq: u64,
         connection_id: String,
     },
+    SetSubjectRoles {
+        connection_id: String,
+        subject_uuid: String,
+        roles: Vec<String>,
+    },
     DeleteSnapshots {
         connection_id: String,
         vm_uuid: String,
@@ -386,6 +391,10 @@ pub enum Event {
     PoolStatus {
         seq: u64,
         result: Result<Box<xen_core::pool_status::PoolStatus>, String>,
+    },
+    SubjectRolesUpdated {
+        subject_uuid: String,
+        result: Result<(), String>,
     },
     VmDetails {
         seq: u64,
@@ -680,6 +689,19 @@ fn dispatch(
                 let _ = events.send(Event::SrActionFinished {
                     sr_uuid,
                     action,
+                    result,
+                });
+            }
+            Command::SetSubjectRoles {
+                connection_id,
+                subject_uuid,
+                roles,
+            } => {
+                let result = workspace
+                    .set_subject_roles(&connection_id, &subject_uuid, roles)
+                    .await;
+                let _ = events.send(Event::SubjectRolesUpdated {
+                    subject_uuid,
                     result,
                 });
             }

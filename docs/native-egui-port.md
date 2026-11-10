@@ -37,7 +37,7 @@ dependency.
 | XenSearch filtering | Implemented | Fields + comparators, AND/OR/NOT and parentheses, grouping, editable named saved searches |
 
 | Alerts | Implemented (basic) | Priority 1–4 XenAPI messages with dismiss; diagnostics/health checks are still separate |
-| Authentication / RBAC | Implemented (read-only) | External auth type/service, redacted config, subjects with roles and public roles; role editing remains |
+| Authentication / RBAC | Implemented | Read-only auth/config/subjects/roles plus add/remove role assignment for directory subjects; local root protected |
 | Pool status | Implemented (read-only) | HA config/statefiles/redo log, WLB settings/recommendations, PVS sites/servers/proxies/cache, VMSS schedules, DR tasks |
 | Storage repository actions | Implemented | Create/introduce/forget/probe/repair/reattach/detach/scan/TRIM/destroy, PBD plug/unplug, user-VDI inventory and safe deletion |
 | Network actions | Implemented | Create internal networks, bonds and VLANs; destroy cleans dependent VLAN/bond PIFs; physical PIF plug/unplug with management protection |
