@@ -5,7 +5,7 @@ use xen_core::workspace::WorkspaceView;
 use crate::format;
 use crate::state::{
     ActionKind, PowerFilter, Scope, Target, UiAction, UiState, action_allowed, connection_id,
-    connection_name, is_read_only, scoped_hosts, scoped_targets, scoped_templates,
+    connection_name, find_connection, is_read_only, scoped_hosts, scoped_targets, scoped_templates,
 };
 use crate::theme::*;
 use crate::widgets;
@@ -754,6 +754,23 @@ pub fn networks(
             }
         }
     }
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(format::plural(rows.len(), "network", "networks"))
+                .size(10.0)
+                .color(dim_fg()),
+        );
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if let Some(id) = state.scope.connection_id()
+                && find_connection(workspace, id)
+                    .is_some_and(|connection| !is_read_only(connection))
+                && ui.add(widgets::primary_button("Add network")).clicked()
+            {
+                actions.push(UiAction::OpenNetworkCreate);
+            }
+        });
+    });
+    ui.add_space(6.0);
     if rows.is_empty() {
         widgets::empty_state(ui, "No networks", "Connect a pool to list its networks.");
         return;

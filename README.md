@@ -34,6 +34,7 @@ default and a persisted dark-theme toggle.
   shutdown, with explicit confirmation for disruptive actions.
 - Priority pool alerts from XenAPI message records, shown on the pool page with
   a dismiss action.
+- Storage repository scan/destroy actions and XenAPI network create/destroy.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.

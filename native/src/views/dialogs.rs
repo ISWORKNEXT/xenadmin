@@ -39,6 +39,15 @@ pub fn show(
     if state.snapshot_confirm.is_some() {
         snapshot_delete(ctx, state, actions);
     }
+    if state.sr_action_confirm.is_some() {
+        sr_action_confirm(ctx, state, actions);
+    }
+    if state.network_create_dialog.is_some() {
+        network_create(ctx, state, actions);
+    }
+    if state.network_destroy_confirm.is_some() {
+        network_destroy(ctx, state, actions);
+    }
     if state.vif_dialog.is_some() {
         vif_dialog(ctx, state, actions);
     }
@@ -557,6 +566,284 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
     }
     if close {
         actions.push(UiAction::CloseVmEdit);
+    }
+}
+
+fn network_create(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.network_create_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("network-create-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(520.0);
+            modal_title(
+                ui,
+                "Add network",
+                "Creates an internal XenAPI network. Attach a PIF or VIF afterwards.",
+            );
+            widgets::field_label(ui, "Name");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.name)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Description");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::multiline(&mut dialog.description)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(2)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "MTU");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.mtu)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(4)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && !dialog.name.trim().is_empty(),
+                            widgets::primary_button(if dialog.submitting {
+                                "Creating…"
+                            } else {
+                                "Create network"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveNetwork);
+    }
+    if close {
+        actions.push(UiAction::CloseNetworkCreate);
+    }
+}
+
+fn network_destroy(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut destroy = false;
+    let Some(dialog) = state.network_destroy_confirm.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("network-destroy-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(480.0);
+            modal_title(
+                ui,
+                "Destroy network",
+                "This removes the XenAPI network record.",
+            );
+            ui.horizontal(|ui| {
+                widgets::dot(ui, red(), 6.0);
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label(RichText::new(&dialog.name).size(11.5).strong());
+                    ui.label(
+                        RichText::new(&dialog.network_uuid)
+                            .monospace()
+                            .size(9.0)
+                            .color(dim_fg()),
+                    );
+                });
+            });
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new("The network must have no PIFs or VIFs. This cannot be undone.")
+                    .size(9.5)
+                    .color(red()),
+            );
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::Checkbox::new(
+                    &mut dialog.acknowledged,
+                    RichText::new("I understand this network operation").size(10.0),
+                ),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && dialog.acknowledged,
+                            egui::Button::new(
+                                RichText::new(if dialog.submitting {
+                                    "Destroying…"
+                                } else {
+                                    "Destroy network"
+                                })
+                                .size(11.0)
+                                .color(red()),
+                            )
+                            .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120))),
+                        )
+                        .clicked()
+                    {
+                        destroy = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if destroy {
+        actions.push(UiAction::ConfirmNetworkDestroy);
+    }
+    if close {
+        actions.push(UiAction::CancelNetworkDestroy);
+    }
+}
+
+fn sr_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut confirm = false;
+    let Some(dialog) = state.sr_action_confirm.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("sr-action-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(500.0);
+            modal_title(
+                ui,
+                dialog.action.title(),
+                "Review the storage repository before submitting to XenAPI.",
+            );
+            ui.horizontal(|ui| {
+                widgets::dot(ui, accent(), 6.0);
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label(RichText::new(&dialog.sr_name).size(11.5).strong());
+                    ui.label(
+                        RichText::new(&dialog.sr_uuid)
+                            .monospace()
+                            .size(9.0)
+                            .color(dim_fg()),
+                    );
+                });
+            });
+            ui.add_space(8.0);
+            if dialog.action.destructive() {
+                ui.label(
+                    RichText::new(
+                        "Destroying an SR removes its record. The SR must be empty; data loss is possible.",
+                    )
+                    .size(9.5)
+                    .color(red()),
+                );
+                ui.add_space(4.0);
+                ui.add_enabled(
+                    !dialog.submitting,
+                    egui::Checkbox::new(
+                        &mut dialog.acknowledged,
+                        RichText::new("I understand this storage operation").size(10.0),
+                    ),
+                );
+            }
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let destructive = dialog.action.destructive();
+                    let button = if destructive {
+                        egui::Button::new(
+                            RichText::new(if dialog.submitting {
+                                "Running…"
+                            } else {
+                                dialog.action.title()
+                            })
+                            .size(11.0)
+                            .color(red()),
+                        )
+                        .stroke(egui::Stroke::new(1.0, with_alpha(red(), 120)))
+                    } else {
+                        widgets::primary_button(if dialog.submitting {
+                            "Running…"
+                        } else {
+                            dialog.action.title()
+                        })
+                    };
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting && (!destructive || dialog.acknowledged),
+                            button,
+                        )
+                        .clicked()
+                    {
+                        confirm = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if confirm {
+        actions.push(UiAction::ConfirmSrAction);
+    }
+    if close {
+        actions.push(UiAction::CancelSrAction);
     }
 }
 

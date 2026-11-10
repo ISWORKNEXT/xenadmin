@@ -632,6 +632,70 @@ impl App {
                         .toasts
                         .push(Toast::new(message, ToastKind::Error)),
                 },
+                Event::NetworkChanged { action, result } => match result {
+                    Ok(()) => {
+                        self.state.network_create_dialog = None;
+                        self.state.network_destroy_confirm = None;
+                        self.state.toasts.push(Toast::new(
+                            if action == "create" {
+                                "Network created."
+                            } else {
+                                "Network destroyed."
+                            },
+                            ToastKind::Success,
+                        ));
+                    }
+                    Err(message) => {
+                        let mut handled = false;
+                        if let Some(dialog) = self.state.network_create_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if let Some(dialog) = self.state.network_destroy_confirm.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message.clone());
+                            handled = true;
+                        }
+                        if !handled {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
+                Event::SrActionFinished {
+                    sr_uuid,
+                    action,
+                    result,
+                } => match result {
+                    Ok(()) => {
+                        if self
+                            .state
+                            .sr_action_confirm
+                            .as_ref()
+                            .is_some_and(|confirm| confirm.sr_uuid == sr_uuid)
+                        {
+                            self.state.sr_action_confirm = None;
+                        }
+                        self.state.toasts.push(Toast::new(
+                            format!("{} completed.", action.title()),
+                            ToastKind::Success,
+                        ));
+                    }
+                    Err(message) => {
+                        if let Some(confirm) = self.state.sr_action_confirm.as_mut()
+                            && confirm.sr_uuid == sr_uuid
+                        {
+                            confirm.submitting = false;
+                            confirm.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::SnapshotsDeleted { vm_uuid, result } => match result {
                     Ok(count) => {
                         if self
@@ -1499,6 +1563,149 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::OpenNetworkCreate => {
+                    let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
+                    else {
+                        self.state.toasts.push(Toast::new(
+                            "Select a pool in the Infrastructure tree before adding a network.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    self.state.network_create_dialog = Some(crate::state::NetworkCreateDialog {
+                        connection_id,
+                        name: String::new(),
+                        description: String::new(),
+                        mtu: "1500".into(),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseNetworkCreate => {
+                    if !self
+                        .state
+                        .network_create_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.network_create_dialog = None;
+                    }
+                }
+                UiAction::SaveNetwork => {
+                    let Some(dialog) = self.state.network_create_dialog.as_mut() else {
+                        continue;
+                    };
+                    if dialog.name.trim().is_empty() {
+                        dialog.error = Some("Enter a network name.".into());
+                        continue;
+                    }
+                    let Some(mtu) = dialog.mtu.trim().parse::<u64>().ok() else {
+                        dialog.error = Some("Enter a whole-number MTU.".into());
+                        continue;
+                    };
+                    if !(1500..=9000).contains(&mtu) {
+                        dialog.error = Some("MTU must be between 1500 and 9000.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::CreateNetwork {
+                        connection_id: dialog.connection_id.clone(),
+                        name: dialog.name.trim().to_owned(),
+                        description: dialog.description.clone(),
+                        mtu,
+                    });
+                }
+                UiAction::PromptDestroyNetwork {
+                    connection_id,
+                    network_uuid,
+                    name,
+                } => {
+                    self.state.network_destroy_confirm =
+                        Some(crate::state::NetworkDestroyConfirm {
+                            connection_id,
+                            network_uuid,
+                            name,
+                            acknowledged: false,
+                            submitting: false,
+                            error: None,
+                        });
+                }
+                UiAction::CancelNetworkDestroy => {
+                    if !self
+                        .state
+                        .network_destroy_confirm
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.network_destroy_confirm = None;
+                    }
+                }
+                UiAction::ConfirmNetworkDestroy => {
+                    let Some(dialog) = self.state.network_destroy_confirm.as_mut() else {
+                        continue;
+                    };
+                    if !dialog.acknowledged {
+                        dialog.error = Some("Confirm that you understand this action.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::DestroyNetwork {
+                        connection_id: dialog.connection_id.clone(),
+                        network_uuid: dialog.network_uuid.clone(),
+                    });
+                }
+                UiAction::PromptSrAction {
+                    connection_id,
+                    sr_uuid,
+                    sr_name,
+                    action,
+                } => {
+                    if action.destructive() {
+                        self.state.sr_action_confirm = Some(crate::state::SrActionConfirm {
+                            connection_id,
+                            sr_uuid,
+                            sr_name,
+                            action,
+                            acknowledged: false,
+                            submitting: false,
+                            error: None,
+                        });
+                    } else {
+                        self.worker.send(Command::SrAction {
+                            connection_id,
+                            sr_uuid,
+                            action,
+                        });
+                    }
+                }
+                UiAction::CancelSrAction => {
+                    if !self
+                        .state
+                        .sr_action_confirm
+                        .as_ref()
+                        .is_some_and(|confirm| confirm.submitting)
+                    {
+                        self.state.sr_action_confirm = None;
+                    }
+                }
+                UiAction::ConfirmSrAction => {
+                    let Some(confirm) = self.state.sr_action_confirm.as_mut() else {
+                        continue;
+                    };
+                    if !confirm.acknowledged {
+                        confirm.error = Some("Confirm that you understand this action.".into());
+                        continue;
+                    }
+                    confirm.submitting = true;
+                    confirm.error = None;
+                    self.worker.send(Command::SrAction {
+                        connection_id: confirm.connection_id.clone(),
+                        sr_uuid: confirm.sr_uuid.clone(),
+                        action: confirm.action,
                     });
                 }
                 UiAction::PromptDeleteSnapshots => {

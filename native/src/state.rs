@@ -686,6 +686,34 @@ impl ConsoleState {
     }
 }
 
+pub struct NetworkCreateDialog {
+    pub connection_id: String,
+    pub name: String,
+    pub description: String,
+    pub mtu: String,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct NetworkDestroyConfirm {
+    pub connection_id: String,
+    pub network_uuid: String,
+    pub name: String,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
+pub struct SrActionConfirm {
+    pub connection_id: String,
+    pub sr_uuid: String,
+    pub sr_name: String,
+    pub action: xen_core::operations::SrAction,
+    pub acknowledged: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct SnapshotDeleteConfirm {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -817,6 +845,9 @@ pub struct UiState {
     pub host_action_confirm: Option<HostActionConfirm>,
     pub snapshot_selection: HashSet<String>,
     pub snapshot_confirm: Option<SnapshotDeleteConfirm>,
+    pub sr_action_confirm: Option<SrActionConfirm>,
+    pub network_create_dialog: Option<NetworkCreateDialog>,
+    pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -877,6 +908,9 @@ impl Default for UiState {
             host_action_confirm: None,
             snapshot_selection: HashSet::new(),
             snapshot_confirm: None,
+            sr_action_confirm: None,
+            network_create_dialog: None,
+            network_destroy_confirm: None,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -965,6 +999,24 @@ pub enum UiAction {
         connection_id: String,
         message_uuid: String,
     },
+    OpenNetworkCreate,
+    CloseNetworkCreate,
+    SaveNetwork,
+    PromptDestroyNetwork {
+        connection_id: String,
+        network_uuid: String,
+        name: String,
+    },
+    CancelNetworkDestroy,
+    ConfirmNetworkDestroy,
+    PromptSrAction {
+        connection_id: String,
+        sr_uuid: String,
+        sr_name: String,
+        action: xen_core::operations::SrAction,
+    },
+    CancelSrAction,
+    ConfirmSrAction,
     PromptDeleteSnapshots,
     CloseSnapshotDelete,
     ConfirmSnapshotDelete,

@@ -265,6 +265,33 @@ pub struct RemoteTask {
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
+pub enum SrAction {
+    Scan,
+    Destroy,
+}
+
+impl SrAction {
+    fn method(self) -> &'static str {
+        match self {
+            Self::Scan => "Async.SR.scan",
+            Self::Destroy => "Async.SR.destroy",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Scan => "Scan storage",
+            Self::Destroy => "Destroy storage repository",
+        }
+    }
+
+    pub fn destructive(self) -> bool {
+        matches!(self, Self::Destroy)
+    }
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum HostAction {
     Enable,
     Disable,
@@ -303,6 +330,87 @@ impl HostAction {
 }
 
 impl Connection {
+    pub async fn create_network(
+        &self,
+        name: &str,
+        description: &str,
+        mtu: u64,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 255 {
+            return Err(ApiError::Xen(
+                "Enter a network name between 1 and 255 characters.".into(),
+            ));
+        }
+        if description.chars().count() > 1024 {
+            return Err(ApiError::Xen(
+                "The description must be 1024 characters or fewer.".into(),
+            ));
+        }
+        if !(1500..=9000).contains(&mtu) {
+            return Err(ApiError::Xen("MTU must be between 1500 and 9000.".into()));
+        }
+        self.request::<Value>(
+            "network.create",
+            json!([
+                self.session,
+                {
+                    "name_label": name,
+                    "name_description": description,
+                    "MTU": mtu,
+                    "other_config": {},
+                    "tags": [],
+                    "bridge": ""
+                }
+            ]),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn destroy_network(&self, network_uuid: &str) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let network_ref: String = self
+            .request("network.get_by_uuid", json!([self.session, network_uuid]))
+            .await?;
+        let network: Value = self
+            .request("network.get_record", json!([self.session, network_ref]))
+            .await?;
+        if network["uuid"].as_str() != Some(network_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        self.async_task("Async.network.destroy", json!([self.session, network_ref]))
+            .await
+    }
+
+    pub async fn sr_action(&self, sr_uuid: &str, action: SrAction) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let sr_ref: String = self
+            .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
+            .await?;
+        let sr: Value = self
+            .request("SR.get_record", json!([self.session, sr_ref]))
+            .await?;
+        if sr["uuid"].as_str() != Some(sr_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        self.async_task(action.method(), json!([self.session, sr_ref]))
+            .await
+    }
+
     pub async fn dismiss_alert(&self, message_uuid: &str) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(

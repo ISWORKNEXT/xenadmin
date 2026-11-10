@@ -1,5 +1,5 @@
 use egui::{Align, Layout, RichText, Sense, Ui, Vec2};
-use xen_core::workspace::WorkspaceView;
+use xen_core::{operations::SrAction, workspace::WorkspaceView};
 
 use crate::format;
 use crate::state::{
@@ -36,6 +36,49 @@ pub fn storage(
         &connection_id,
         actions,
     );
+
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.menu_button(RichText::new("Manage storage…").size(10.5), |ui| {
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection),
+                        egui::Button::new(RichText::new("Scan storage").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptSrAction {
+                        connection_id: connection_id.clone(),
+                        sr_uuid: sr.uuid.clone(),
+                        sr_name: sr.name.clone(),
+                        action: SrAction::Scan,
+                    });
+                    ui.close();
+                }
+                ui.separator();
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection),
+                        egui::Button::new(
+                            RichText::new("Destroy storage repository…")
+                                .size(11.0)
+                                .color(red()),
+                        ),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptSrAction {
+                        connection_id: connection_id.clone(),
+                        sr_uuid: sr.uuid.clone(),
+                        sr_name: sr.name.clone(),
+                        action: SrAction::Destroy,
+                    });
+                    ui.close();
+                }
+            });
+        });
+    });
+    ui.add_space(4.0);
 
     ui.columns(2, |columns| {
         theme::card_frame().show(&mut columns[0], |ui| {
@@ -130,6 +173,30 @@ pub fn network(
         &connection_id,
         actions,
     );
+
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.menu_button(RichText::new("Manage network…").size(10.5), |ui| {
+                if ui
+                    .add_enabled(
+                        !is_read_only(connection),
+                        egui::Button::new(
+                            RichText::new("Destroy network…").size(11.0).color(red()),
+                        ),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptDestroyNetwork {
+                        connection_id: connection_id.clone(),
+                        network_uuid: network.uuid.clone(),
+                        name: network.name.clone(),
+                    });
+                    ui.close();
+                }
+            });
+        });
+    });
+    ui.add_space(4.0);
 
     ui.columns(2, |columns| {
         theme::card_frame().show(&mut columns[0], |ui| {

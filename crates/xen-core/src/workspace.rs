@@ -372,6 +372,74 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn create_network(
+        &self,
+        connection_id: &str,
+        name: String,
+        description: String,
+        mtu: u64,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_network(&name, &description, mtu)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn destroy_network(
+        &self,
+        connection_id: &str,
+        network_uuid: &str,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !active
+            .snapshot
+            .read()
+            .await
+            .networks
+            .iter()
+            .any(|network| network.uuid == network_uuid)
+        {
+            return Err("This network is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .destroy_network(network_uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn sr_action(
+        &self,
+        connection_id: &str,
+        sr_uuid: &str,
+        action: crate::operations::SrAction,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !active
+            .snapshot
+            .read()
+            .await
+            .storage
+            .iter()
+            .any(|sr| sr.uuid == sr_uuid)
+        {
+            return Err("This storage repository is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .sr_action(sr_uuid, action)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn delete_snapshots(
         &self,
         connection_id: &str,

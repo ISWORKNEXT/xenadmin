@@ -57,6 +57,21 @@ pub enum Command {
         connection_id: String,
         message_uuid: String,
     },
+    SrAction {
+        connection_id: String,
+        sr_uuid: String,
+        action: xen_core::operations::SrAction,
+    },
+    CreateNetwork {
+        connection_id: String,
+        name: String,
+        description: String,
+        mtu: u64,
+    },
+    DestroyNetwork {
+        connection_id: String,
+        network_uuid: String,
+    },
     DeleteSnapshots {
         connection_id: String,
         vm_uuid: String,
@@ -193,6 +208,15 @@ pub enum Event {
     SnapshotsDeleted {
         vm_uuid: String,
         result: Result<usize, String>,
+    },
+    SrActionFinished {
+        sr_uuid: String,
+        action: xen_core::operations::SrAction,
+        result: Result<(), String>,
+    },
+    NetworkChanged {
+        action: String,
+        result: Result<(), String>,
     },
     VmDetails {
         seq: u64,
@@ -427,6 +451,44 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::HostDetails { seq, result });
+            }
+            Command::SrAction {
+                connection_id,
+                sr_uuid,
+                action,
+            } => {
+                let result = workspace.sr_action(&connection_id, &sr_uuid, action).await;
+                let _ = events.send(Event::SrActionFinished {
+                    sr_uuid,
+                    action,
+                    result,
+                });
+            }
+            Command::CreateNetwork {
+                connection_id,
+                name,
+                description,
+                mtu,
+            } => {
+                let result = workspace
+                    .create_network(&connection_id, name, description, mtu)
+                    .await;
+                let _ = events.send(Event::NetworkChanged {
+                    action: "create".into(),
+                    result,
+                });
+            }
+            Command::DestroyNetwork {
+                connection_id,
+                network_uuid,
+            } => {
+                let result = workspace
+                    .destroy_network(&connection_id, &network_uuid)
+                    .await;
+                let _ = events.send(Event::NetworkChanged {
+                    action: "destroy".into(),
+                    result,
+                });
             }
             Command::DeleteSnapshots {
                 connection_id,
