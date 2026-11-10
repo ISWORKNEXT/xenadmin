@@ -126,7 +126,8 @@ pub fn show(
         }
         VmTab::Ha => {
             if let Some(details) = details_state(ui, state, actions) {
-                ha(ui, &details);
+                let editable = !read_only && !is_template && !is_snapshot;
+                ha(ui, &details, editable, vm.power_state == "Running", actions);
             }
         }
         VmTab::Snapshots => snapshots(ui, state, workspace, connection, vm, read_only, actions),
@@ -1913,10 +1914,31 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
     });
 }
 
-fn ha(ui: &mut Ui, details: &VmDetails) {
+fn ha(
+    ui: &mut Ui,
+    details: &VmDetails,
+    editable: bool,
+    running: bool,
+    actions: &mut Vec<UiAction>,
+) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.label(RichText::new("High availability").size(15.0).strong());
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("High availability").size(15.0).strong());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(editable, widgets::primary_button("Edit HA settings"))
+                    .on_hover_text(if running {
+                        "Some changes take effect on the next start"
+                    } else {
+                        "Change restart priority, always-run, delays and affinity"
+                    })
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenHaEdit);
+                }
+            });
+        });
         ui.label(
             RichText::new("HA failover tolerance and the HA plan are configured at pool level.")
                 .size(10.0)
@@ -1941,6 +1963,18 @@ fn ha(ui: &mut Ui, details: &VmDetails) {
         );
         widgets::kv(ui, "Resident host", &details.resident_on, false);
         widgets::kv(ui, "Affinity", &details.affinity, false);
+        widgets::kv(
+            ui,
+            "Start delay",
+            &format!("{} seconds", details.start_delay),
+            false,
+        );
+        widgets::kv(
+            ui,
+            "Shutdown delay",
+            &format!("{} seconds", details.shutdown_delay),
+            false,
+        );
         ui.add_space(4.0);
         widgets::kv(
             ui,

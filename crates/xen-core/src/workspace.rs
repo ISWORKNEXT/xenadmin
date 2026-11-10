@@ -592,6 +592,34 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn update_vm_ha(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        restart_priority: String,
+        start_delay: u64,
+        shutdown_delay: u64,
+        affinity_host_uuid: Option<String>,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .update_vm_ha(
+                vm_uuid,
+                &restart_priority,
+                start_delay,
+                shutdown_delay,
+                affinity_host_uuid.as_deref(),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn set_vbd_bootable(
         &self,
         connection_id: &str,

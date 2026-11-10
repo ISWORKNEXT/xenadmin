@@ -733,6 +733,34 @@ impl App {
                         }
                     }
                 },
+                Event::VmHaUpdated { vm_uuid, result } => match result {
+                    Ok(()) => {
+                        if self
+                            .state
+                            .ha_edit_dialog
+                            .as_ref()
+                            .is_some_and(|dialog| dialog.vm_uuid == vm_uuid)
+                        {
+                            self.state.ha_edit_dialog = None;
+                        }
+                        self.state
+                            .toasts
+                            .push(Toast::new("HA settings updated.", ToastKind::Success));
+                        self.apply(vec![UiAction::ReloadVmDetails]);
+                    }
+                    Err(message) => {
+                        if let Some(dialog) = self.state.ha_edit_dialog.as_mut()
+                            && dialog.vm_uuid == vm_uuid
+                        {
+                            dialog.submitting = false;
+                            dialog.error = Some(message);
+                        } else {
+                            self.state
+                                .toasts
+                                .push(Toast::new(message, ToastKind::Error));
+                        }
+                    }
+                },
                 Event::VdiCatalog { seq, result } => {
                     if seq == self.state.vdi_catalog_seq
                         && let Some(dialog) = self.state.attach_vdi_dialog.as_mut()
@@ -1917,6 +1945,86 @@ impl App {
                         connection_id: confirm.connection_id.clone(),
                         host_uuid: confirm.host_uuid.clone(),
                         action: confirm.action,
+                    });
+                }
+                UiAction::OpenHaEdit => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let Some(details) = self.state.vm_state.ready() else {
+                        continue;
+                    };
+                    let hosts: Vec<(String, String)> =
+                        find_connection(&self.workspace, &connection_id)
+                            .and_then(crate::state::connection_inventory)
+                            .map(|inventory| {
+                                inventory
+                                    .hosts
+                                    .iter()
+                                    .map(|host| (host.uuid.clone(), host.name.clone()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                    self.state.ha_edit_dialog = Some(crate::state::HaEditDialog {
+                        connection_id,
+                        vm_uuid,
+                        hosts,
+                        restart_priority: details.ha_restart_priority.clone(),
+                        start_delay: details.start_delay.to_string(),
+                        shutdown_delay: details.shutdown_delay.to_string(),
+                        affinity_host_uuid: (!details.affinity_ref.is_empty()
+                            && details.affinity_ref != "OpaqueRef:NULL")
+                            .then(|| details.affinity_ref.clone()),
+                        submitting: false,
+                        error: None,
+                    });
+                }
+                UiAction::CloseHaEdit => {
+                    if !self
+                        .state
+                        .ha_edit_dialog
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.ha_edit_dialog = None;
+                    }
+                }
+                UiAction::SaveHaEdit => {
+                    let Some(dialog) = self.state.ha_edit_dialog.as_mut() else {
+                        continue;
+                    };
+                    let Some(start_delay) = dialog.start_delay.trim().parse::<u64>().ok() else {
+                        dialog.error =
+                            Some("Start delay must be a whole number of seconds.".into());
+                        continue;
+                    };
+                    let Some(shutdown_delay) = dialog.shutdown_delay.trim().parse::<u64>().ok()
+                    else {
+                        dialog.error =
+                            Some("Shutdown delay must be a whole number of seconds.".into());
+                        continue;
+                    };
+                    if start_delay > 7 * 24 * 60 * 60 || shutdown_delay > 7 * 24 * 60 * 60 {
+                        dialog.error = Some("Delays must be 7 days or fewer.".into());
+                        continue;
+                    }
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::UpdateVmHa {
+                        connection_id: dialog.connection_id.clone(),
+                        vm_uuid: dialog.vm_uuid.clone(),
+                        restart_priority: dialog.restart_priority.clone(),
+                        start_delay,
+                        shutdown_delay,
+                        affinity_host_uuid: dialog.affinity_host_uuid.clone(),
                     });
                 }
                 UiAction::OpenAttachVdi => {

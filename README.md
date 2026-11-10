@@ -34,6 +34,8 @@ default and a persisted dark-theme toggle.
 - Host actions menu for enable/disable, power-on, evacuate, rescan physical
   interfaces, restart toolstack, reboot and shutdown, with explicit confirmation
   for disruptive actions.
+- Edit VM HA restart priority, start/shutdown delays and host affinity from the
+  HA tab.
 - Priority pool alerts from XenAPI message records, shown on the pool page with
   a dismiss action.
 - Storage repository scan/destroy actions and XenAPI network create/destroy.

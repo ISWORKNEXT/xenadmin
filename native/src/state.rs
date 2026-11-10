@@ -751,6 +751,18 @@ pub struct HostActionConfirm {
     pub error: Option<String>,
 }
 
+pub struct HaEditDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub hosts: Vec<(String, String)>,
+    pub restart_priority: String,
+    pub start_delay: String,
+    pub shutdown_delay: String,
+    pub affinity_host_uuid: Option<String>,
+    pub submitting: bool,
+    pub error: Option<String>,
+}
+
 pub struct AttachVdiDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -877,6 +889,7 @@ pub struct UiState {
     pub vif_confirm: Option<VifConfirm>,
     pub disk_dialog: Option<DiskDialog>,
     pub attach_vdi_dialog: Option<AttachVdiDialog>,
+    pub ha_edit_dialog: Option<HaEditDialog>,
     pub vdi_catalog_seq: u64,
     pub host_action_confirm: Option<HostActionConfirm>,
     pub snapshot_selection: HashSet<String>,
@@ -945,6 +958,7 @@ impl Default for UiState {
             vif_confirm: None,
             disk_dialog: None,
             attach_vdi_dialog: None,
+            ha_edit_dialog: None,
             vdi_catalog_seq: 0,
             host_action_confirm: None,
             snapshot_selection: HashSet::new(),
@@ -1072,6 +1086,9 @@ pub enum UiAction {
     CancelHostAction,
     ConfirmHostAction,
     OpenAddDisk,
+    OpenHaEdit,
+    CloseHaEdit,
+    SaveHaEdit,
     OpenAttachVdi,
     CloseAttachVdi,
     SaveAttachVdi,

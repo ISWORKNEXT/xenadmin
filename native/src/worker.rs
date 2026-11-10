@@ -130,6 +130,14 @@ pub enum Command {
         vbd_uuid: String,
         bootable: bool,
     },
+    UpdateVmHa {
+        connection_id: String,
+        vm_uuid: String,
+        restart_priority: String,
+        start_delay: u64,
+        shutdown_delay: u64,
+        affinity_host_uuid: Option<String>,
+    },
     AddDisk {
         connection_id: String,
         vm_uuid: String,
@@ -253,6 +261,10 @@ pub enum Event {
     VdiCatalog {
         seq: u64,
         result: Result<Vec<xen_core::vm::VdiSummary>, String>,
+    },
+    VmHaUpdated {
+        vm_uuid: String,
+        result: Result<(), String>,
     },
     CdChanged {
         vm_uuid: String,
@@ -645,6 +657,26 @@ fn dispatch(
                     action: "attach".into(),
                     result,
                 });
+            }
+            Command::UpdateVmHa {
+                connection_id,
+                vm_uuid,
+                restart_priority,
+                start_delay,
+                shutdown_delay,
+                affinity_host_uuid,
+            } => {
+                let result = workspace
+                    .update_vm_ha(
+                        &connection_id,
+                        &vm_uuid,
+                        restart_priority,
+                        start_delay,
+                        shutdown_delay,
+                        affinity_host_uuid,
+                    )
+                    .await;
+                let _ = events.send(Event::VmHaUpdated { vm_uuid, result });
             }
             Command::SetVbdBootable {
                 connection_id,

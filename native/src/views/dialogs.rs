@@ -36,6 +36,9 @@ pub fn show(
     if state.attach_vdi_dialog.is_some() {
         attach_vdi_dialog(ctx, state, actions);
     }
+    if state.ha_edit_dialog.is_some() {
+        ha_edit_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1244,6 +1247,151 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn ha_edit_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.ha_edit_dialog.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("vm-ha-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(540.0);
+            modal_title(
+                ui,
+                "HA and startup settings",
+                "Restart priority is used when the pool must recover guests.",
+            );
+            widgets::field_label(ui, "Restart priority");
+            let priority_label = match dialog.restart_priority.as_str() {
+                "restart" => "Restart if possible".to_owned(),
+                "best-effort" => "Always restart".to_owned(),
+                "" => "Never restart".to_owned(),
+                other => other.to_owned(),
+            };
+            ui.add_enabled_ui(!dialog.submitting, |ui| {
+                egui::ComboBox::from_id_salt("vm-ha-priority")
+                    .selected_text(RichText::new(priority_label).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for (value, label) in [
+                            ("", "Never restart"),
+                            ("restart", "Restart if possible"),
+                            ("best-effort", "Always restart"),
+                        ] {
+                            if ui
+                                .selectable_label(
+                                    dialog.restart_priority == value,
+                                    RichText::new(label).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.restart_priority = value.into();
+                            }
+                        }
+                    });
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Start delay (seconds)");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.start_delay)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(7)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Shutdown delay (seconds)");
+            ui.add_enabled(
+                !dialog.submitting,
+                egui::TextEdit::singleline(&mut dialog.shutdown_delay)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(7)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Affinity host");
+            let affinity_label = dialog
+                .affinity_host_uuid
+                .as_ref()
+                .and_then(|uuid| {
+                    dialog
+                        .hosts
+                        .iter()
+                        .find(|(host_uuid, _)| host_uuid == uuid)
+                        .map(|(_, name)| name.clone())
+                })
+                .unwrap_or_else(|| "No affinity".into());
+            ui.add_enabled_ui(!dialog.submitting, |ui| {
+                egui::ComboBox::from_id_salt("vm-ha-affinity")
+                    .selected_text(RichText::new(affinity_label).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        if ui
+                            .selectable_label(
+                                dialog.affinity_host_uuid.is_none(),
+                                RichText::new("No affinity").size(11.0),
+                            )
+                            .clicked()
+                        {
+                            dialog.affinity_host_uuid = None;
+                        }
+                        for (uuid, name) in &dialog.hosts {
+                            if ui
+                                .selectable_label(
+                                    dialog.affinity_host_uuid.as_deref() == Some(uuid.as_str()),
+                                    RichText::new(name).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.affinity_host_uuid = Some(uuid.clone());
+                            }
+                        }
+                    });
+            });
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !dialog.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting,
+                            widgets::primary_button(if dialog.submitting {
+                                "Saving…"
+                            } else {
+                                "Save HA settings"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !dialog.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveHaEdit);
+    }
+    if close {
+        actions.push(UiAction::CloseHaEdit);
     }
 }
 

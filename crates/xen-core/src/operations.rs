@@ -1094,6 +1094,102 @@ impl Connection {
             .await
     }
 
+    /// Update VM HA restart policy, always-run, boot/shutdown delays and affinity.
+    pub async fn update_vm_ha(
+        &self,
+        uuid: &str,
+        restart_priority: &str,
+        start_delay: u64,
+        shutdown_delay: u64,
+        affinity_host_uuid: Option<&str>,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        if !valid_restart_priority(restart_priority) {
+            return Err(ApiError::Xen(
+                "Restart priority must be Never restart, Restart if possible or Always restart."
+                    .into(),
+            ));
+        }
+        if start_delay > MAX_VM_DELAY || shutdown_delay > MAX_VM_DELAY {
+            return Err(ApiError::Xen(
+                "Start and shutdown delays must be 7 days or fewer.".into(),
+            ));
+        }
+        let reference: String = self
+            .request("VM.get_by_uuid", json!([self.session, uuid]))
+            .await?;
+        let record: Value = self
+            .request("VM.get_record", json!([self.session, reference]))
+            .await?;
+        if record["uuid"].as_str() != Some(uuid)
+            || record["is_control_domain"].as_bool() == Some(true)
+            || record["is_a_template"].as_bool() == Some(true)
+            || record["is_a_snapshot"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen(
+                "HA settings can only be changed on a virtual machine.".into(),
+            ));
+        }
+        let affinity_ref = match affinity_host_uuid
+            .map(str::trim)
+            .filter(|uuid| !uuid.is_empty())
+        {
+            Some(host_uuid) => {
+                let host_ref: String = self
+                    .request("host.get_by_uuid", json!([self.session, host_uuid]))
+                    .await?;
+                let host: Value = self
+                    .request("host.get_record", json!([self.session, host_ref]))
+                    .await?;
+                if host["uuid"].as_str() != Some(host_uuid) {
+                    return Err(ApiError::Protocol);
+                }
+                host_ref
+            }
+            None => String::new(),
+        };
+        let current_priority = text(&record, "ha_restart_priority");
+        if current_priority != restart_priority {
+            self.request::<Value>(
+                "VM.set_ha_restart_priority",
+                json!([self.session, reference, restart_priority]),
+            )
+            .await?;
+        }
+        if number(&record, "start_delay") != start_delay {
+            self.request::<Value>(
+                "VM.set_start_delay",
+                json!([self.session, reference, start_delay]),
+            )
+            .await?;
+        }
+        if number(&record, "shutdown_delay") != shutdown_delay {
+            self.request::<Value>(
+                "VM.set_shutdown_delay",
+                json!([self.session, reference, shutdown_delay]),
+            )
+            .await?;
+        }
+        let current_affinity = text(&record, "affinity");
+        let current_affinity = if current_affinity == "OpaqueRef:NULL" {
+            String::new()
+        } else {
+            current_affinity
+        };
+        if current_affinity != affinity_ref {
+            self.request::<Value>(
+                "VM.set_affinity",
+                json!([self.session, reference, affinity_ref]),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
     pub async fn set_vbd_bootable(
         &self,
         vm_uuid: &str,
@@ -1699,6 +1795,12 @@ impl Connection {
     }
 }
 
+const MAX_VM_DELAY: u64 = 7 * 24 * 60 * 60;
+
+fn valid_restart_priority(value: &str) -> bool {
+    matches!(value, "" | "restart" | "best-effort" | "0" | "1")
+}
+
 fn attachable_vdi(vdi: &Value) -> bool {
     text(vdi, "type") == "user" && vdi["missing"].as_bool() != Some(true)
 }
@@ -1893,6 +1995,16 @@ mod tests {
         );
         assert!(owner_vdis(&vbds, &json!({"suspend_VDI": "OpaqueRef:NULL"}), "vm").len() == 1);
     }
+    #[test]
+    fn validates_vm_ha_restart_priority_and_delays() {
+        for value in ["", "restart", "best-effort", "0", "1"] {
+            assert!(valid_restart_priority(value), "{value}");
+        }
+        assert!(!valid_restart_priority("always"));
+        assert!(!valid_restart_priority("restart-if-possible"));
+        assert_eq!(MAX_VM_DELAY, 604800);
+    }
+
     #[test]
     fn attach_accepts_only_available_user_disks() {
         assert!(attachable_vdi(&json!({"type":"user","missing":false})));
