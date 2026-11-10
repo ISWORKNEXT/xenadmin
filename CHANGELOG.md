@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add VM header and General-tab quick actions for VNC console, disks, network, snapshots and resources; opening Console auto-connects the active running VM.
+- Add vCPU, memory and disk-size sliders to the edit/add-disk/resize dialogs, and make the VM edit form scrollable so its footer stays reachable.
 - Rework the native UI into an XCP-ng Center-style Infrastructure tree with object tabs, a contextual toolbar and a status bar.
 - Add a custom undecorated title bar, object tabs, drag/resize handling, window controls and a persisted light/dark theme toggle.
 - Increase default typography/readability (110% UI scale) and add a title-bar zoom control plus `Ctrl+Plus` / `Ctrl+Minus` / `Ctrl+0`.

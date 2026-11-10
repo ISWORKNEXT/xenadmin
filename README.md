@@ -32,6 +32,8 @@ packaging. See `.github/workflows/release.yml`.
 - Edit a VM's name, description, firmware (BIOS/UEFI), secure boot, boot order,
   boot policy and after-crash behaviour; change vCPUs and static memory while
   halted, and dynamic memory while running when allowed.
+- VM quick actions for the VNC console (auto-connect when running), disks,
+  network, snapshots and resources, plus vCPU/memory and disk-size sliders.
 - Change or eject CD/DVD media from the VM Storage tab, with a searchable list
   of ISO images from ISO storage repositories.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.
