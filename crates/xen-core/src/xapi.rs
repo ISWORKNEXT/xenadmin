@@ -218,14 +218,15 @@ impl Connection {
     }
 
     pub async fn raw_inventory(&self) -> Result<RawInventory, ApiError> {
-        let (pools, hosts, metrics, vms, storage, networks, tasks) = tokio::join!(
+        let (pools, hosts, metrics, vms, storage, networks, tasks, messages) = tokio::join!(
             self.records("pool"),
             self.records("host"),
             self.records("host_metrics"),
             self.records("VM"),
             self.records("SR"),
             self.records("network"),
-            self.records("task")
+            self.records("task"),
+            self.records("message")
         );
         Ok(RawInventory {
             pools: pools?,
@@ -237,6 +238,7 @@ impl Connection {
             // Older hosts may not expose task listing to this role; the
             // inventory remains useful without it.
             tasks: tasks.unwrap_or_default(),
+            messages: messages.unwrap_or_default(),
         })
     }
 
@@ -266,6 +268,7 @@ pub struct RawInventory {
     pub(crate) storage: HashMap<String, Value>,
     pub(crate) networks: HashMap<String, Value>,
     pub(crate) tasks: HashMap<String, Value>,
+    pub(crate) messages: HashMap<String, Value>,
 }
 
 impl RawInventory {
@@ -286,6 +289,7 @@ impl RawInventory {
                 "sr" => &mut self.storage,
                 "network" => &mut self.networks,
                 "task" => &mut self.tasks,
+                "message" => &mut self.messages,
                 _ => continue,
             };
             if operation == "del" {
@@ -439,6 +443,35 @@ impl RawInventory {
             .collect();
         tasks.sort_by_key(|task| std::cmp::Reverse(task.started_at));
         tasks.truncate(100);
+        let mut alerts: Vec<_> = self
+            .messages
+            .iter()
+            .filter(|(_, message)| {
+                message["priority"]
+                    .as_u64()
+                    .or_else(|| message["priority"].as_str().and_then(|p| p.parse().ok()))
+                    .is_some_and(|priority| (1..=4).contains(&priority))
+            })
+            .map(|(reference, message)| PoolAlert {
+                reference: reference.clone(),
+                uuid: text(message, "uuid"),
+                name: text(message, "name"),
+                priority: message["priority"]
+                    .as_u64()
+                    .or_else(|| message["priority"].as_str().and_then(|p| p.parse().ok()))
+                    .unwrap_or(5),
+                time: xapi_epoch(&text(message, "timestamp")),
+                body: text(message, "body"),
+                obj_uuid: text(message, "obj_uuid"),
+                class: text(message, "cls"),
+            })
+            .collect();
+        alerts.sort_by(|left, right| {
+            left.priority
+                .cmp(&right.priority)
+                .then(right.time.cmp(&left.time))
+        });
+        alerts.truncate(100);
         Ok(Inventory {
             pool_id,
             templates,
@@ -450,6 +483,7 @@ impl RawInventory {
             storage,
             networks,
             tasks,
+            alerts,
         })
     }
 }
@@ -533,6 +567,7 @@ pub struct Inventory {
     pub storage: Vec<Storage>,
     pub networks: Vec<Network>,
     pub tasks: Vec<ExternalTask>,
+    pub alerts: Vec<PoolAlert>,
 }
 
 #[derive(Clone, Serialize)]
@@ -567,6 +602,18 @@ pub struct VirtualMachine {
     pub vcpus: u64,
     pub memory: u64,
     pub os: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct PoolAlert {
+    pub reference: String,
+    pub uuid: String,
+    pub name: String,
+    pub priority: u64,
+    pub time: u64,
+    pub body: String,
+    pub obj_uuid: String,
+    pub class: String,
 }
 
 #[derive(Clone, Serialize)]

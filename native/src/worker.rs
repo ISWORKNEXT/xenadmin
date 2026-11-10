@@ -53,6 +53,10 @@ pub enum Command {
         host_uuid: String,
         action: xen_core::operations::HostAction,
     },
+    DismissAlert {
+        connection_id: String,
+        message_uuid: String,
+    },
     VmDetails {
         seq: u64,
         connection_id: String,
@@ -176,6 +180,9 @@ pub enum Event {
     HostActionFinished {
         host_uuid: String,
         action: xen_core::operations::HostAction,
+        result: Result<(), String>,
+    },
+    AlertDismissed {
         result: Result<(), String>,
     },
     VmDetails {
@@ -411,6 +418,13 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::HostDetails { seq, result });
+            }
+            Command::DismissAlert {
+                connection_id,
+                message_uuid,
+            } => {
+                let result = workspace.dismiss_alert(&connection_id, &message_uuid).await;
+                let _ = events.send(Event::AlertDismissed { result });
             }
             Command::HostAction {
                 connection_id,

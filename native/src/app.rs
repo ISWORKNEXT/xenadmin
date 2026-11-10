@@ -622,6 +622,16 @@ impl App {
                         };
                     }
                 }
+                Event::AlertDismissed { result } => match result {
+                    Ok(()) => self
+                        .state
+                        .toasts
+                        .push(Toast::new("Alert dismissed.", ToastKind::Success)),
+                    Err(message) => self
+                        .state
+                        .toasts
+                        .push(Toast::new(message, ToastKind::Error)),
+                },
                 Event::HostActionFinished {
                     host_uuid,
                     action,
@@ -1456,6 +1466,15 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::DismissAlert {
+                    connection_id,
+                    message_uuid,
+                } => {
+                    self.worker.send(Command::DismissAlert {
+                        connection_id,
+                        message_uuid,
                     });
                 }
                 UiAction::PromptHostAction {

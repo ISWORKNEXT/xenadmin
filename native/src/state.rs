@@ -948,6 +948,10 @@ pub enum UiAction {
     },
     CloseIsoDialog,
     SaveIso,
+    DismissAlert {
+        connection_id: String,
+        message_uuid: String,
+    },
     PromptHostAction {
         host_uuid: String,
         host_name: String,

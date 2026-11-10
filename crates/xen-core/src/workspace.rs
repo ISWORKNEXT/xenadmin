@@ -372,6 +372,21 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn dismiss_alert(
+        &self,
+        connection_id: &str,
+        message_uuid: &str,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .dismiss_alert(message_uuid)
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn host_action(
         &self,
         connection_id: &str,

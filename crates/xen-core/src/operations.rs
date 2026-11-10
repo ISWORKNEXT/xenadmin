@@ -303,6 +303,20 @@ impl HostAction {
 }
 
 impl Connection {
+    pub async fn dismiss_alert(&self, message_uuid: &str) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let message_ref: String = self
+            .request("message.get_by_uuid", json!([self.session, message_uuid]))
+            .await?;
+        self.request::<Value>("message.destroy", json!([self.session, message_ref]))
+            .await?;
+        Ok(())
+    }
+
     pub async fn host_action(&self, host_uuid: &str, action: HostAction) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(

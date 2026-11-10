@@ -56,7 +56,7 @@
 | Template provisioning | New VM wizard: เลือก CPU/RAM/disk/SR/network, fast clone | clone + provision disks ตาม template, ใช้ค่าเดิมของ template | ยังไม่มี wizard ปรับ CPU/RAM/disk/network ตอนสร้าง |
 | Host details | General/NIC/Network/Storage/GPU/USB/Performance/Alerts/HA เต็ม | read-only subset + warnings | ข้อมูลไม่ครบ, แก้ไขไม่ได้ |
 | Performance | host + VM RRD, ช่วง 5s/1m/1h/1d, custom graphs, server-time offset | host + VM RRD, 15m/1h/24h, graph คงที่ | จัดกราฟเองไม่ได้, ช่วงเวลาไม่ครบ |
-| Alerts | typed alerts + diagnostics checks | host `message` records เท่านั้น | ไม่มี health diagnostics/alert actions |
+| Alerts | typed alerts + diagnostics checks | priority 1–4 messages + dismiss บน pool page | ยังไม่มี 34 diagnostic checks/health check service |
 | Tasks | task ของ host + AsyncAction หลายสถานะ | task ที่เราส่ง + host tasks จาก event stream (read-only); task ของเราเก็บใน memory | เห็น task จาก client อื่นแล้ว แต่ยัง cancel/check งานของ client อื่นไม่ได้ |
 | Errors | 774 friendly errors + RBAC errors | 5 mapped messages + generic | ข้อความ error ไม่ละเอียด |
 | Search | XenSearch query/group/saved search | substring filter | ค้นหาแบบซับซ้อนไม่ได้ |
@@ -169,7 +169,7 @@
 2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, boot options อื่น
 3. **Bulk snapshot selection** (revert คืน power state แล้ว)
 4. **Console SSH/text + embedded RDP** (external RDP และ clipboard มีแล้ว)
-5. **Alerts + diagnostics + health check**, host maintenance
+5. **Diagnostics + health check** (alerts พื้นฐานและ host actions มีแล้ว)
 
 ### P1 — จัดการโครงสร้างพื้นฐาน
 

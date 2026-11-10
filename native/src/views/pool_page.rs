@@ -159,6 +159,10 @@ pub fn show(
         ],
     );
     ui.add_space(GAP);
+    if !inventory.alerts.is_empty() {
+        alerts_card(ui, inventory, &connection_id, read_only, actions);
+        ui.add_space(GAP);
+    }
 
     ui.columns(2, |columns| {
         hosts_card(&mut columns[0], inventory, &connection_id, actions);
@@ -168,6 +172,93 @@ pub fn show(
     ui.columns(2, |columns| {
         networks_card(&mut columns[0], inventory, &connection_id, actions);
         vms_card(&mut columns[1], inventory, &connection_id, actions);
+    });
+}
+
+fn alerts_card(
+    ui: &mut Ui,
+    inventory: &xen_core::xapi::Inventory,
+    connection_id: &str,
+    read_only: bool,
+    actions: &mut Vec<UiAction>,
+) {
+    theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        card_heading(ui, "Alerts", inventory.alerts.len(), |ui| {
+            if inventory.alerts.len() > 6 {
+                ui.label(
+                    RichText::new(format!("showing 6 of {}", inventory.alerts.len()))
+                        .size(9.5)
+                        .color(dim_fg()),
+                );
+            }
+        });
+        for alert in inventory.alerts.iter().take(6) {
+            ui.horizontal(|ui| {
+                let (label, color) = match alert.priority {
+                    1 => ("Critical", red()),
+                    2 => ("Major", amber()),
+                    3 => ("Minor", amber()),
+                    _ => ("Warning", accent()),
+                };
+                widgets::dot(ui, color, 7.0);
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 1.0;
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(&alert.name).size(11.0).strong());
+                        ui.label(RichText::new(label).size(9.0).color(color));
+                        if alert.time > 0 {
+                            ui.label(
+                                RichText::new(format::short_time(alert.time))
+                                    .size(9.0)
+                                    .color(dim_fg()),
+                            );
+                        }
+                    });
+                    let body = if alert.body.chars().count() > 180 {
+                        format!("{}…", alert.body.chars().take(180).collect::<String>())
+                    } else {
+                        alert.body.clone()
+                    };
+                    ui.label(RichText::new(body).size(9.5).color(muted_fg()));
+                    ui.label(
+                        RichText::new(format!(
+                            "{} · {}",
+                            alert.class,
+                            if alert.obj_uuid.is_empty() {
+                                "unknown object"
+                            } else {
+                                &alert.obj_uuid
+                            }
+                        ))
+                        .monospace()
+                        .size(8.5)
+                        .color(dim_fg()),
+                    );
+                });
+                if !read_only {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui
+                            .add(egui::Button::new(RichText::new("Dismiss").size(9.5)))
+                            .clicked()
+                        {
+                            actions.push(UiAction::DismissAlert {
+                                connection_id: connection_id.to_owned(),
+                                message_uuid: alert.uuid.clone(),
+                            });
+                        }
+                    });
+                }
+            });
+            ui.add_space(4.0);
+        }
+        if read_only {
+            ui.label(
+                RichText::new("Read-only connection: alerts cannot be dismissed.")
+                    .size(9.0)
+                    .color(dim_fg()),
+            );
+        }
     });
 }
 

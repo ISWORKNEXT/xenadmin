@@ -31,6 +31,8 @@ default and a persisted dark-theme toggle.
   CD/DVD drives.
 - Host actions menu for enable/disable, evacuate, restart toolstack, reboot and
   shutdown, with explicit confirmation for disruptive actions.
+- Priority pool alerts from XenAPI message records, shown on the pool page with
+  a dismiss action.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.
