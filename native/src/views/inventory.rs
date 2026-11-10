@@ -3,6 +3,7 @@ use egui_extras::{Column, TableBuilder};
 use xen_core::workspace::WorkspaceView;
 
 use crate::format;
+use crate::search::SearchQuery;
 use crate::state::{
     ActionKind, PowerFilter, Scope, Target, UiAction, UiState, action_allowed, connection_id,
     connection_name, find_connection, is_read_only, scoped_hosts, scoped_targets, scoped_templates,
@@ -24,18 +25,10 @@ pub fn vms(
     } else {
         scoped_targets(workspace, &state.scope)
     };
-    let needle = state.query.trim().to_lowercase();
+    let query = SearchQuery::parse(&state.query);
     targets.retain(|target| {
-        let matches_query = needle.is_empty()
-            || [
-                target.vm.name.as_str(),
-                target.vm.uuid.as_str(),
-                target.vm.host_name.as_str(),
-                connection_name(target.connection).as_str(),
-            ]
-            .iter()
-            .any(|value| value.to_lowercase().contains(&needle));
-        matches_query && state.power.matches(&target.vm.power_state)
+        let connection = connection_name(target.connection);
+        query.matches(target.vm, &connection) && state.power.matches(&target.vm.power_state)
     });
 
     toolbar(ui, state, actions, targets.len(), templates);
@@ -253,8 +246,11 @@ fn toolbar(
     ui.horizontal(|ui| {
         ui.scope(|ui| {
             ui.set_width(300.0);
-            let response =
-                widgets::search_field(ui, &mut state.query, "Search name, host or connection…");
+            let response = widgets::search_field(
+                ui,
+                &mut state.query,
+                "Search name:/host:/tag:/power_state: …",
+            );
             if state.focus_search {
                 response.request_focus();
                 state.focus_search = false;

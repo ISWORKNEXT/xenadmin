@@ -24,6 +24,7 @@ pub(crate) struct StartupOptions {
     pub vm: Option<String>,
     pub vm_tab: Option<crate::state::VmTab>,
     pub health: bool,
+    pub search: Option<String>,
     pub light: Option<bool>,
 }
 
@@ -49,6 +50,7 @@ impl App {
             vm: startup_vm,
             vm_tab: startup_vm_tab,
             health: startup_health,
+            search: startup_search,
             light: startup_light,
         } = options;
         let preferences = crate::config::load_ui_preferences();
@@ -63,7 +65,10 @@ impl App {
                 profile_id: None,
             });
         }
-        let mut state = UiState::default();
+        let mut state = UiState {
+            query: startup_search.unwrap_or_default(),
+            ..UiState::default()
+        };
         if let Some(view) = startup_view {
             state.view = view;
         }

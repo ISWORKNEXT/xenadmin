@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod console;
 mod format;
+mod search;
 mod state;
 mod theme;
 mod views;
@@ -51,6 +52,7 @@ fn main() -> eframe::Result {
     let startup_host = argument("--host");
     let startup_vm = argument("--vm");
     let startup_health = std::env::args().any(|arg| arg == "--health");
+    let startup_search = argument("--search");
     let startup_vm_tab = argument("--vm-tab").and_then(|value| state::VmTab::from_key(&value));
     let startup_light =
         argument("--theme").and_then(|value| match value.to_ascii_lowercase().as_str() {
@@ -83,6 +85,7 @@ fn main() -> eframe::Result {
                     vm: startup_vm,
                     vm_tab: startup_vm_tab,
                     health: startup_health,
+                    search: startup_search,
                     light: startup_light,
                 },
             )))

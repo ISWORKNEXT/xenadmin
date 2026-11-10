@@ -580,6 +580,15 @@ fn vm_record(reference: String, r: &Value, host_names: &HashMap<String, String>)
         vcpus: number(r, "VCPUs_max"),
         memory: number(r, "memory_dynamic_max"),
         os: text(&r["other_config"], "os_type"),
+        tags: r["tags"]
+            .as_array()
+            .map(|tags| {
+                tags.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default(),
         disk_count: r["VBDs"].as_array().map_or(0, Vec::len),
         interface_count: r["VIFs"].as_array().map_or(0, Vec::len),
     }
@@ -649,6 +658,7 @@ pub struct VirtualMachine {
     pub vcpus: u64,
     pub memory: u64,
     pub os: String,
+    pub tags: Vec<String>,
 }
 
 #[derive(Clone, Serialize)]

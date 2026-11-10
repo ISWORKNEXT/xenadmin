@@ -34,6 +34,7 @@ dependency.
 | Host actions | Implemented | Enable/disable, power-on, evacuate, PIF rescan, restart toolstack, reboot, shutdown with confirmation |
 | Proxy | Implemented | Per-connection HTTP/SOCKS proxy for XenAPI and RRD traffic; console tunnel is direct |
 | Health diagnostics | Implemented (basic) | Alerts, host availability, SR capacity/PBDs, pool host count, broken VM disk/ISO references |
+| XenSearch filtering | Implemented (basic) | name/host/tag/power_state fields, quotes, negation and free text; saved searches/grouping remain |
 
 | Alerts | Implemented (basic) | Priority 1–4 XenAPI messages with dismiss; diagnostics/health checks are still separate |
 | Storage repository actions | Implemented (basic) | Scan and confirmed destroy from the SR page |

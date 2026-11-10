@@ -93,6 +93,7 @@ The executable is written to `target/release/xen-native`.
 --vm <vm-uuid>            open the VM detail tab after connecting
 --vm-tab general|performance|storage|network|ha|snapshots|console
 --health                  open the pool Health & diagnostics page
+--search QUERY            prefill the VM/template search (e.g. power_state:running)
 --theme light|dark        start with the light (default) or dark theme
 --on-top                  keep the window above other windows
 ```
