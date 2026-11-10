@@ -43,7 +43,8 @@ default and a persisted dark-theme toggle.
 - VM detail tabs: General, Performance (VM RRD), Storage, Network, HA, Snapshots and Console.
 - Embedded VNC console over the host's HTTPS CONNECT tunnel, with live
   framebuffer updates, mouse, scroll wheel, keyboard input (including typed
-  Unicode characters), Ctrl+Alt+Del and clipboard exchange with the local desktop.
+  Unicode characters), Ctrl+Alt+Del, clipboard exchange and an external RDP
+  launcher using the guest IPv4 address.
 - Host detail page: General, CPU/memory, Performance, Networking, Storage,
   Hardware, Updates, Certificates, Health.
 - Host performance graphs with all CPU cores in one chart, plus memory and

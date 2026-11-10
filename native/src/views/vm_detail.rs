@@ -890,6 +890,20 @@ fn console(
                     {
                         ui.ctx().copy_text(clipboard);
                     }
+                    if let Some(ip) = state
+                        .vm_state
+                        .ready()
+                        .and_then(|details| details.guest_ips.first())
+                        .cloned()
+                        && ui
+                            .add(egui::Button::new(
+                                RichText::new("RDP").size(11.0),
+                            ))
+                            .on_hover_text(format!("Open an external RDP client to {ip}"))
+                            .clicked()
+                    {
+                        actions.push(UiAction::LaunchRdp(ip));
+                    }
                     if ui
                         .add(egui::Button::new(
                             RichText::new("Paste to guest").size(11.0),

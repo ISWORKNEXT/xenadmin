@@ -1877,6 +1877,33 @@ impl App {
                         });
                     }
                 }
+                UiAction::LaunchRdp(address) => {
+                    if address.parse::<std::net::IpAddr>().is_err() {
+                        self.state.toasts.push(Toast::new(
+                            "The guest did not report a valid IPv4 address.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    }
+                    match std::process::Command::new("xfreerdp")
+                        .args([
+                            format!("/v:{address}"),
+                            "/cert:ignore".into(),
+                            "/dynamic-resolution".into(),
+                            "/network:auto".into(),
+                        ])
+                        .spawn()
+                    {
+                        Ok(_) => self
+                            .state
+                            .toasts
+                            .push(Toast::new("Launching RDP with xfreerdp.", ToastKind::Info)),
+                        Err(error) => self.state.toasts.push(Toast::new(
+                            format!("Cannot launch xfreerdp: {error}"),
+                            ToastKind::Error,
+                        )),
+                    }
+                }
                 UiAction::ConsoleClipboard { console_id, text } => {
                     if self
                         .state

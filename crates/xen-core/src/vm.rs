@@ -38,6 +38,7 @@ pub struct VmDetails {
     pub os_version: String,
     pub pv_drivers_version: String,
     pub pv_drivers_up_to_date: bool,
+    pub guest_ips: Vec<String>,
     pub disks: Vec<VmDisk>,
     pub isos: Vec<VmIso>,
     pub interfaces: Vec<VmInterface>,
@@ -255,6 +256,20 @@ impl Connection {
         }
 
         let guest = related(guests.as_ref(), &text(&vm, "guest_metrics"));
+        let mut guest_ips: Vec<String> = guest["networks"]
+            .as_object()
+            .map(|networks| {
+                networks
+                    .iter()
+                    .filter(|(key, _)| key.ends_with("/ip") || key.ends_with("/ipv4"))
+                    .filter_map(|(_, value)| value.as_str())
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        guest_ips.sort();
+        guest_ips.dedup();
         let platform = fields(&vm["platform"], PLATFORM_FIELDS);
         let other_config = fields(&vm["other_config"], OTHER_CONFIG_FIELDS);
 
@@ -285,6 +300,7 @@ impl Connection {
             os_version: text(guest, "os_version"),
             pv_drivers_version: text(guest, "PV_drivers_version"),
             pv_drivers_up_to_date: guest["PV_drivers_up_to_date"].as_bool().unwrap_or(false),
+            guest_ips,
             disks,
             isos,
             interfaces,

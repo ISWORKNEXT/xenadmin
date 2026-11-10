@@ -91,8 +91,8 @@
 ### 3. Console
 
 - VNC ผ่าน HTTPS CONNECT + framebuffer/keyboard/mouse/clipboard (มีแล้ว)
-- RDP (เดิมใช้ Windows ActiveX)
-- SSH/text console, RDP; การพิมพ์ Unicode ใช้ X11 keysym (guest ต้องรองรับ); clipboard จำกัด Latin-1 ตาม RFB
+- RDP ภายนอกผ่าน xfreerdp (มีแล้ว); RDP embedded แบบ ActiveX ยังไม่มี
+- SSH/text console; การพิมพ์ Unicode ใช้ X11 keysym (guest ต้องรองรับ); clipboard จำกัด Latin-1 ตาม RFB
 
 ### 4. Storage
 
@@ -168,7 +168,7 @@
 1. **HA precheck** ก่อน start (missing VDI/SR + `assert_can_boot_here` มีแล้ว)
 2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, boot options อื่น
 3. **Bulk snapshot selection** (revert คืน power state แล้ว)
-4. **Console RDP + clipboard/SSH console**
+4. **Console SSH/text + embedded RDP** (external RDP และ clipboard มีแล้ว)
 5. **Alerts + diagnostics + health check**, host maintenance
 
 ### P1 — จัดการโครงสร้างพื้นฐาน

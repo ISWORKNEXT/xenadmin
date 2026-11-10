@@ -999,6 +999,7 @@ pub enum UiAction {
         console_id: String,
         text: String,
     },
+    LaunchRdp(String),
     DismissToast(usize),
     ConfirmRemove(String),
     CancelRemove,
