@@ -35,7 +35,7 @@ dependency.
 | Live inventory | Implemented | XenAPI event stream applied to a raw-record cache; heartbeat, reconnect and coordinator redirect |
 | VM performance | Implemented | VM RRD with per-vCPU CPU graph, memory/network graphs, remaining metrics and the same ranges |
 | VM console | Implemented | VNC over XenAPI HTTPS CONNECT tunnel; framebuffer, mouse/wheel, keyboard and reconnect |
-| VM editing | Implemented | Name/description anytime; vCPUs and static memory maximum while halted |
+| VM editing | Implemented | Name/description/boot order anytime; vCPUs and static memory while halted; dynamic memory while running when allowed |
 | VM start on host | Implemented | Start/resume on a chosen host with `assert_can_boot_here` precheck |
 | Help / migration status | Implemented | Mirrors the previous client's status dialog |
 | Window chrome | Implemented | Undecorated custom title bar, object tabs, context toolbar, drag, resize handles and window controls |

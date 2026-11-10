@@ -1,6 +1,6 @@
 //! Read-only VM detail model. Every field is explicitly selected; `other_config`
 //! and `platform` are allowlisted so configuration secrets never leave the core.
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -29,6 +29,8 @@ pub struct VmDetails {
     pub memory_dynamic_max: u64,
     pub memory_dynamic_min: u64,
     pub memory_target: u64,
+    pub hvm_boot_policy: String,
+    pub hvm_boot_params: BTreeMap<String, String>,
     pub ha_restart_priority: String,
     pub ha_always_run: bool,
     pub platform: Vec<InfoField>,
@@ -231,6 +233,8 @@ impl Connection {
             memory_dynamic_max: number(&vm, "memory_dynamic_max"),
             memory_dynamic_min: number(&vm, "memory_dynamic_min"),
             memory_target: number(&vm, "memory_target"),
+            hvm_boot_policy: text(&vm, "HVM_boot_policy"),
+            hvm_boot_params: string_map(&vm["HVM_boot_params"]),
             ha_restart_priority: text(&vm, "ha_restart_priority"),
             ha_always_run: vm["ha_always_run"].as_bool().unwrap_or(false),
             platform,
@@ -287,6 +291,18 @@ fn fields(record: &Value, allowed: &[(&str, &str)]) -> Vec<InfoField> {
             value: display(&record[*key]),
         })
         .collect()
+}
+
+fn string_map(value: &Value) -> BTreeMap<String, String> {
+    value
+        .as_object()
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_owned())))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn strings(value: &Value) -> Vec<String> {

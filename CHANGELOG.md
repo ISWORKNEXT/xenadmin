@@ -16,6 +16,7 @@
 - Add VM editing for name, description, vCPU limits and the static memory maximum; CPU/memory changes require a halted VM and clamp dynamic memory to the new maximum.
 - Replace periodic inventory polling with the XenAPI event stream and a local raw-record cache, so changes from other clients appear automatically.
 - Add start-on-host and resume-on-host actions with an `assert_can_boot_here` precheck and host picker.
+- Extend VM editing with dynamic memory limits (live when permitted) and HVM boot order.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

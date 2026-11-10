@@ -309,7 +309,10 @@ impl Workspace {
         description: String,
         vcpus_max: u64,
         vcpus_at_startup: u64,
-        memory_mib: u64,
+        memory_static_max_mib: u64,
+        memory_dynamic_min_mib: u64,
+        memory_dynamic_max_mib: u64,
+        boot_order: Option<String>,
     ) -> Result<(), String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;
@@ -324,7 +327,10 @@ impl Workspace {
                 &description,
                 vcpus_max,
                 vcpus_at_startup,
-                memory_mib,
+                memory_static_max_mib,
+                memory_dynamic_min_mib,
+                memory_dynamic_max_mib,
+                boot_order,
             )
             .await
             .map_err(|error| error.to_string())?;

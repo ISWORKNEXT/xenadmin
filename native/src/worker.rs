@@ -66,7 +66,10 @@ pub enum Command {
         description: String,
         vcpus_max: u64,
         vcpus_at_startup: u64,
-        memory_mib: u64,
+        memory_static_max_mib: u64,
+        memory_dynamic_min_mib: u64,
+        memory_dynamic_max_mib: u64,
+        boot_order: Option<String>,
     },
     OpenConsole {
         console_id: String,
@@ -374,7 +377,10 @@ fn dispatch(
                 description,
                 vcpus_max,
                 vcpus_at_startup,
-                memory_mib,
+                memory_static_max_mib,
+                memory_dynamic_min_mib,
+                memory_dynamic_max_mib,
+                boot_order,
             } => {
                 let result = workspace
                     .update_vm(
@@ -384,7 +390,10 @@ fn dispatch(
                         description,
                         vcpus_max,
                         vcpus_at_startup,
-                        memory_mib,
+                        memory_static_max_mib,
+                        memory_dynamic_min_mib,
+                        memory_dynamic_max_mib,
+                        boot_order,
                     )
                     .await;
                 let _ = events.send(Event::VmEdited { vm_uuid, result });

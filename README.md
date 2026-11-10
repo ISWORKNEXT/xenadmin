@@ -21,8 +21,8 @@ default and a persisted dark-theme toggle.
   and optional snapshot cleanup.
 - Create a VM from a template: clone, provision declared disks, refresh the
   inventory and track progress in Activity & tasks.
-- Edit a VM's name and description at any time; change vCPUs and the static
-  memory maximum while the VM is halted.
+- Edit a VM's name, description and HVM boot order at any time; change vCPUs and
+  static memory while halted, and dynamic memory while running when allowed.
 - Bulk actions with an explicit target review dialog.
 - Live inventory updates from the XenAPI event stream with a local raw-record
   cache; manual refresh remains available as a fallback.

@@ -1124,7 +1124,19 @@ impl App {
                         description: details.description.clone(),
                         vcpus_max: details.vcpus_max.to_string(),
                         vcpus_at_startup: details.vcpus_at_startup.to_string(),
-                        memory_mib: (details.memory_static_max / (1024 * 1024)).to_string(),
+                        memory_static_max_mib: (details.memory_static_max / (1024 * 1024))
+                            .to_string(),
+                        memory_dynamic_min_mib: (details.memory_dynamic_min / (1024 * 1024))
+                            .to_string(),
+                        memory_dynamic_max_mib: (details.memory_dynamic_max / (1024 * 1024))
+                            .to_string(),
+                        boot_order: details
+                            .hvm_boot_params
+                            .get("order")
+                            .cloned()
+                            .unwrap_or_else(|| "cd".into()),
+                        is_hvm: !details.hvm_boot_policy.is_empty()
+                            || !details.hvm_boot_params.is_empty(),
                         running: details.power_state != "Halted",
                         error: None,
                         submitting: false,
@@ -1153,8 +1165,18 @@ impl App {
                         edit.error = Some("Enter a whole number for vCPUs at startup.".into());
                         continue;
                     };
-                    let Some(memory_mib) = parse(&edit.memory_mib) else {
-                        edit.error = Some("Enter a whole number for memory in MiB.".into());
+                    let Some(memory_static_max_mib) = parse(&edit.memory_static_max_mib) else {
+                        edit.error = Some("Enter a whole number for static memory in MiB.".into());
+                        continue;
+                    };
+                    let Some(memory_dynamic_min_mib) = parse(&edit.memory_dynamic_min_mib) else {
+                        edit.error =
+                            Some("Enter a whole number for the dynamic memory minimum.".into());
+                        continue;
+                    };
+                    let Some(memory_dynamic_max_mib) = parse(&edit.memory_dynamic_max_mib) else {
+                        edit.error =
+                            Some("Enter a whole number for the dynamic memory maximum.".into());
                         continue;
                     };
                     if edit.name.trim().is_empty() {
@@ -1166,8 +1188,20 @@ impl App {
                             Some("vCPUs at startup must be between 1 and the vCPU maximum.".into());
                         continue;
                     }
-                    if memory_mib == 0 {
+                    if memory_static_max_mib == 0
+                        || memory_dynamic_min_mib == 0
+                        || memory_dynamic_max_mib == 0
+                    {
                         edit.error = Some("Memory must be greater than zero.".into());
+                        continue;
+                    }
+                    if memory_dynamic_min_mib > memory_dynamic_max_mib
+                        || memory_dynamic_max_mib > memory_static_max_mib
+                    {
+                        edit.error = Some(
+                            "Dynamic memory must stay between the static minimum and maximum."
+                                .into(),
+                        );
                         continue;
                     }
                     edit.submitting = true;
@@ -1179,7 +1213,10 @@ impl App {
                         description: edit.description.clone(),
                         vcpus_max,
                         vcpus_at_startup,
-                        memory_mib,
+                        memory_static_max_mib,
+                        memory_dynamic_min_mib,
+                        memory_dynamic_max_mib,
+                        boot_order: edit.is_hvm.then(|| edit.boot_order.clone()),
                     });
                 }
                 UiAction::OpenConsole(connection_id, vm_uuid) => {

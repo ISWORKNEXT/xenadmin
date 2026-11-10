@@ -436,11 +436,66 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
             resources_field(
                 ui,
                 "Static memory maximum (MiB)",
-                &mut edit.memory_mib,
+                &mut edit.memory_static_max_mib,
                 !edit.running && !edit.submitting,
             );
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                resources_field(
+                    &mut columns[0],
+                    "Dynamic memory minimum (MiB)",
+                    &mut edit.memory_dynamic_min_mib,
+                    !edit.submitting,
+                );
+                resources_field(
+                    &mut columns[1],
+                    "Dynamic memory maximum (MiB)",
+                    &mut edit.memory_dynamic_max_mib,
+                    !edit.submitting,
+                );
+            });
+            if edit.is_hvm {
+                ui.add_space(8.0);
+                widgets::field_label(ui, "Boot order");
+                let current = edit.boot_order.clone();
+                let label = match current.as_str() {
+                    "dc" => "Disk first",
+                    "cd" => "CD first",
+                    "ncd" => "Network first",
+                    _ => "Custom",
+                };
+                ui.add_enabled_ui(!edit.submitting, |ui| {
+                    egui::ComboBox::from_id_salt("vm-edit-boot-order")
+                        .selected_text(RichText::new(label).size(11.0))
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for (value, text) in [
+                                ("dc", "Disk first"),
+                                ("cd", "CD first"),
+                                ("ncd", "Network first"),
+                            ] {
+                                if ui
+                                    .selectable_label(
+                                        edit.boot_order == value,
+                                        RichText::new(text).size(11.0),
+                                    )
+                                    .clicked()
+                                {
+                                    edit.boot_order = value.into();
+                                }
+                            }
+                            if !matches!(edit.boot_order.as_str(), "dc" | "cd" | "ncd") {
+                                ui.label(
+                                    RichText::new(format!("Custom: {}", edit.boot_order))
+                                        .size(10.0)
+                                        .color(muted_fg()),
+                                );
+                            }
+                        });
+                });
+            }
             ui.label(
-                RichText::new("CPU and memory changes require the VM to be shut down. Dynamic memory limits are clamped to the new maximum.")
+                RichText::new("vCPU and static memory changes require the VM to be shut down. Dynamic memory can change while running when the host allows it.")
                     .size(9.0)
                     .color(if edit.running { amber() } else { dim_fg() }),
             );

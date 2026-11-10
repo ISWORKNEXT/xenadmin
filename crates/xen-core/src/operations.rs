@@ -334,6 +334,7 @@ impl Connection {
 
     /// Update the editable name/description and, when the VM is halted, its
     /// vCPU and static-memory limits. Only changed values are submitted.
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_vm(
         &self,
         uuid: &str,
@@ -341,7 +342,10 @@ impl Connection {
         description: &str,
         vcpus_max: u64,
         vcpus_at_startup: u64,
-        memory_mib: u64,
+        memory_static_max_mib: u64,
+        memory_dynamic_min_mib: u64,
+        memory_dynamic_max_mib: u64,
+        boot_order: Option<String>,
     ) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(
@@ -364,8 +368,33 @@ impl Connection {
                 "vCPUs at startup must be between 1 and the vCPU maximum.".into(),
             ));
         }
-        if memory_mib == 0 {
+        if memory_static_max_mib == 0 || memory_dynamic_min_mib == 0 || memory_dynamic_max_mib == 0
+        {
             return Err(ApiError::Xen("Enter a memory size in MiB.".into()));
+        }
+        if memory_dynamic_min_mib > memory_dynamic_max_mib
+            || memory_dynamic_max_mib > memory_static_max_mib
+        {
+            return Err(ApiError::Xen(
+                "Dynamic memory minimum must not exceed the maximum, and the dynamic maximum must not exceed the static maximum.".into(),
+            ));
+        }
+        let boot_order = boot_order.map(|order| order.trim().to_ascii_lowercase());
+        if let Some(order) = &boot_order {
+            let valid = !order.is_empty()
+                && order.len() <= 3
+                && order.chars().all(|c| matches!(c, 'c' | 'd' | 'n'))
+                && order
+                    .chars()
+                    .collect::<std::collections::HashSet<_>>()
+                    .len()
+                    == order.len();
+            if !valid {
+                return Err(ApiError::Xen(
+                    "Boot order must contain unique device letters: c (CD), d (disk), n (network)."
+                        .into(),
+                ));
+            }
         }
 
         let reference: String = self
@@ -393,21 +422,45 @@ impl Connection {
         let current_static_max = number(&record, "memory_static_max");
         let current_dynamic_min = number(&record, "memory_dynamic_min");
         let current_dynamic_max = number(&record, "memory_dynamic_max");
-        let memory_bytes = memory_mib.saturating_mul(1024 * 1024);
-        if memory_bytes < current_static_min {
+        let static_max = memory_static_max_mib.saturating_mul(1024 * 1024);
+        let dynamic_min = memory_dynamic_min_mib.saturating_mul(1024 * 1024);
+        let dynamic_max = memory_dynamic_max_mib.saturating_mul(1024 * 1024);
+        if static_max < current_static_min || dynamic_min < current_static_min {
             return Err(ApiError::Xen(format!(
                 "Memory cannot be lower than the static minimum ({} MiB).",
                 current_static_min / (1024 * 1024)
             )));
         }
 
-        let resources_changed = vcpus_max != current_vcpus_max
-            || vcpus_at_startup != current_vcpus_startup
-            || memory_bytes != current_static_max;
-        if resources_changed && record["power_state"].as_str() != Some("Halted") {
+        let current_boot_order = record["HVM_boot_params"]["order"]
+            .as_str()
+            .unwrap_or("cd")
+            .to_ascii_lowercase();
+        let boot_changed = boot_order
+            .as_ref()
+            .is_some_and(|order| order != &current_boot_order);
+
+        let vcpus_changed =
+            vcpus_max != current_vcpus_max || vcpus_at_startup != current_vcpus_startup;
+        let static_changed = static_max != current_static_max;
+        let dynamic_changed =
+            dynamic_min != current_dynamic_min || dynamic_max != current_dynamic_max;
+        let halted = record["power_state"].as_str() == Some("Halted");
+        if (vcpus_changed || static_changed) && !halted {
             return Err(ApiError::Xen(
-                "Shut down the VM before changing its CPU or memory settings.".into(),
+                "Shut down the VM before changing its CPU or static memory settings.".into(),
             ));
+        }
+        if dynamic_changed && !halted {
+            let allowed = record["allowed_operations"].as_array().is_some_and(|ops| {
+                ops.iter()
+                    .any(|op| op.as_str() == Some("changing_dynamic_range"))
+            });
+            if !allowed {
+                return Err(ApiError::Xen(
+                    "The host does not currently allow changing dynamic memory for this VM.".into(),
+                ));
+            }
         }
 
         if name != current_name {
@@ -422,7 +475,7 @@ impl Connection {
             .await?;
         }
 
-        if vcpus_max != current_vcpus_max || vcpus_at_startup != current_vcpus_startup {
+        if vcpus_changed {
             if vcpus_max < current_vcpus_startup {
                 self.request::<Value>(
                     "VM.set_VCPUs_at_startup",
@@ -448,21 +501,36 @@ impl Connection {
             }
         }
 
-        if memory_bytes != current_static_max {
-            let dynamic_min = current_dynamic_min
-                .max(current_static_min)
-                .min(memory_bytes);
-            let dynamic_max = current_dynamic_max.max(dynamic_min).min(memory_bytes);
+        if halted && (static_changed || dynamic_changed) {
             self.request::<Value>(
                 "VM.set_memory_limits",
                 json!([
                     self.session,
                     reference,
                     current_static_min,
-                    memory_bytes,
+                    static_max,
                     dynamic_min,
                     dynamic_max
                 ]),
+            )
+            .await?;
+        } else if dynamic_changed {
+            self.request::<Value>(
+                "VM.set_memory_dynamic_range",
+                json!([self.session, reference, dynamic_min, dynamic_max]),
+            )
+            .await?;
+        }
+
+        if boot_changed && let Some(order) = boot_order {
+            let mut params = record["HVM_boot_params"]
+                .as_object()
+                .cloned()
+                .unwrap_or_default();
+            params.insert("order".into(), Value::String(order));
+            self.request::<Value>(
+                "VM.set_HVM_boot_params",
+                json!([self.session, reference, Value::Object(params)]),
             )
             .await?;
         }
