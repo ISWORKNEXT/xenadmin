@@ -1,0 +1,9 @@
+pub mod chrome;
+pub mod content;
+pub mod dialogs;
+pub mod host_details;
+pub mod inventory;
+pub mod overview;
+pub mod sidebar;
+pub mod tasks;
+pub mod vm_detail;

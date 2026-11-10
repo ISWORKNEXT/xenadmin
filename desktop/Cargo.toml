@@ -1,0 +1,6 @@
+[workspace]
+members = ["crates/xen-core", "src-tauri"]
+resolver = "3"
+
+[profile.dev]
+debug = 0

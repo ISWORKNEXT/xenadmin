@@ -1,0 +1,28 @@
+[package]
+name = "xen-native"
+version = "0.1.0"
+edition = "2024"
+license = "BSD-2-Clause"
+description = "Native egui desktop client for XCP-ng and XenServer"
+
+[dependencies]
+eframe = { version = "0.37", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+egui = "0.37"
+egui_extras = "0.37"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
+xen-core = { path = "../desktop/crates/xen-core" }
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+strip = true
+lto = "thin"
