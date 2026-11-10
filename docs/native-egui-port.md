@@ -31,7 +31,7 @@ dependency.
 | VM detail | Implemented | General, Performance, Storage, Network, HA and Snapshots tabs; revert with power restore, bulk snapshot deletion, delete VM/snapshot and template provisioning |
 | Action review | Implemented | Exact targets, clone/snapshot name, force/revert warnings |
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
-| Host actions | Implemented | Enable/disable, evacuate, restart toolstack, reboot, shutdown with confirmation |
+| Host actions | Implemented | Enable/disable, power-on, evacuate, PIF rescan, restart toolstack, reboot, shutdown with confirmation |
 | Alerts | Implemented (basic) | Priority 1–4 XenAPI messages with dismiss; diagnostics/health checks are still separate |
 | Storage repository actions | Implemented (basic) | Scan and confirmed destroy from the SR page |
 | Network actions | Implemented (basic) | Create internal networks and confirmed destroy from the Networks page |

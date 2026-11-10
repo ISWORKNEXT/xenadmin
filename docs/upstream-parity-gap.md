@@ -113,8 +113,8 @@
 
 ### 6. Host administration
 
-- Enable/disable, evacuate, reboot/shutdown/restart toolstack (มีแล้ว)
-- Maintenance mode (disable + evacuate) แบบรวมคำสั่งเดียว, power-on
+- Enable/disable, power-on, evacuate, PIF rescan, reboot/shutdown/restart toolstack (มีแล้ว)
+- Maintenance mode (disable + evacuate) แบบรวมคำสั่งเดียว
 - Change host password, reconnect as, forget password
 - License apply/edition
 - Control domain memory, autostart, power-on settings
@@ -175,7 +175,7 @@
 
 8. Storage/VDI/VBD management (SR scan/destroy, VM disks มีแล้ว)
 9. Network/VIF/PIF/bond/VLAN/SR-IOV management
-10. Host power-on/maintenance workflow (enable/disable/evacuate/reboot/shutdown มีแล้ว)
+10. Host maintenance workflow (enable/disable/power-on/evacuate/reboot/shutdown/PIF rescan มีแล้ว)
 11. Alerts + diagnostics + health check
 12. Updates apply/upload + certificate management
 13. XVA import/export

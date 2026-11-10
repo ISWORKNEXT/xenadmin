@@ -30,8 +30,9 @@ default and a persisted dark-theme toggle.
 - Add, remove, plug and unplug virtual network interfaces from the VM Network tab.
 - Add, resize and remove virtual disks while the VM is halted, and create empty
   CD/DVD drives.
-- Host actions menu for enable/disable, evacuate, restart toolstack, reboot and
-  shutdown, with explicit confirmation for disruptive actions.
+- Host actions menu for enable/disable, power-on, evacuate, rescan physical
+  interfaces, restart toolstack, reboot and shutdown, with explicit confirmation
+  for disruptive actions.
 - Priority pool alerts from XenAPI message records, shown on the pool page with
   a dismiss action.
 - Storage repository scan/destroy actions and XenAPI network create/destroy.

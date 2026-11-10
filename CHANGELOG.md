@@ -30,6 +30,7 @@
 - Collect priority XenAPI message records into pool alerts and allow dismissing them.
 - Add checkbox selection, select-all and confirmed bulk deletion in the VM Snapshots tab.
 - Add storage repository scan/destroy and XenAPI network create/destroy actions.
+- Add host power-on and physical-interface rescan actions.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

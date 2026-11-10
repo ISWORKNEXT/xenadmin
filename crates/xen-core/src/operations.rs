@@ -295,10 +295,12 @@ impl SrAction {
 pub enum HostAction {
     Enable,
     Disable,
+    PowerOn,
     Evacuate,
     Reboot,
     Shutdown,
     RestartToolstack,
+    RescanPifs,
 }
 
 impl HostAction {
@@ -306,10 +308,12 @@ impl HostAction {
         match self {
             Self::Enable => "Async.host.enable",
             Self::Disable => "Async.host.disable",
+            Self::PowerOn => "Async.host.power_on",
             Self::Evacuate => "Async.host.evacuate",
             Self::Reboot => "Async.host.reboot",
             Self::Shutdown => "Async.host.shutdown",
             Self::RestartToolstack => "Async.host.restart_agent",
+            Self::RescanPifs => "Async.PIF.scan",
         }
     }
 
@@ -317,10 +321,12 @@ impl HostAction {
         match self {
             Self::Enable => "Enable host",
             Self::Disable => "Disable host",
+            Self::PowerOn => "Power on host",
             Self::Evacuate => "Evacuate host",
             Self::Reboot => "Reboot host",
             Self::Shutdown => "Shut down host",
             Self::RestartToolstack => "Restart toolstack",
+            Self::RescanPifs => "Rescan physical interfaces",
         }
     }
 
@@ -1658,6 +1664,7 @@ mod tests {
     fn host_actions_use_async_host_methods() {
         assert_eq!(HostAction::Enable.method(), "Async.host.enable");
         assert_eq!(HostAction::Disable.method(), "Async.host.disable");
+        assert_eq!(HostAction::PowerOn.method(), "Async.host.power_on");
         assert_eq!(HostAction::Evacuate.method(), "Async.host.evacuate");
         assert_eq!(HostAction::Reboot.method(), "Async.host.reboot");
         assert_eq!(HostAction::Shutdown.method(), "Async.host.shutdown");
