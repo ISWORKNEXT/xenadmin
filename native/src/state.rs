@@ -728,9 +728,11 @@ pub enum DiskDialog {
 pub struct VifDialog {
     pub connection_id: String,
     pub vm_uuid: String,
+    pub vif_uuid: Option<String>,
     pub networks: Vec<(String, String)>,
     pub network_uuid: Option<String>,
     pub mac: String,
+    pub locking_mode: String,
     pub submitting: bool,
     pub error: Option<String>,
 }
@@ -948,7 +950,7 @@ pub enum UiAction {
     },
     CloseDiskDialog,
     SaveDiskDialog,
-    OpenVifDialog,
+    OpenVifDialog(Option<String>),
     CloseVifDialog,
     SaveVif,
     PromptRemoveVif {

@@ -306,7 +306,7 @@ fn intent(
                 ui.add_space(8.0);
                 ui.label(
                     RichText::new(
-                        "Reverting replaces the parent VM's disk state. This does not automatically restart or resume the VM.",
+                        "Reverting replaces the parent VM's disk state. If the snapshot was taken while running, the VM is started again afterwards.",
                     )
                     .size(9.5)
                     .color(amber()),
@@ -778,10 +778,19 @@ fn vif_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiActi
         .frame(theme::modal_frame())
         .show(ctx, |ui| {
             ui.set_width(520.0);
+            let editing = dialog.vif_uuid.is_some();
             modal_title(
                 ui,
-                "Add network interface",
-                "The interface is created with the next free device slot.",
+                if editing {
+                    "Edit network interface"
+                } else {
+                    "Add network interface"
+                },
+                if editing {
+                    "Move the interface to another network or change its locking mode."
+                } else {
+                    "The interface is created with the next free device slot."
+                },
             );
             widgets::field_label(ui, "Network");
             let selected = dialog
@@ -814,13 +823,49 @@ fn vif_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiActi
             ui.add_space(8.0);
             widgets::field_label(ui, "MAC address (optional)");
             ui.add_enabled(
-                !dialog.submitting,
+                !dialog.submitting && !editing,
                 egui::TextEdit::singleline(&mut dialog.mac)
                     .desired_width(f32::INFINITY)
                     .hint_text("Leave empty to generate automatically")
                     .char_limit(17)
                     .margin(egui::Margin::symmetric(8, 5)),
             );
+            if editing {
+                ui.label(
+                    RichText::new("The MAC cannot be changed; remove and recreate the interface.")
+                        .size(9.0)
+                        .color(dim_fg()),
+                );
+            }
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Locking mode");
+            let locking_label = match dialog.locking_mode.as_str() {
+                "locked" => "Locked",
+                "unlocked" => "Unlocked",
+                _ => "Network default",
+            };
+            ui.add_enabled_ui(!dialog.submitting, |ui| {
+                egui::ComboBox::from_id_salt("vif-locking")
+                    .selected_text(RichText::new(locking_label).size(11.0))
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for (value, label) in [
+                            ("network_default", "Network default"),
+                            ("locked", "Locked"),
+                            ("unlocked", "Unlocked"),
+                        ] {
+                            if ui
+                                .selectable_label(
+                                    dialog.locking_mode == value,
+                                    RichText::new(label).size(11.0),
+                                )
+                                .clicked()
+                            {
+                                dialog.locking_mode = value.into();
+                            }
+                        }
+                    });
+            });
             if let Some(error) = &dialog.error {
                 ui.add_space(8.0);
                 ui.label(RichText::new(error).size(10.0).color(red()));
@@ -841,7 +886,9 @@ fn vif_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiActi
                         .add_enabled(
                             !dialog.submitting && dialog.network_uuid.is_some(),
                             widgets::primary_button(if dialog.submitting {
-                                "Adding…"
+                                "Saving…"
+                            } else if editing {
+                                "Save changes"
                             } else {
                                 "Add interface"
                             }),

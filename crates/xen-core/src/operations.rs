@@ -122,7 +122,10 @@ impl Connection {
             ));
         }
         let template = record["is_a_template"].as_bool() == Some(true);
-        if template && !matches!(action, VmAction::Clone { .. } | VmAction::Destroy { .. }) {
+        if template
+            && !snapshot
+            && !matches!(action, VmAction::Clone { .. } | VmAction::Destroy { .. })
+        {
             return Err(ApiError::Xen(
                 "Templates can only be cloned or deleted.".into(),
             ));
@@ -981,6 +984,87 @@ impl Connection {
         )
         .await?;
         Ok(())
+    }
+
+    pub async fn update_vif(
+        &self,
+        vm_uuid: &str,
+        vif_uuid: &str,
+        network_uuid: &str,
+        locking_mode: &str,
+    ) -> Result<(), ApiError> {
+        let vif_ref = self.vif_for_vm(vm_uuid, vif_uuid).await?;
+        let vif: Value = self
+            .request("VIF.get_record", json!([self.session, vif_ref]))
+            .await?;
+        if !matches!(locking_mode, "network_default" | "locked" | "unlocked") {
+            return Err(ApiError::Xen("Unknown VIF locking mode.".into()));
+        }
+        let current_network = text(&vif, "network");
+        let network_ref: String = self
+            .request("network.get_by_uuid", json!([self.session, network_uuid]))
+            .await?;
+        let network: Value = self
+            .request("network.get_record", json!([self.session, network_ref]))
+            .await?;
+        if network["uuid"].as_str() != Some(network_uuid) {
+            return Err(ApiError::Protocol);
+        }
+        if current_network != network_ref {
+            self.async_task(
+                "Async.VIF.move",
+                json!([self.session, vif_ref, network_ref]),
+            )
+            .await?;
+        }
+        let current_locking = text(&vif, "locking_mode");
+        if current_locking != locking_mode {
+            self.async_task(
+                "Async.VIF.set_locking_mode",
+                json!([self.session, vif_ref, locking_mode]),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// Read the parent VM and its current power state before reverting a
+    /// snapshot, so the workspace can restore it afterwards.
+    pub async fn revert_restore_hint(
+        &self,
+        snapshot_uuid: &str,
+    ) -> Result<Option<(String, String)>, ApiError> {
+        let snapshot_ref: String = self
+            .request("VM.get_by_uuid", json!([self.session, snapshot_uuid]))
+            .await?;
+        let snapshot: Value = self
+            .request("VM.get_record", json!([self.session, snapshot_ref]))
+            .await?;
+        if snapshot["is_a_snapshot"].as_bool() != Some(true) {
+            return Ok(None);
+        }
+        let parent_ref = snapshot["snapshot_of"].as_str().unwrap_or_default();
+        if parent_ref.is_empty() || parent_ref == "OpaqueRef:NULL" {
+            return Ok(None);
+        }
+        let power = snapshot["snapshot_info"]["power-state-at-snapshot"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        if power != "Running" {
+            return Ok(None);
+        }
+        let parent_uuid: String = self
+            .request("VM.get_uuid", json!([self.session, parent_ref]))
+            .await?;
+        if parent_uuid.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some((parent_uuid, power)))
+    }
+
+    pub async fn wait_task(&self, reference: &str) -> Result<(), ApiError> {
+        wait_task(self, reference).await
     }
 
     pub async fn remove_vif(&self, vm_uuid: &str, vif_uuid: &str) -> Result<(), ApiError> {

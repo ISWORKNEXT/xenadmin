@@ -22,6 +22,7 @@
 - Add VM network interface management: create on the next free slot with an optional MAC, remove, plug and unplug.
 - Add virtual disk management: create on a chosen SR, grow, and remove disks (optionally deleting the VDI) on halted VMs.
 - Add empty CD/DVD drive creation and two-way console clipboard actions (copy guest, paste from desktop).
+- Restore the running power state after reverting a snapshot taken while the VM was running.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

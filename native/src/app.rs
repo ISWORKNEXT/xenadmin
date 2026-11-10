@@ -707,6 +707,7 @@ impl App {
                     let message = match action.as_str() {
                         "add" => "Network interface added.",
                         "remove" => "Network interface removed.",
+                        "edit" => "Network interface updated.",
                         "plug" => "Network interface plugged.",
                         "unplug" => "Network interface unplugged.",
                         _ => "Network interface updated.",
@@ -1603,7 +1604,7 @@ impl App {
                         }
                     }
                 }
-                UiAction::OpenVifDialog => {
+                UiAction::OpenVifDialog(vif_uuid) => {
                     let Some(key) = self
                         .state
                         .object_tabs
@@ -1633,12 +1634,29 @@ impl App {
                         ));
                         continue;
                     }
+                    let existing = vif_uuid.as_ref().and_then(|vif_uuid| {
+                        self.state.vm_state.ready().and_then(|details| {
+                            details
+                                .interfaces
+                                .iter()
+                                .find(|interface| &interface.uuid == vif_uuid)
+                        })
+                    });
                     self.state.vif_dialog = Some(crate::state::VifDialog {
                         connection_id,
                         vm_uuid,
-                        network_uuid: networks.first().map(|(uuid, _)| uuid.clone()),
+                        vif_uuid,
+                        network_uuid: existing
+                            .map(|interface| interface.network_uuid.clone())
+                            .or_else(|| networks.first().map(|(uuid, _)| uuid.clone())),
                         networks,
-                        mac: String::new(),
+                        mac: existing
+                            .map(|interface| interface.mac.clone())
+                            .unwrap_or_default(),
+                        locking_mode: existing
+                            .map(|interface| interface.locking_mode.clone())
+                            .filter(|mode| !mode.is_empty())
+                            .unwrap_or_else(|| "network_default".into()),
                         submitting: false,
                         error: None,
                     });
@@ -1663,12 +1681,23 @@ impl App {
                     };
                     dialog.submitting = true;
                     dialog.error = None;
-                    self.worker.send(Command::AddVif {
-                        connection_id: dialog.connection_id.clone(),
-                        vm_uuid: dialog.vm_uuid.clone(),
-                        network_uuid,
-                        mac: (!dialog.mac.trim().is_empty()).then(|| dialog.mac.trim().to_owned()),
-                    });
+                    if let Some(vif_uuid) = dialog.vif_uuid.clone() {
+                        self.worker.send(Command::UpdateVif {
+                            connection_id: dialog.connection_id.clone(),
+                            vm_uuid: dialog.vm_uuid.clone(),
+                            vif_uuid,
+                            network_uuid,
+                            locking_mode: dialog.locking_mode.clone(),
+                        });
+                    } else {
+                        self.worker.send(Command::AddVif {
+                            connection_id: dialog.connection_id.clone(),
+                            vm_uuid: dialog.vm_uuid.clone(),
+                            network_uuid,
+                            mac: (!dialog.mac.trim().is_empty())
+                                .then(|| dialog.mac.trim().to_owned()),
+                        });
+                    }
                 }
                 UiAction::PromptRemoveVif { vif_uuid, mac } => {
                     let Some(key) = self

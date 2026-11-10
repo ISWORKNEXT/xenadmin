@@ -319,7 +319,7 @@ fn action_bar(
         });
         ui.label(
             RichText::new(
-                "Revert replaces the parent VM's disk state. Deleting a snapshot frees its disks.",
+                "Revert replaces the parent VM's disk state and restores a running power state. Deleting a snapshot frees its disks.",
             )
             .size(10.0)
             .color(dim_fg()),
@@ -1631,7 +1631,7 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
                     .add_enabled(editable, widgets::primary_button("Add interface"))
                     .clicked()
                 {
-                    actions.push(UiAction::OpenVifDialog);
+                    actions.push(UiAction::OpenVifDialog(None));
                 }
             });
         });
@@ -1733,6 +1733,12 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
                         }
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 4.0;
+                            if ui
+                                .add(egui::Button::new(RichText::new("Edit").size(9.5)).small())
+                                .clicked()
+                            {
+                                actions.push(UiAction::OpenVifDialog(Some(interface.uuid.clone())));
+                            }
                             if ui
                                 .add(
                                     egui::Button::new(
@@ -1946,7 +1952,7 @@ fn snapshots(
         ui.add_space(2.0);
         ui.label(
             RichText::new(
-                "Reverting replaces disk state; it does not restore the previous power state.",
+                "Reverting replaces disk state. If the snapshot was running, the VM is started again.",
             )
             .size(9.5)
             .color(dim_fg()),

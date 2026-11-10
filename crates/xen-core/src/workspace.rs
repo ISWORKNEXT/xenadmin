@@ -88,6 +88,7 @@ pub struct Operation {
 struct TrackedTask {
     record: Operation,
     remote_ref: String,
+    restore: Option<(String, String)>,
 }
 
 #[derive(Clone, Serialize)]
@@ -461,6 +462,27 @@ impl Workspace {
         active
             .connection
             .add_vif(vm_uuid, network_uuid, mac.as_deref())
+            .await
+            .map_err(|error| error.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn update_vif(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        vif_uuid: &str,
+        network_uuid: &str,
+        locking_mode: &str,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .update_vif(vm_uuid, vif_uuid, network_uuid, locking_mode)
             .await
             .map_err(|error| error.to_string())?;
         refresh_inventory_cache(&active).await
@@ -856,6 +878,15 @@ impl Workspace {
             active.busy_vms.lock().await.remove(&vm_uuid);
             return Err("Object is not present in this connection. Refresh the inventory.".into());
         };
+        let restore = if matches!(action, VmAction::Revert) {
+            active
+                .connection
+                .revert_restore_hint(&vm_uuid)
+                .await
+                .unwrap_or_default()
+        } else {
+            None
+        };
         let remote_ref = match active.connection.begin_vm_action(&vm_uuid, &action).await {
             Ok(reference) => reference,
             Err(error) => {
@@ -885,6 +916,7 @@ impl Workspace {
             TrackedTask {
                 record: record.clone(),
                 remote_ref: remote_ref.clone(),
+                restore,
             },
         );
         let workspace = self.clone();
@@ -959,6 +991,7 @@ impl Workspace {
             TrackedTask {
                 record: record.clone(),
                 remote_ref: String::new(),
+                restore: None,
             },
         );
         let workspace = self.clone();
@@ -1048,6 +1081,7 @@ impl Workspace {
             TrackedTask {
                 record: record.clone(),
                 remote_ref: String::new(),
+                restore: None,
             },
         );
         let workspace = self.clone();
@@ -1101,6 +1135,55 @@ impl Workspace {
                         task.record.can_cancel = !terminal && remote.can_cancel;
                     }
                     if terminal {
+                        if remote.status == TaskStatus::Succeeded {
+                            let restore = self
+                                .tasks
+                                .lock()
+                                .await
+                                .get(id)
+                                .and_then(|task| task.restore.clone());
+                            if let Some((parent_uuid, _)) = restore {
+                                let state = active
+                                    .snapshot
+                                    .read()
+                                    .await
+                                    .vms
+                                    .iter()
+                                    .find(|vm| vm.uuid == parent_uuid)
+                                    .map(|vm| vm.power_state.clone());
+                                let action = match state.as_deref() {
+                                    Some("Halted") => Some(VmAction::Start),
+                                    Some("Suspended") => Some(VmAction::Resume),
+                                    _ => None,
+                                };
+                                if let Some(action) = action {
+                                    let result = match active
+                                        .connection
+                                        .begin_vm_action(&parent_uuid, &action)
+                                        .await
+                                    {
+                                        Ok(task_ref) => {
+                                            let result =
+                                                active.connection.wait_task(&task_ref).await;
+                                            let _ = refresh_inventory_cache(active).await;
+                                            result.map_err(|error| error.to_string())
+                                        }
+                                        Err(error) => Err(error.to_string()),
+                                    };
+                                    if let Some(task) = self.tasks.lock().await.get_mut(id) {
+                                        task.record.message = match result {
+                                            Ok(()) => {
+                                                "Reverted and restored the running power state."
+                                                    .into()
+                                            }
+                                            Err(error) => format!(
+                                                "Reverted, but restoring the power state failed: {error}"
+                                            ),
+                                        };
+                                    }
+                                }
+                            }
+                        }
                         return;
                     }
                 }

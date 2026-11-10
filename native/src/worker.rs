@@ -106,6 +106,13 @@ pub enum Command {
         network_uuid: String,
         mac: Option<String>,
     },
+    UpdateVif {
+        connection_id: String,
+        vm_uuid: String,
+        vif_uuid: String,
+        network_uuid: String,
+        locking_mode: String,
+    },
     RemoveVif {
         connection_id: String,
         vm_uuid: String,
@@ -538,6 +545,28 @@ fn dispatch(
                 let _ = events.send(Event::VifChanged {
                     vm_uuid,
                     action: "add".into(),
+                    result,
+                });
+            }
+            Command::UpdateVif {
+                connection_id,
+                vm_uuid,
+                vif_uuid,
+                network_uuid,
+                locking_mode,
+            } => {
+                let result = workspace
+                    .update_vif(
+                        &connection_id,
+                        &vm_uuid,
+                        &vif_uuid,
+                        &network_uuid,
+                        &locking_mode,
+                    )
+                    .await;
+                let _ = events.send(Event::VifChanged {
+                    vm_uuid,
+                    action: "edit".into(),
                     result,
                 });
             }
