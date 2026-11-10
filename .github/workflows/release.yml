@@ -86,7 +86,7 @@ jobs:
 
           Profiles are stored under %APPDATA%\xen-desktop.
           EOF
-          7z a -tzip "release-assets/${NAME}.zip" "release-assets/${NAME}" >/dev/null
+          (cd release-assets && 7z a -tzip "${NAME}.zip" "${NAME}" >/dev/null)
           rm -rf "release-assets/${NAME}"
         env:
           TARGET: ${{ matrix.target }}
@@ -121,6 +121,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          name: Xen Desktop ${{ github.ref_name }}
           files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: true
