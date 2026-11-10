@@ -95,6 +95,8 @@ The executable is written to `target/release/xen-native`.
 --vm-tab general|performance|storage|network|ha|snapshots|console
 --health                  open the pool Health & diagnostics page
 --search QUERY            prefill the VM/template search (e.g. power_state:running)
+--group-by none|connection|host|power|tag
+--saved-search NAME       apply a saved search on startup
 --theme light|dark        start with the light (default) or dark theme
 --on-top                  keep the window above other windows
 ```

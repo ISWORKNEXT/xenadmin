@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::time::Instant;
 
 use chrono::{DateTime, Local};
+
+use crate::config::{GroupBy, SavedSearch};
 use xen_core::{
     host::{DataSection, HostDetails, InfoGroup},
     operations::{TaskStatus, VmAction},
@@ -722,6 +724,11 @@ pub struct SrActionConfirm {
     pub error: Option<String>,
 }
 
+pub struct SaveSearchState {
+    pub name: String,
+    pub error: Option<String>,
+}
+
 pub struct SnapshotDeleteConfirm {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -875,6 +882,9 @@ pub struct UiState {
     pub network_create_dialog: Option<NetworkCreateDialog>,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
     pub query: String,
+    pub group_by: GroupBy,
+    pub saved_searches: Vec<SavedSearch>,
+    pub save_search: Option<SaveSearchState>,
     pub power: PowerFilter,
     pub page: usize,
     pub selected: HashSet<(String, String)>,
@@ -940,6 +950,9 @@ impl Default for UiState {
             network_create_dialog: None,
             network_destroy_confirm: None,
             query: String::new(),
+            group_by: GroupBy::None,
+            saved_searches: Vec::new(),
+            save_search: None,
             power: PowerFilter::All,
             page: 0,
             selected: HashSet::new(),
@@ -1063,6 +1076,11 @@ pub enum UiAction {
         vbd_uuid: String,
         bootable: bool,
     },
+    ApplySavedSearch(usize),
+    DeleteSavedSearch(usize),
+    OpenSaveSearch,
+    CloseSaveSearch,
+    SaveCurrentSearch,
     AddCdDrive,
     OpenDiskResize {
         vdi_uuid: String,

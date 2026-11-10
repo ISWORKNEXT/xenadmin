@@ -25,6 +25,8 @@ pub(crate) struct StartupOptions {
     pub vm_tab: Option<crate::state::VmTab>,
     pub health: bool,
     pub search: Option<String>,
+    pub group_by: Option<crate::config::GroupBy>,
+    pub saved_search: Option<String>,
     pub light: Option<bool>,
 }
 
@@ -51,6 +53,8 @@ impl App {
             vm_tab: startup_vm_tab,
             health: startup_health,
             search: startup_search,
+            group_by: startup_group_by,
+            saved_search: startup_saved_search,
             light: startup_light,
         } = options;
         let preferences = crate::config::load_ui_preferences();
@@ -67,8 +71,21 @@ impl App {
         }
         let mut state = UiState {
             query: startup_search.unwrap_or_default(),
+            saved_searches: crate::config::load_saved_searches(),
             ..UiState::default()
         };
+        if let Some(group_by) = startup_group_by {
+            state.group_by = group_by;
+        }
+        if let Some(name) = startup_saved_search
+            && let Some(saved) = state
+                .saved_searches
+                .iter()
+                .find(|saved| saved.name.eq_ignore_ascii_case(&name))
+        {
+            state.query = saved.query.clone();
+            state.group_by = saved.group_by;
+        }
         if let Some(view) = startup_view {
             state.view = view;
         }
@@ -1976,6 +1993,67 @@ impl App {
                         vbd_uuid,
                         bootable,
                     });
+                }
+                UiAction::ApplySavedSearch(index) => {
+                    let Some(saved) = self.state.saved_searches.get(index).cloned() else {
+                        continue;
+                    };
+                    self.state.query = saved.query;
+                    self.state.group_by = saved.group_by;
+                    self.state.page = 0;
+                    self.state.selected.clear();
+                }
+                UiAction::DeleteSavedSearch(index) => {
+                    if index < self.state.saved_searches.len() {
+                        self.state.saved_searches.remove(index);
+                        crate::config::save_saved_searches(&self.state.saved_searches);
+                        self.state
+                            .toasts
+                            .push(Toast::new("Saved search deleted.", ToastKind::Info));
+                    }
+                }
+                UiAction::OpenSaveSearch => {
+                    let suggested = if self.state.query.trim().is_empty() {
+                        "All objects".to_owned()
+                    } else {
+                        self.state.query.trim().chars().take(48).collect()
+                    };
+                    self.state.save_search = Some(crate::state::SaveSearchState {
+                        name: suggested,
+                        error: None,
+                    });
+                }
+                UiAction::CloseSaveSearch => self.state.save_search = None,
+                UiAction::SaveCurrentSearch => {
+                    let Some(mut dialog) = self.state.save_search.take() else {
+                        continue;
+                    };
+                    let name = dialog.name.trim().to_owned();
+                    if name.is_empty() {
+                        dialog.error = Some("Enter a name for the saved search.".into());
+                        self.state.save_search = Some(dialog);
+                        continue;
+                    }
+                    let saved = crate::config::SavedSearch {
+                        name: name.clone(),
+                        query: self.state.query.clone(),
+                        group_by: self.state.group_by,
+                    };
+                    if let Some(existing) = self
+                        .state
+                        .saved_searches
+                        .iter_mut()
+                        .find(|saved| saved.name.eq_ignore_ascii_case(&name))
+                    {
+                        *existing = saved;
+                    } else {
+                        self.state.saved_searches.push(saved);
+                    }
+                    crate::config::save_saved_searches(&self.state.saved_searches);
+                    self.state.toasts.push(Toast::new(
+                        format!("Saved search “{name}”."),
+                        ToastKind::Success,
+                    ));
                 }
                 UiAction::OpenAddDisk => {
                     let Some(key) = self

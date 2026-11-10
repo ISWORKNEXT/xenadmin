@@ -15,6 +15,7 @@ native/
     worker.rs        Tokio workspace thread and profile persistence
     console.rs       VNC console session over the XenAPI HTTPS tunnel
     search.rs        XenSearch-style VM/template query parser
+    config.rs        UI preferences and saved searches
     state.rs         UI state, scopes, action gating and workspace helpers
     theme.rs         light/dark palettes, frames and egui visuals
     widgets.rs       badges, cards, resource bars, info groups, toasts

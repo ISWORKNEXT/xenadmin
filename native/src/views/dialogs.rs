@@ -48,6 +48,9 @@ pub fn show(
     if state.network_create_dialog.is_some() {
         network_create(ctx, state, actions);
     }
+    if state.save_search.is_some() {
+        save_search_dialog(ctx, state, actions);
+    }
     if state.network_destroy_confirm.is_some() {
         network_destroy(ctx, state, actions);
     }
@@ -681,6 +684,64 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
     }
     if close {
         actions.push(UiAction::CloseVmEdit);
+    }
+}
+
+fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(dialog) = state.save_search.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("save-search-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(480.0);
+            modal_title(
+                ui,
+                "Save search",
+                "Saves the current query and grouping for this workspace.",
+            );
+            widgets::field_label(ui, "Search name");
+            ui.add(
+                egui::TextEdit::singleline(&mut dialog.name)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(80)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add(egui::Button::new(RichText::new("Cancel").size(11.0)))
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.name.trim().is_empty(),
+                            widgets::primary_button("Save search"),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveCurrentSearch);
+    }
+    if close {
+        actions.push(UiAction::CloseSaveSearch);
     }
 }
 

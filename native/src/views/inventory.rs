@@ -2,12 +2,14 @@ use egui::{Align, CornerRadius, Frame, Label, Layout, Margin, RichText, Sense, S
 use egui_extras::{Column, TableBuilder};
 use xen_core::workspace::WorkspaceView;
 
+use crate::config::GroupBy;
 use crate::format;
 use crate::search::SearchQuery;
 use crate::state::{
     ActionKind, PowerFilter, Scope, Target, UiAction, UiState, action_allowed, connection_id,
     connection_name, find_connection, is_read_only, scoped_hosts, scoped_targets, scoped_templates,
 };
+use crate::theme;
 use crate::theme::*;
 use crate::widgets;
 
@@ -34,6 +36,10 @@ pub fn vms(
     toolbar(ui, state, actions, targets.len(), templates);
     if !templates {
         bulk_bar(ui, state, workspace, actions, &targets);
+    }
+    if state.group_by != GroupBy::None {
+        grouped_targets(ui, state, workspace, actions, &targets, templates);
+        return;
     }
 
     let total = targets.len();
@@ -202,6 +208,126 @@ pub fn vms(
     }
 }
 
+fn grouped_targets(
+    ui: &mut Ui,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
+    targets: &[Target<'_>],
+    templates: bool,
+) {
+    use std::collections::BTreeMap;
+    let mut groups: BTreeMap<String, Vec<Target<'_>>> = BTreeMap::new();
+    for target in targets {
+        groups
+            .entry(group_value(
+                target.vm,
+                &connection_name(target.connection),
+                state.group_by,
+            ))
+            .or_default()
+            .push(*target);
+    }
+    for (label, group) in groups {
+        theme::card_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(&label).size(13.5).strong());
+                widgets::badge(ui, group.len().to_string(), accent());
+            });
+            ui.add_space(4.0);
+            for target in group {
+                ui.horizontal(|ui| {
+                    if !templates {
+                        let id = key(&target);
+                        let mut checked = state.selected.contains(&id);
+                        if ui.add(egui::Checkbox::without_text(&mut checked)).changed() {
+                            toggle(state, &id, checked);
+                        }
+                    }
+                    widgets::dot(
+                        ui,
+                        if target.vm.power_state == "Running" {
+                            green()
+                        } else {
+                            dim_fg()
+                        },
+                        6.0,
+                    );
+                    if ui
+                        .add(
+                            Label::new(RichText::new(&target.vm.name).size(11.5).color(fg()))
+                                .truncate()
+                                .sense(Sense::click()),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::OpenVm(
+                            connection_id(target.connection).to_owned(),
+                            target.vm.uuid.clone(),
+                        ));
+                    }
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if !templates {
+                            vm_menu(ui, workspace, target, actions);
+                        }
+                        ui.label(
+                            RichText::new(format::bytes(target.vm.memory))
+                                .monospace()
+                                .size(9.5)
+                                .color(muted_fg()),
+                        );
+                        ui.label(
+                            RichText::new(format!("{} vCPU", target.vm.vcpus))
+                                .monospace()
+                                .size(9.5)
+                                .color(muted_fg()),
+                        );
+                        widgets::power_badge(ui, &target.vm.power_state);
+                        ui.label(
+                            RichText::new(format!(
+                                "{} · {}",
+                                connection_name(target.connection),
+                                target.vm.host_name
+                            ))
+                            .size(9.0)
+                            .color(dim_fg()),
+                        );
+                    });
+                });
+                ui.separator();
+            }
+        });
+        ui.add_space(6.0);
+    }
+}
+
+fn group_value(vm: &xen_core::xapi::VirtualMachine, connection: &str, group_by: GroupBy) -> String {
+    match group_by {
+        GroupBy::None => String::new(),
+        GroupBy::Connection => connection.to_owned(),
+        GroupBy::Host => {
+            if vm.host_name.is_empty() || vm.host_name == "Unassigned" {
+                "Unassigned".into()
+            } else {
+                vm.host_name.clone()
+            }
+        }
+        GroupBy::PowerState => {
+            if vm.power_state.is_empty() {
+                "Unknown".into()
+            } else {
+                vm.power_state.clone()
+            }
+        }
+        GroupBy::Tag => vm
+            .tags
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "Untagged".into()),
+    }
+}
+
 fn key(target: &Target<'_>) -> (String, String) {
     (
         connection_id(target.connection).to_owned(),
@@ -239,7 +365,7 @@ fn select_all(
 fn toolbar(
     ui: &mut Ui,
     state: &mut UiState,
-    _actions: &mut Vec<UiAction>,
+    actions: &mut Vec<UiAction>,
     count: usize,
     templates: bool,
 ) {
@@ -254,6 +380,65 @@ fn toolbar(
             if state.focus_search {
                 response.request_focus();
                 state.focus_search = false;
+            }
+        });
+        let mut group_by = state.group_by;
+        egui::ComboBox::from_id_salt("group-by")
+            .selected_text(RichText::new(group_by.label()).size(10.5))
+            .width(130.0)
+            .show_ui(ui, |ui| {
+                for option in GroupBy::ALL {
+                    ui.selectable_value(&mut group_by, option, option.label());
+                }
+            });
+        if group_by != state.group_by {
+            state.group_by = group_by;
+            state.page = 0;
+        }
+        ui.menu_button(RichText::new("Saved searches").size(10.5), |ui| {
+            if state.saved_searches.is_empty() {
+                ui.label(
+                    RichText::new("No saved searches yet.")
+                        .size(10.0)
+                        .color(dim_fg()),
+                );
+            }
+            for (index, saved) in state.saved_searches.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if ui
+                        .selectable_label(false, RichText::new(&saved.name).size(10.5))
+                        .on_hover_text(format!(
+                            "{}\nGroup: {}",
+                            if saved.query.is_empty() {
+                                "(no query)"
+                            } else {
+                                &saved.query
+                            },
+                            saved.group_by.label()
+                        ))
+                        .clicked()
+                    {
+                        actions.push(UiAction::ApplySavedSearch(index));
+                        ui.close();
+                    }
+                    if ui
+                        .add(egui::Button::new(RichText::new("×").size(10.0)).frame(false))
+                        .on_hover_text("Delete saved search")
+                        .clicked()
+                    {
+                        actions.push(UiAction::DeleteSavedSearch(index));
+                    }
+                });
+            }
+            ui.separator();
+            if ui
+                .add(egui::Button::new(
+                    RichText::new("Save current search…").size(10.5),
+                ))
+                .clicked()
+            {
+                actions.push(UiAction::OpenSaveSearch);
+                ui.close();
             }
         });
         let mut power = state.power;
@@ -866,4 +1051,57 @@ pub fn networks(
                     });
                 });
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_vm(host: &str, power: &str, tags: &[&str]) -> xen_core::xapi::VirtualMachine {
+        xen_core::xapi::VirtualMachine {
+            reference: "ref".into(),
+            kind: "vm".into(),
+            allowed_operations: Vec::new(),
+            host_name: host.into(),
+            resident_on: String::new(),
+            snapshot_of: String::new(),
+            snapshot_time: String::new(),
+            disk_count: 0,
+            interface_count: 0,
+            uuid: "uuid".into(),
+            name: "name".into(),
+            description: String::new(),
+            power_state: power.into(),
+            vcpus: 2,
+            memory: 1024,
+            os: String::new(),
+            tags: tags.iter().map(|tag| (*tag).to_owned()).collect(),
+        }
+    }
+
+    #[test]
+    fn groups_vms_by_connection_host_power_and_first_tag() {
+        let vm = sample_vm("host-a", "Running", &["prod", "web"]);
+        assert_eq!(group_value(&vm, "conn", GroupBy::Connection), "conn");
+        assert_eq!(group_value(&vm, "conn", GroupBy::Host), "host-a");
+        assert_eq!(group_value(&vm, "conn", GroupBy::PowerState), "Running");
+        assert_eq!(group_value(&vm, "conn", GroupBy::Tag), "prod");
+        assert_eq!(
+            group_value(&sample_vm("Unassigned", "", &[]), "conn", GroupBy::Host),
+            "Unassigned"
+        );
+        assert_eq!(
+            group_value(
+                &sample_vm("Unassigned", "", &[]),
+                "conn",
+                GroupBy::PowerState
+            ),
+            "Unknown"
+        );
+        assert_eq!(
+            group_value(&sample_vm("Unassigned", "", &[]), "conn", GroupBy::Tag),
+            "Untagged"
+        );
+        assert_eq!(group_value(&vm, "conn", GroupBy::None), "");
+    }
 }
