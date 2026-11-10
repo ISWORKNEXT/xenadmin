@@ -32,6 +32,8 @@ dependency.
 | Action review | Implemented | Exact targets, clone/snapshot name, force/revert warnings |
 | Host details | Implemented | General, CPU/memory, performance, networking, storage, hardware, updates, certificates, health |
 | Host actions | Implemented | Enable/disable, power-on, evacuate, PIF rescan, restart toolstack, reboot, shutdown with confirmation |
+| Proxy | Implemented | Per-connection HTTP/SOCKS proxy for XenAPI and RRD traffic; console tunnel is direct |
+
 | Alerts | Implemented (basic) | Priority 1–4 XenAPI messages with dismiss; diagnostics/health checks are still separate |
 | Storage repository actions | Implemented (basic) | Scan and confirmed destroy from the SR page |
 | Network actions | Implemented (basic) | Create internal networks and confirmed destroy from the Networks page |

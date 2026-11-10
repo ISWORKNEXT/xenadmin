@@ -152,6 +152,19 @@ fn connect(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                     .size(9.5)
                     .color(if protected { amber() } else { dim_fg() }),
                 );
+                ui.add_space(6.0);
+                widgets::field_label(ui, "HTTP proxy (optional)");
+                ui.add(
+                    egui::TextEdit::singleline(&mut connect.proxy)
+                        .hint_text("http://proxy:3128 or socks5://proxy:1080")
+                        .desired_width(f32::INFINITY)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                ui.label(
+                    RichText::new("Used for XenAPI and RRD traffic on this connection only.")
+                        .size(9.0)
+                        .color(dim_fg()),
+                );
                 ui.add_space(4.0);
                 ui.checkbox(
                     &mut connect.settings.tls.bypass_certificate_verification,
@@ -205,7 +218,11 @@ fn connect(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
             close = true;
         }
         if submit && !connect.submitting {
-            if connect.password.is_empty() {
+            connect.settings.proxy =
+                (!connect.proxy.trim().is_empty()).then(|| connect.proxy.trim().to_owned());
+            if let Err(error) = connect.settings.proxy_url() {
+                connect.error = Some(error);
+            } else if connect.password.is_empty() {
                 connect.error = Some("Enter the host password.".into());
             } else {
                 connect.submitting = true;

@@ -15,10 +15,11 @@ pub struct TlsOptions {
 pub struct HostTransport {
     client: Client,
     origin: Url,
+    proxy: Option<String>,
 }
 
 impl HostTransport {
-    pub fn new(origin: Url, tls: TlsOptions) -> Result<Self, TransportError> {
+    pub fn new(origin: Url, tls: TlsOptions, proxy: Option<&str>) -> Result<Self, TransportError> {
         if origin.scheme() != "https"
             || origin.host_str().is_none()
             || !origin.username().is_empty()
@@ -30,16 +31,27 @@ impl HostTransport {
             return Err(TransportError::InvalidOrigin);
         }
 
-        let client = Client::builder()
+        let proxy = proxy
+            .map(str::trim)
+            .filter(|proxy| !proxy.is_empty())
+            .map(str::to_owned);
+        let mut builder = Client::builder()
             .tls_danger_accept_invalid_certs(tls.bypass_certificate_verification)
             .redirect(redirect::Policy::none())
             .retry(reqwest::retry::never())
             .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(45))
-            .build()
-            .map_err(TransportError::Http)?;
+            .timeout(Duration::from_secs(45));
+        if let Some(proxy) = proxy.as_deref() {
+            builder = builder
+                .proxy(reqwest::Proxy::all(proxy).map_err(|_| TransportError::InvalidProxy)?);
+        }
+        let client = builder.build().map_err(TransportError::Http)?;
 
-        Ok(Self { client, origin })
+        Ok(Self {
+            client,
+            origin,
+            proxy,
+        })
     }
 
     pub async fn probe(&self) -> Result<Response, reqwest::Error> {
@@ -63,7 +75,7 @@ impl HostTransport {
         origin
             .set_host(Some(address))
             .map_err(|_| TransportError::InvalidOrigin)?;
-        Self::new(origin, tls)
+        Self::new(origin, tls, self.proxy.as_deref())
     }
 
     pub(crate) async fn rrd_updates(
@@ -94,6 +106,7 @@ impl HostTransport {
 #[derive(Debug)]
 pub enum TransportError {
     InvalidOrigin,
+    InvalidProxy,
     Http(reqwest::Error),
 }
 
@@ -103,6 +116,7 @@ impl std::fmt::Display for TransportError {
             Self::InvalidOrigin => {
                 f.write_str("Expected an HTTPS origin without credentials or a path")
             }
+            Self::InvalidProxy => f.write_str("Expected a valid proxy URL"),
             Self::Http(_) => f.write_str("Could not create host HTTP client"),
         }
     }
@@ -112,7 +126,7 @@ impl std::error::Error for TransportError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Http(error) => Some(error),
-            Self::InvalidOrigin => None,
+            Self::InvalidOrigin | Self::InvalidProxy => None,
         }
     }
 }
@@ -136,6 +150,23 @@ mod tests {
     }
 
     #[test]
+    fn validates_and_builds_proxy_clients() {
+        let origin = Url::parse("https://localhost/").unwrap();
+        assert!(
+            HostTransport::new(
+                origin.clone(),
+                TlsOptions::default(),
+                Some("http://127.0.0.1:3128")
+            )
+            .is_ok()
+        );
+        assert!(matches!(
+            HostTransport::new(origin, TlsOptions::default(), Some("not a proxy")),
+            Err(TransportError::InvalidProxy)
+        ));
+    }
+
+    #[test]
     fn rejects_credentials_plaintext_and_non_origin_urls() {
         for value in [
             "http://localhost/",
@@ -145,7 +176,7 @@ mod tests {
             "https://localhost/#fragment",
         ] {
             assert!(matches!(
-                HostTransport::new(Url::parse(value).unwrap(), TlsOptions::default()),
+                HostTransport::new(Url::parse(value).unwrap(), TlsOptions::default(), None),
                 Err(TransportError::InvalidOrigin)
             ));
         }

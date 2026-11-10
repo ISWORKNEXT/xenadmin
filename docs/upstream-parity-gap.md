@@ -61,7 +61,7 @@
 | Errors | 774 friendly errors + RBAC errors | 5 mapped messages + generic | ข้อความ error ไม่ละเอียด |
 | Search | XenSearch query/group/saved search | substring filter | ค้นหาแบบซับซ้อนไม่ได้ |
 | TLS | certificate install/reset/trust | per-connection bypass เท่านั้น | จัดการ certificate ไม่ได้ |
-| Proxy | HTTP proxy ตาม settings | ไม่มี | ใช้งานหลัง proxy ไม่ได้ |
+| Proxy | HTTP proxy ตาม settings | per-connection HTTP/SOCKS proxy สำหรับ XenAPI/RRD; console tunnel ยังตรง | ใช้งาน XenAPI หลัง proxy ได้; console ต้องเปิดทางตรง |
 | Password saving | encrypted saved passwords + forget | ไม่บันทึกเลย (ตั้งใจ) | ต้องกรอกรหัสทุกครั้ง |
 | RBAC | role checks, permissions, warnings | `allowed_operations` + map error | ไม่มี role introspection |
 | Tags/folders/custom fields | จัดการได้ | แค่แสดง tags ใน host details | จัดระเบียบทรัพยากรไม่ได้ |
@@ -149,7 +149,7 @@
 - AD authentication/roles/subjects
 - RBAC role/permission UI
 - Certificate trust store/install/reset
-- Proxy configuration
+- Proxy configuration (มีแล้ว; console tunnel ยังไม่ผ่าน proxy)
 - Saved password encryption/forget
 - Session delegation
 
@@ -212,7 +212,7 @@
 - `crates/xen-core/src/workspace.rs` — task tracking ใน memory, ไม่มี event/heartbeat
 - `crates/xen-core/src/performance.rs` — host series only, 3 ช่วง
 - `crates/xen-core/src/host.rs` — read-only host sections + redaction
-- `crates/xen-core/src/transport.rs` — no proxy, no redirect, per-connection TLS bypass
+- `crates/xen-core/src/transport.rs` — per-connection proxy + TLS bypass, no redirects
 - `native/src/state.rs` — action gating จาก `allowed_operations` + read-only
 
 ## หมายเหตุ

@@ -22,6 +22,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         TlsOptions {
             bypass_certificate_verification: bypass,
         },
+        None,
     )?;
     match client.probe().await {
         Ok(response) => {

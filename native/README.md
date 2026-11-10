@@ -52,7 +52,9 @@ while work is active and every 800 ms when idle.
 ## Security
 
 - `xen-core` validates the HTTPS origin, rejects credentials/paths/queries in
-  the URL, disables redirects and retries, and applies TLS bypass per connection.
+  the URL, disables redirects and retries, and applies TLS bypass and an optional
+  HTTP/SOCKS proxy per connection. Proxy credentials are part of the saved
+  profile if embedded in the proxy URL; the Xen password is still never saved.
 - The window is undecorated; dragging uses `ViewportCommand::StartDrag`, edge
   handles use `BeginResize`, and window actions are explicit viewport commands.
 - The UI never displays or logs the password; it is passed to the worker and

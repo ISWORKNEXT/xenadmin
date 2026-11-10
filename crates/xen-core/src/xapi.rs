@@ -39,6 +39,9 @@ pub struct ConnectionSettings {
     pub read_only: bool,
     #[serde(default)]
     pub tls: TlsOptions,
+    /// Per-connection HTTP/SOCKS proxy, e.g. `http://proxy:3128`.
+    #[serde(default)]
+    pub proxy: Option<String>,
 }
 
 impl ConnectionSettings {
@@ -46,6 +49,31 @@ impl ConnectionSettings {
         if origin.host_str() == Some("10.100.1.11") {
             self.read_only = true;
         }
+    }
+
+    /// Validate the optional proxy URL before any network request.
+    pub fn proxy_url(&self) -> Result<Option<Url>, String> {
+        let Some(proxy) = self
+            .proxy
+            .as_deref()
+            .map(str::trim)
+            .filter(|proxy| !proxy.is_empty())
+        else {
+            return Ok(None);
+        };
+        let url = Url::parse(proxy).map_err(|_| {
+            "Enter a proxy URL like http://proxy:3128 or socks5://proxy:1080.".to_owned()
+        })?;
+        if !matches!(url.scheme(), "http" | "https" | "socks5" | "socks5h") {
+            return Err("Proxy scheme must be http, https, socks5 or socks5h.".to_owned());
+        }
+        if url.host_str().is_none() {
+            return Err("The proxy URL must include a host.".to_owned());
+        }
+        if !matches!(url.path(), "" | "/") || url.query().is_some() || url.fragment().is_some() {
+            return Err("The proxy URL must not include a path, query or fragment.".to_owned());
+        }
+        Ok(Some(url))
     }
 }
 
@@ -81,8 +109,13 @@ impl Connection {
             };
             let origin = Url::parse(&address).map_err(|_| ApiError::InvalidHost)?;
             settings.enforce_host_policy(&origin);
-            let transport =
-                HostTransport::new(origin, settings.tls).map_err(|_| ApiError::InvalidHost)?;
+            let transport = HostTransport::new(origin, settings.tls, settings.proxy.as_deref())
+                .map_err(|error| match error {
+                    crate::transport::TransportError::InvalidProxy => {
+                        ApiError::Xen("The proxy URL is invalid.".into())
+                    }
+                    _ => ApiError::InvalidHost,
+                })?;
             let mut connection = Self {
                 transport,
                 session: String::new(),
@@ -666,6 +699,29 @@ mod tests {
         assert_eq!(number(&record, "unknown"), 0);
     }
     #[test]
+    fn proxy_urls_are_validated_per_connection() {
+        let mut settings: ConnectionSettings = serde_json::from_value(json!({
+            "host": "example.test",
+            "username": "root"
+        }))
+        .unwrap();
+        assert!(settings.proxy_url().unwrap().is_none());
+        settings.proxy = Some("http://proxy.example:3128".into());
+        assert_eq!(settings.proxy_url().unwrap().unwrap().scheme(), "http");
+        settings.proxy = Some("socks5://127.0.0.1:1080".into());
+        assert!(settings.proxy_url().is_ok());
+        for invalid in [
+            "proxy.example:3128",
+            "ftp://proxy.example:21",
+            "http://proxy.example:3128/path",
+            "http://proxy.example:3128/?token=1",
+        ] {
+            settings.proxy = Some(invalid.into());
+            assert!(settings.proxy_url().is_err(), "{invalid} should fail");
+        }
+    }
+
+    #[test]
     fn xapi_timestamps_are_parsed() {
         assert!(xapi_epoch("20261110T18:36:56Z") > 0);
         assert_eq!(xapi_epoch("19700101T00:00:00Z"), 0);
@@ -694,6 +750,7 @@ mod tests {
             transport: HostTransport::new(
                 Url::parse(&format!("https://{}", listener.local_addr().unwrap())).unwrap(),
                 TlsOptions::default(),
+                None,
             )
             .unwrap(),
             session: "test-session".into(),

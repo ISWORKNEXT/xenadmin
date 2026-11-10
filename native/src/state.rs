@@ -413,6 +413,7 @@ pub struct ConnectState {
     pub profile_id: Option<String>,
     pub settings: ConnectionSettings,
     pub password: String,
+    pub proxy: String,
     pub error: Option<String>,
     pub submitting: bool,
 }
@@ -427,8 +428,10 @@ impl ConnectState {
                 label: String::new(),
                 read_only: false,
                 tls: Default::default(),
+                proxy: None,
             },
             password: String::new(),
+            proxy: String::new(),
             error: None,
             submitting: false,
         }
@@ -437,6 +440,7 @@ impl ConnectState {
     pub fn from_profile(profile_id: String, settings: ConnectionSettings) -> Self {
         Self {
             profile_id: Some(profile_id),
+            proxy: settings.proxy.clone().unwrap_or_default(),
             settings,
             password: String::new(),
             error: None,
