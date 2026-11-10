@@ -638,6 +638,42 @@ impl App {
                         };
                     }
                 }
+                Event::VmEdited { vm_uuid, result } => {
+                    if !self
+                        .state
+                        .vm_edit
+                        .as_ref()
+                        .is_some_and(|edit| edit.vm_uuid == vm_uuid)
+                    {
+                        continue;
+                    }
+                    match result {
+                        Ok(()) => {
+                            let Some(edit) = self.state.vm_edit.take() else {
+                                continue;
+                            };
+                            if let Some(tab) = self.state.object_tabs.get_mut(self.state.active_tab)
+                                && matches!(
+                                    &tab.key,
+                                    ObjectKey::Vm { vm_uuid: active, .. } if active == &vm_uuid
+                                )
+                            {
+                                tab.title = edit.name.clone();
+                            }
+                            self.state.toasts.push(Toast::new(
+                                format!("Updated {}.", edit.name),
+                                ToastKind::Success,
+                            ));
+                            self.apply(vec![UiAction::ReloadVmDetails]);
+                        }
+                        Err(message) => {
+                            if let Some(edit) = self.state.vm_edit.as_mut() {
+                                edit.submitting = false;
+                                edit.error = Some(message);
+                            }
+                        }
+                    }
+                }
                 Event::ConsoleOpened {
                     console_id,
                     vm_uuid,
@@ -1036,6 +1072,93 @@ impl App {
                 UiAction::SetVmPerfRange(range) => {
                     self.state.vm_perf_range = range;
                     self.apply(vec![UiAction::LoadVmPerformance]);
+                }
+                UiAction::OpenVmEdit => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let LoadState::Ready(details) = &self.state.vm_state else {
+                        self.state.toasts.push(Toast::new(
+                            "Wait for the virtual machine details to load.",
+                            ToastKind::Info,
+                        ));
+                        continue;
+                    };
+                    if details.is_template || details.is_snapshot {
+                        continue;
+                    }
+                    self.state.vm_edit = Some(crate::state::VmEditState {
+                        connection_id,
+                        vm_uuid,
+                        name: details.name.clone(),
+                        description: details.description.clone(),
+                        vcpus_max: details.vcpus_max.to_string(),
+                        vcpus_at_startup: details.vcpus_at_startup.to_string(),
+                        memory_mib: (details.memory_static_max / (1024 * 1024)).to_string(),
+                        running: details.power_state != "Halted",
+                        error: None,
+                        submitting: false,
+                    });
+                }
+                UiAction::CloseVmEdit => {
+                    if !self
+                        .state
+                        .vm_edit
+                        .as_ref()
+                        .is_some_and(|edit| edit.submitting)
+                    {
+                        self.state.vm_edit = None;
+                    }
+                }
+                UiAction::SaveVmEdit => {
+                    let Some(edit) = self.state.vm_edit.as_mut() else {
+                        continue;
+                    };
+                    let parse = |value: &str| value.trim().parse::<u64>().ok();
+                    let Some(vcpus_max) = parse(&edit.vcpus_max) else {
+                        edit.error = Some("Enter a whole number for the vCPU maximum.".into());
+                        continue;
+                    };
+                    let Some(vcpus_at_startup) = parse(&edit.vcpus_at_startup) else {
+                        edit.error = Some("Enter a whole number for vCPUs at startup.".into());
+                        continue;
+                    };
+                    let Some(memory_mib) = parse(&edit.memory_mib) else {
+                        edit.error = Some("Enter a whole number for memory in MiB.".into());
+                        continue;
+                    };
+                    if edit.name.trim().is_empty() {
+                        edit.error = Some("Enter a name for the virtual machine.".into());
+                        continue;
+                    }
+                    if vcpus_max == 0 || vcpus_at_startup == 0 || vcpus_at_startup > vcpus_max {
+                        edit.error =
+                            Some("vCPUs at startup must be between 1 and the vCPU maximum.".into());
+                        continue;
+                    }
+                    if memory_mib == 0 {
+                        edit.error = Some("Memory must be greater than zero.".into());
+                        continue;
+                    }
+                    edit.submitting = true;
+                    edit.error = None;
+                    self.worker.send(Command::EditVm {
+                        connection_id: edit.connection_id.clone(),
+                        vm_uuid: edit.vm_uuid.clone(),
+                        name: edit.name.trim().to_owned(),
+                        description: edit.description.clone(),
+                        vcpus_max,
+                        vcpus_at_startup,
+                        memory_mib,
+                    });
                 }
                 UiAction::OpenConsole(connection_id, vm_uuid) => {
                     self.release_console_modifiers();

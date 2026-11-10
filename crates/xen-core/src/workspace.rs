@@ -255,6 +255,46 @@ impl Workspace {
             .map_err(|error| error.to_string())
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_vm(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        name: String,
+        description: String,
+        vcpus_max: u64,
+        vcpus_at_startup: u64,
+        memory_mib: u64,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("This virtual machine is not part of the selected connection.".into());
+        }
+        active
+            .connection
+            .update_vm(
+                vm_uuid,
+                &name,
+                &description,
+                vcpus_max,
+                vcpus_at_startup,
+                memory_mib,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        match active.connection.inventory().await {
+            Ok(snapshot) => {
+                *active.snapshot.write().await = snapshot;
+                *active.error.write().await = None;
+                Ok(())
+            }
+            Err(error) => Err(format!(
+                "The VM was updated, but the inventory refresh failed: {error}"
+            )),
+        }
+    }
+
     pub async fn console_tunnel(
         &self,
         connection_id: &str,

@@ -31,6 +31,7 @@
 | เลือก pool coordinator | connection manager | ต้องเลือก coordinator เอง; ถ้าต่อ member จะได้ error `HOST_IS_SLAVE` |
 | Inventory พื้นฐาน | pool/host/VM/template/snapshot/SR/network | เทียบเท่าข้อมูลหลัก |
 | VM power actions | start/shutdown/reboot/force/pause/unpause/suspend/resume | เทียบเท่าคำสั่งหลัก |
+| VM edit | name/description/CPU/memory/boot options/ISO | name/description ได้ตลอด; vCPU และ static memory max เมื่อ halted | ยังไม่มี dynamic memory target, boot order/options, ISO/CD |
 | Clone | `VM.clone` + set description | clone VM/template ได้, ตั้งชื่อได้, ยังไม่ตั้ง description |
 | Template provisioning | New VM from template + provision disks | clone + provision (`VM.provision`) + ล้าง `other_config.disks` |
 | Snapshot | create/revert/delete | create/revert/delete + cleanup VBD/VDI ที่เป็นเจ้าของ |
@@ -70,7 +71,7 @@
 ### 1. VM provisioning และการแก้ไข VM
 
 - New VM wizard, fast create, create from snapshot (create from template มีแล้ว)
-- แก้ CPU/memory, boot order/options, ISO/CD drive
+- dynamic memory target, boot order/options, ISO/CD drive
 - VBD/disk attach, resize, move, detach
 - VIF create/edit/plug/unplug, VIF locking
 - HA restart priority, startup options, other_config
@@ -167,7 +168,7 @@
 1. **Event stream + cache generation** (`event.from("*")`, token, resync) แทน polling; ลด load และได้ข้อมูลสด
 2. **Heartbeat/reconnect/coordinator failover** (heartbeat 15s, duplicate session, `HOST_IS_SLAVE`)
 3. **VM start semantics**: `start_on`/`resume_on`, `assert_can_boot_here`, broken CD/ISO/SR precheck
-4. **แก้ VM พื้นฐาน**: CPU/memory, ISO/CD, boot order
+4. **แก้ VM พื้นฐาน**: ISO/CD, boot order, dynamic memory target
 5. **Revert ที่คืน power state** และ bulk snapshot selection
 6. **Console RDP + clipboard/SSH console**
 

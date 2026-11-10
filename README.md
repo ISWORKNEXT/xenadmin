@@ -20,6 +20,8 @@ default and a persisted dark-theme toggle.
   delete VM with owned-disk and optional snapshot cleanup.
 - Create a VM from a template: clone, provision declared disks, refresh the
   inventory and track progress in Activity & tasks.
+- Edit a VM's name and description at any time; change vCPUs and the static
+  memory maximum while the VM is halted.
 - Bulk actions with an explicit target review dialog.
 - XenAPI task progress, failure, success, cancellation and “check again” for
   interrupted tasks without resubmitting the mutation.

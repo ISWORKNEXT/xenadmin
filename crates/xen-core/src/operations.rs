@@ -283,6 +283,144 @@ impl Connection {
         Ok(new_uuid)
     }
 
+    /// Update the editable name/description and, when the VM is halted, its
+    /// vCPU and static-memory limits. Only changed values are submitted.
+    pub async fn update_vm(
+        &self,
+        uuid: &str,
+        name: &str,
+        description: &str,
+        vcpus_max: u64,
+        vcpus_at_startup: u64,
+        memory_mib: u64,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen(
+                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
+            ));
+        }
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 255 {
+            return Err(ApiError::Xen(
+                "Enter a name between 1 and 255 characters.".into(),
+            ));
+        }
+        if description.chars().count() > 1024 {
+            return Err(ApiError::Xen(
+                "The description must be 1024 characters or fewer.".into(),
+            ));
+        }
+        if vcpus_max < 1 || vcpus_at_startup < 1 || vcpus_at_startup > vcpus_max {
+            return Err(ApiError::Xen(
+                "vCPUs at startup must be between 1 and the vCPU maximum.".into(),
+            ));
+        }
+        if memory_mib == 0 {
+            return Err(ApiError::Xen("Enter a memory size in MiB.".into()));
+        }
+
+        let reference: String = self
+            .request("VM.get_by_uuid", json!([self.session, uuid]))
+            .await?;
+        let record: Value = self
+            .request("VM.get_record", json!([self.session, reference]))
+            .await?;
+        if record["uuid"].as_str() != Some(uuid)
+            || record["is_control_domain"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Protocol);
+        }
+        if record["is_a_template"].as_bool() == Some(true)
+            || record["is_a_snapshot"].as_bool() == Some(true)
+        {
+            return Err(ApiError::Xen("Only virtual machines can be edited.".into()));
+        }
+
+        let current_name = record["name_label"].as_str().unwrap_or_default();
+        let current_description = record["name_description"].as_str().unwrap_or_default();
+        let current_vcpus_max = number(&record, "VCPUs_max");
+        let current_vcpus_startup = number(&record, "VCPUs_at_startup");
+        let current_static_min = number(&record, "memory_static_min");
+        let current_static_max = number(&record, "memory_static_max");
+        let current_dynamic_min = number(&record, "memory_dynamic_min");
+        let current_dynamic_max = number(&record, "memory_dynamic_max");
+        let memory_bytes = memory_mib.saturating_mul(1024 * 1024);
+        if memory_bytes < current_static_min {
+            return Err(ApiError::Xen(format!(
+                "Memory cannot be lower than the static minimum ({} MiB).",
+                current_static_min / (1024 * 1024)
+            )));
+        }
+
+        let resources_changed = vcpus_max != current_vcpus_max
+            || vcpus_at_startup != current_vcpus_startup
+            || memory_bytes != current_static_max;
+        if resources_changed && record["power_state"].as_str() != Some("Halted") {
+            return Err(ApiError::Xen(
+                "Shut down the VM before changing its CPU or memory settings.".into(),
+            ));
+        }
+
+        if name != current_name {
+            self.request::<Value>("VM.set_name_label", json!([self.session, reference, name]))
+                .await?;
+        }
+        if description != current_description {
+            self.request::<Value>(
+                "VM.set_name_description",
+                json!([self.session, reference, description]),
+            )
+            .await?;
+        }
+
+        if vcpus_max != current_vcpus_max || vcpus_at_startup != current_vcpus_startup {
+            if vcpus_max < current_vcpus_startup {
+                self.request::<Value>(
+                    "VM.set_VCPUs_at_startup",
+                    json!([self.session, reference, vcpus_at_startup]),
+                )
+                .await?;
+                self.request::<Value>(
+                    "VM.set_VCPUs_max",
+                    json!([self.session, reference, vcpus_max]),
+                )
+                .await?;
+            } else {
+                self.request::<Value>(
+                    "VM.set_VCPUs_max",
+                    json!([self.session, reference, vcpus_max]),
+                )
+                .await?;
+                self.request::<Value>(
+                    "VM.set_VCPUs_at_startup",
+                    json!([self.session, reference, vcpus_at_startup]),
+                )
+                .await?;
+            }
+        }
+
+        if memory_bytes != current_static_max {
+            let dynamic_min = current_dynamic_min
+                .max(current_static_min)
+                .min(memory_bytes);
+            let dynamic_max = current_dynamic_max.max(dynamic_min).min(memory_bytes);
+            self.request::<Value>(
+                "VM.set_memory_limits",
+                json!([
+                    self.session,
+                    reference,
+                    current_static_min,
+                    memory_bytes,
+                    dynamic_min,
+                    dynamic_max
+                ]),
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
     /// Delete a VM and, optionally, the disks it owns. Owner VBDs are identified
     /// the same way as upstream XenAdmin: a VBD with an `owner` key in
     /// `other_config`. The suspended-image VDI is removed as well.
@@ -424,6 +562,14 @@ impl Connection {
         let task: String = self.request(method, params).await?;
         wait_task(self, &task).await
     }
+}
+
+fn number(record: &Value, key: &str) -> u64 {
+    let value = &record[key];
+    value
+        .as_u64()
+        .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
+        .unwrap_or(0)
 }
 
 fn owner_vdis(vbds: &HashMap<String, Value>, record: &Value, reference: &str) -> Vec<String> {

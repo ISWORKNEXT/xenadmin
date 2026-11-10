@@ -36,8 +36,8 @@ native/
 runtime in `worker.rs` owns the `Arc<Workspace>` and exposes two channels:
 
 - `Command`: connect, refresh, disconnect, remove, VM action, task check/cancel,
-  host details, host performance, VM details/perf, console open/input/close,
-  shutdown.
+  host details, host performance, VM details/perf/edit, console
+  open/input/close, shutdown.
 - `Event`: workspace snapshot, connect result, action queued, refresh result,
   task result, host detail/perf/VM detail/perf result, console state/frames and
   errors.

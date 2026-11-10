@@ -408,6 +408,17 @@ fn action_bar(
                 vec![(connection_id.to_owned(), vm_uuid.to_owned())],
             ));
         }
+        let can_edit = !read_only && !running_task(workspace, connection_id, vm_uuid);
+        if ui
+            .add_enabled(
+                can_edit,
+                egui::Button::new(RichText::new("Edit…").size(11.0)),
+            )
+            .on_hover_text("Edit the name, description, vCPUs and memory")
+            .clicked()
+        {
+            actions.push(UiAction::OpenVmEdit);
+        }
         if running_task(workspace, connection_id, vm_uuid) {
             ui.label(
                 RichText::new("A task is active for this object.")

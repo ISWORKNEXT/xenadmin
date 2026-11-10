@@ -24,6 +24,9 @@ pub fn show(
     if state.record_dialog.is_some() {
         record(ctx, state);
     }
+    if state.vm_edit.is_some() {
+        vm_edit(ctx, state, actions);
+    }
     if state.confirm_remove.is_some() {
         confirm_remove(ctx, state, workspace, actions);
     }
@@ -366,6 +369,120 @@ fn intent(
     if close {
         actions.push(UiAction::CloseIntent);
     }
+}
+
+fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut save = false;
+    let Some(edit) = state.vm_edit.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("vm-edit-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(520.0);
+            modal_title(
+                ui,
+                "Edit virtual machine",
+                "Name and description can change while the VM is running.",
+            );
+            widgets::field_label(ui, "Name");
+            ui.add_enabled(
+                !edit.submitting,
+                egui::TextEdit::singleline(&mut edit.name)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Description");
+            ui.add_enabled(
+                !edit.submitting,
+                egui::TextEdit::multiline(&mut edit.description)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(3)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(10.0);
+            ui.columns(2, |columns| {
+                resources_field(
+                    &mut columns[0],
+                    "vCPUs maximum",
+                    &mut edit.vcpus_max,
+                    !edit.running && !edit.submitting,
+                );
+                resources_field(
+                    &mut columns[1],
+                    "vCPUs at startup",
+                    &mut edit.vcpus_at_startup,
+                    !edit.running && !edit.submitting,
+                );
+            });
+            ui.add_space(8.0);
+            resources_field(
+                ui,
+                "Static memory maximum (MiB)",
+                &mut edit.memory_mib,
+                !edit.running && !edit.submitting,
+            );
+            ui.label(
+                RichText::new("CPU and memory changes require the VM to be shut down. Dynamic memory limits are clamped to the new maximum.")
+                    .size(9.0)
+                    .color(if edit.running { amber() } else { dim_fg() }),
+            );
+            if let Some(error) = &edit.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(14.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !edit.submitting,
+                        egui::Button::new(RichText::new("Cancel").size(11.0)),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !edit.submitting && !edit.name.trim().is_empty(),
+                            widgets::primary_button(if edit.submitting {
+                                "Saving…"
+                            } else {
+                                "Save changes"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        save = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() && !edit.submitting {
+        close = true;
+    }
+    if save {
+        actions.push(UiAction::SaveVmEdit);
+    }
+    if close {
+        actions.push(UiAction::CloseVmEdit);
+    }
+}
+
+fn resources_field(ui: &mut Ui, label: &str, value: &mut String, enabled: bool) {
+    widgets::field_label(ui, label);
+    ui.add_enabled(
+        enabled,
+        egui::TextEdit::singleline(value)
+            .desired_width(f32::INFINITY)
+            .char_limit(8)
+            .margin(egui::Margin::symmetric(8, 5)),
+    );
 }
 
 fn help(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {

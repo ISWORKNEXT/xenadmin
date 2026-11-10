@@ -669,6 +669,19 @@ impl ConsoleState {
     }
 }
 
+pub struct VmEditState {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub name: String,
+    pub description: String,
+    pub vcpus_max: String,
+    pub vcpus_at_startup: String,
+    pub memory_mib: String,
+    pub running: bool,
+    pub error: Option<String>,
+    pub submitting: bool,
+}
+
 pub struct UiState {
     pub view: View,
     pub scope: Scope,
@@ -686,6 +699,7 @@ pub struct UiState {
     pub console: Option<ConsoleState>,
     pub console_seq: u64,
     pub console_focus: bool,
+    pub vm_edit: Option<VmEditState>,
     pub query: String,
     pub power: PowerFilter,
     pub page: usize,
@@ -738,6 +752,7 @@ impl Default for UiState {
             console: None,
             console_seq: 0,
             console_focus: false,
+            vm_edit: None,
             query: String::new(),
             power: PowerFilter::All,
             page: 0,
@@ -812,6 +827,9 @@ pub enum UiAction {
     ReloadVmDetails,
     LoadVmPerformance,
     SetVmPerfRange(u64),
+    OpenVmEdit,
+    CloseVmEdit,
+    SaveVmEdit,
     OpenConsole(String, String),
     CloseConsole,
     ConsoleKey {

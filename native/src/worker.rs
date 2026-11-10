@@ -59,6 +59,15 @@ pub enum Command {
         vm_uuid: String,
         range_seconds: u64,
     },
+    EditVm {
+        connection_id: String,
+        vm_uuid: String,
+        name: String,
+        description: String,
+        vcpus_max: u64,
+        vcpus_at_startup: u64,
+        memory_mib: u64,
+    },
     OpenConsole {
         console_id: String,
         connection_id: String,
@@ -110,6 +119,10 @@ pub enum Event {
     VmPerformance {
         seq: u64,
         result: Result<Box<HostPerformance>, String>,
+    },
+    VmEdited {
+        vm_uuid: String,
+        result: Result<(), String>,
     },
     ConsoleOpened {
         console_id: String,
@@ -353,6 +366,28 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::VmPerformance { seq, result });
+            }
+            Command::EditVm {
+                connection_id,
+                vm_uuid,
+                name,
+                description,
+                vcpus_max,
+                vcpus_at_startup,
+                memory_mib,
+            } => {
+                let result = workspace
+                    .update_vm(
+                        &connection_id,
+                        &vm_uuid,
+                        name,
+                        description,
+                        vcpus_max,
+                        vcpus_at_startup,
+                        memory_mib,
+                    )
+                    .await;
+                let _ = events.send(Event::VmEdited { vm_uuid, result });
             }
             Command::OpenConsole {
                 console_id,

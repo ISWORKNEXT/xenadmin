@@ -13,6 +13,7 @@
 - Add delete VM/template/snapshot with owner VBD/VDI cleanup, suspend-image removal, optional snapshot cascade and confirmation of disk deletion.
 - Open `--vm` deep links as a template or snapshot when the UUID belongs to one, and close object tabs whose objects were deleted.
 - Add an embedded VNC console tab: HTTPS CONNECT tunnel with the XenAPI session, live framebuffer with partial texture uploads, mouse/wheel and keyboard input.
+- Add VM editing for name, description, vCPU limits and the static memory maximum; CPU/memory changes require a halted VM and clamp dynamic memory to the new maximum.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.
 - Add the `ui-ux-pro-max` UI/UX design skill under `.opencode/skills/`.
