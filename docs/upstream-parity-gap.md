@@ -139,7 +139,7 @@
 ### 8. Monitoring และบริการ
 
 - Typed alerts + AlertSummary actions
-- 34 diagnostic checks + health check service
+- Health diagnostics พื้นฐาน 6 checks (alerts/hosts/storage/pool HA/broken disks) มีแล้ว; 34 checks เต็มยังไม่มี
 - Performance alerts (Perfmon)
 - VM RRD, graph customization, event overlays
 - Status reports (client/server), logs
@@ -169,7 +169,7 @@
 2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, boot options อื่น
 3. **Embedded RDP/SSH console** (revert และ bulk snapshot มีแล้ว)
 4. **Console SSH/text + embedded RDP** (external RDP และ clipboard มีแล้ว)
-5. **Diagnostics + health check** (alerts พื้นฐานและ host actions มีแล้ว)
+5. **Diagnostics เพิ่มเติม** (6 checks หลักมีแล้ว; 34 checks เต็มยังต้องทำ)
 
 ### P1 — จัดการโครงสร้างพื้นฐาน
 

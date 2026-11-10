@@ -1,6 +1,7 @@
 pub mod chrome;
 pub mod content;
 pub mod dialogs;
+pub mod health;
 pub mod host_details;
 pub mod inventory;
 pub mod overview;

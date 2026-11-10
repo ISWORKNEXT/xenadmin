@@ -23,6 +23,7 @@ pub(crate) struct StartupOptions {
     pub host_tab: Option<crate::state::HostTab>,
     pub vm: Option<String>,
     pub vm_tab: Option<crate::state::VmTab>,
+    pub health: bool,
     pub light: Option<bool>,
 }
 
@@ -34,6 +35,7 @@ pub struct App {
     pending_host_tab: Option<crate::state::HostTab>,
     pending_vm: Option<String>,
     pending_vm_tab: Option<crate::state::VmTab>,
+    pending_health: bool,
 }
 
 impl App {
@@ -46,6 +48,7 @@ impl App {
             host_tab: startup_host_tab,
             vm: startup_vm,
             vm_tab: startup_vm_tab,
+            health: startup_health,
             light: startup_light,
         } = options;
         let preferences = crate::config::load_ui_preferences();
@@ -109,6 +112,7 @@ impl App {
             pending_host_tab: startup_host_tab,
             pending_vm: startup_vm,
             pending_vm_tab: startup_vm_tab,
+            pending_health: startup_health,
         }
     }
 
@@ -158,6 +162,7 @@ impl App {
                 network_uuid,
             } => crate::state::find_network(&self.workspace, connection_id, network_uuid)
                 .map_or_else(|| "Network".into(), |(_, network)| network.name.clone()),
+            ObjectKey::Health { .. } => "Health & diagnostics".into(),
             ObjectKey::List { kind, host_ref, .. } => {
                 if let Some(host_ref) = host_ref {
                     let host = self
@@ -304,6 +309,9 @@ impl App {
             ObjectKey::Network { connection_id, .. } => {
                 self.state.scope = Scope::Connection(connection_id.clone());
                 self.state.view = View::Networks;
+            }
+            ObjectKey::Health { connection_id } => {
+                self.state.scope = Scope::Connection(connection_id.clone());
             }
             ObjectKey::List {
                 connection_id,
@@ -520,6 +528,13 @@ impl App {
                                 self.apply(vec![UiAction::SetVmTab(tab)]);
                             }
                         }
+                    }
+                    if self.pending_health
+                        && let Some(connection_id) =
+                            self.state.scope.connection_id().map(str::to_owned)
+                    {
+                        self.pending_health = false;
+                        self.open_object(ObjectKey::Health { connection_id }, None);
                     }
                 }
                 Event::Connected(id) => {

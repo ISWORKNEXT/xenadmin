@@ -94,6 +94,17 @@ pub fn show(
         });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if ui
+                .add(egui::Button::new(RichText::new("Health check").size(11.5)))
+                .clicked()
+            {
+                actions.push(UiAction::OpenObject {
+                    key: ObjectKey::Health {
+                        connection_id: connection_id.clone(),
+                    },
+                    title: "Health & diagnostics".into(),
+                });
+            }
+            if ui
                 .add(egui::Button::new(RichText::new("Refresh").size(11.5)))
                 .clicked()
             {

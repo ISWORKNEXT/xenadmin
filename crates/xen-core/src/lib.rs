@@ -1,4 +1,5 @@
 pub mod console;
+pub mod health;
 pub mod host;
 pub mod operations;
 pub mod performance;

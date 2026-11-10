@@ -251,7 +251,7 @@ impl Connection {
     }
 
     pub async fn raw_inventory(&self) -> Result<RawInventory, ApiError> {
-        let (pools, hosts, metrics, vms, storage, networks, tasks, messages) = tokio::join!(
+        let (pools, hosts, metrics, vms, storage, networks, tasks, messages, vbds, vdis, pbds) = tokio::join!(
             self.records("pool"),
             self.records("host"),
             self.records("host_metrics"),
@@ -259,7 +259,10 @@ impl Connection {
             self.records("SR"),
             self.records("network"),
             self.records("task"),
-            self.records("message")
+            self.records("message"),
+            self.records("VBD"),
+            self.records("VDI"),
+            self.records("PBD")
         );
         Ok(RawInventory {
             pools: pools?,
@@ -272,6 +275,9 @@ impl Connection {
             // inventory remains useful without it.
             tasks: tasks.unwrap_or_default(),
             messages: messages.unwrap_or_default(),
+            vbds: vbds.unwrap_or_default(),
+            vdis: vdis.unwrap_or_default(),
+            pbds: pbds.unwrap_or_default(),
         })
     }
 
@@ -302,6 +308,9 @@ pub struct RawInventory {
     pub(crate) networks: HashMap<String, Value>,
     pub(crate) tasks: HashMap<String, Value>,
     pub(crate) messages: HashMap<String, Value>,
+    pub(crate) vbds: HashMap<String, Value>,
+    pub(crate) vdis: HashMap<String, Value>,
+    pub(crate) pbds: HashMap<String, Value>,
 }
 
 impl RawInventory {
@@ -323,6 +332,9 @@ impl RawInventory {
                 "network" => &mut self.networks,
                 "task" => &mut self.tasks,
                 "message" => &mut self.messages,
+                "vbd" => &mut self.vbds,
+                "vdi" => &mut self.vdis,
+                "pbd" => &mut self.pbds,
                 _ => continue,
             };
             if operation == "del" {
@@ -517,6 +529,7 @@ impl RawInventory {
             networks,
             tasks,
             alerts,
+            health: crate::health::evaluate(self),
         })
     }
 }
@@ -601,6 +614,7 @@ pub struct Inventory {
     pub networks: Vec<Network>,
     pub tasks: Vec<ExternalTask>,
     pub alerts: Vec<PoolAlert>,
+    pub health: crate::health::HealthReport,
 }
 
 #[derive(Clone, Serialize)]

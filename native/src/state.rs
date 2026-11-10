@@ -149,6 +149,9 @@ pub enum ObjectKey {
         connection_id: String,
         network_uuid: String,
     },
+    Health {
+        connection_id: String,
+    },
     List {
         connection_id: Option<String>,
         kind: ListKind,
@@ -167,7 +170,8 @@ impl ObjectKey {
             | ObjectKey::Template { connection_id, .. }
             | ObjectKey::Snapshot { connection_id, .. }
             | ObjectKey::Storage { connection_id, .. }
-            | ObjectKey::Network { connection_id, .. } => Some(connection_id),
+            | ObjectKey::Network { connection_id, .. }
+            | ObjectKey::Health { connection_id } => Some(connection_id),
             ObjectKey::List { connection_id, .. } => connection_id.as_deref(),
         }
     }
