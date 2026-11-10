@@ -706,6 +706,34 @@ impl ConsoleState {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SshStatus {
+    Connecting,
+    Connected,
+    Closed,
+}
+
+pub struct SshConsoleState {
+    pub console_id: String,
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub host: String,
+    pub username: String,
+    pub status: SshStatus,
+    pub message: String,
+    pub buffer: crate::ssh::TerminalBuffer,
+}
+
+pub struct SshCredentialDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub host: String,
+    pub port: String,
+    pub username: String,
+    pub password: String,
+    pub error: Option<String>,
+}
+
 pub struct AdEnableDialog {
     pub connection_id: String,
     pub domain: String,
@@ -1049,6 +1077,9 @@ pub struct UiState {
     pub sr_probe_dialog: Option<SrProbeDialog>,
     pub user_role_dialog: Option<UserRoleDialog>,
     pub ad_enable_dialog: Option<AdEnableDialog>,
+    pub ssh_console: Option<SshConsoleState>,
+    pub ssh_credentials: Option<SshCredentialDialog>,
+    pub ssh_seq: u64,
     pub ad_disable_dialog: Option<AdDisableDialog>,
     pub sr_probe_seq: u64,
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
@@ -1149,6 +1180,9 @@ impl Default for UiState {
             sr_probe_dialog: None,
             user_role_dialog: None,
             ad_enable_dialog: None,
+            ssh_console: None,
+            ssh_credentials: None,
+            ssh_seq: 0,
             ad_disable_dialog: None,
             sr_probe_seq: 0,
             network_destroy_confirm: None,
@@ -1286,6 +1320,15 @@ pub enum UiAction {
     },
     CancelNetworkDestroy,
     ConfirmNetworkDestroy,
+    OpenSshDialog,
+    CloseSshDialog,
+    ConnectSsh,
+    SshInput {
+        console_id: String,
+        data: Vec<u8>,
+    },
+    CloseSshConsole,
+    ClearSshConsole,
     OpenAdEnable,
     CloseAdEnable,
     SaveAdEnable,

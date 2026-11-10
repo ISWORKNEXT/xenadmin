@@ -839,6 +839,16 @@ fn console(
                 ui.label(RichText::new(status).size(10.0).color(muted_fg()));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(
+                        vm.power_state == "Running",
+                        egui::Button::new(RichText::new("SSH…").size(11.0)),
+                    )
+                    .on_hover_text("Open the embedded SSH text console")
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenSshDialog);
+                }
                 if matching {
                     if ui
                         .add(egui::Button::new(RichText::new("Disconnect").size(11.0)))
@@ -1203,6 +1213,205 @@ fn console(
         });
         state.console_focus = console_focused;
         actions.extend(input_actions);
+    });
+    ssh_console_section(ui, state, connection_id, vm, actions);
+}
+
+fn ssh_console_section(
+    ui: &mut Ui,
+    state: &mut UiState,
+    connection_id: &str,
+    vm: &xen_core::xapi::VirtualMachine,
+    actions: &mut Vec<UiAction>,
+) {
+    theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let matching = state.ssh_console.as_ref().is_some_and(|console| {
+            console.vm_uuid == vm.uuid && console.connection_id == connection_id
+        });
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("SSH text console").size(15.0).strong());
+            widgets::badge(ui, "SSH", accent());
+            if let Some(console) = state.ssh_console.as_ref().filter(|_| matching) {
+                let (label, color) = match console.status {
+                    crate::state::SshStatus::Connecting => ("Connecting", amber()),
+                    crate::state::SshStatus::Connected => ("Connected", green()),
+                    crate::state::SshStatus::Closed => ("Disconnected", dim_fg()),
+                };
+                ui.label(RichText::new(label).size(10.0).color(color));
+                if !console.host.is_empty() {
+                    ui.label(
+                        RichText::new(format!("{}@{}", console.username, console.host))
+                            .monospace()
+                            .size(9.0)
+                            .color(dim_fg()),
+                    );
+                }
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if matching {
+                    if ui
+                        .add(egui::Button::new(RichText::new("Disconnect").size(10.5)))
+                        .clicked()
+                    {
+                        actions.push(UiAction::CloseSshConsole);
+                    }
+                    if ui
+                        .add(egui::Button::new(RichText::new("Clear").size(10.5)))
+                        .clicked()
+                    {
+                        actions.push(UiAction::ClearSshConsole);
+                    }
+                    if ui
+                        .add(egui::Button::new(RichText::new("Ctrl+C").size(10.5)))
+                        .clicked()
+                        && let Some(console) = state.ssh_console.as_ref()
+                    {
+                        actions.push(UiAction::SshInput {
+                            console_id: console.console_id.clone(),
+                            data: vec![0x03],
+                        });
+                    }
+                } else if ui
+                    .add_enabled(
+                        vm.power_state == "Running",
+                        egui::Button::new(RichText::new("Open SSH…").size(10.5)),
+                    )
+                    .on_hover_text(if vm.power_state == "Running" {
+                        "Connect to the guest SSH server"
+                    } else {
+                        "Start the VM before opening SSH"
+                    })
+                    .clicked()
+                {
+                    actions.push(UiAction::OpenSshDialog);
+                }
+            });
+        });
+        ui.add_space(4.0);
+        let Some(console) = state.ssh_console.as_mut().filter(|_| matching) else {
+            let guest = state
+                .vm_state
+                .ready()
+                .and_then(|details| details.guest_ips.first())
+                .cloned()
+                .unwrap_or_default();
+            ui.label(
+                RichText::new(if guest.is_empty() {
+                    "Open SSH to enter the guest address and credentials.".to_owned()
+                } else {
+                    format!("Guest address: {guest}. Open SSH to enter credentials.")
+                })
+                .size(10.0)
+                .color(dim_fg()),
+            );
+            return;
+        };
+        if !console.message.is_empty() {
+            ui.label(RichText::new(&console.message).size(9.5).color(
+                if console.status == crate::state::SshStatus::Closed {
+                    amber()
+                } else {
+                    muted_fg()
+                },
+            ));
+        }
+        egui::Frame::NONE
+            .fill(egui::Color32::from_rgb(18, 20, 24))
+            .corner_radius(egui::CornerRadius::same(6))
+            .inner_margin(egui::Margin::same(8))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                let scroll = egui::ScrollArea::vertical()
+                    .max_height(360.0)
+                    .stick_to_bottom(true)
+                    .auto_shrink([false, false]);
+                scroll.show(ui, |ui| {
+                    let response = ui.add(
+                        egui::Label::new(
+                            RichText::new(console.buffer.display())
+                                .monospace()
+                                .size(10.0)
+                                .color(egui::Color32::from_rgb(220, 225, 230)),
+                        )
+                        .sense(egui::Sense::click())
+                        .wrap_mode(egui::TextWrapMode::Extend),
+                    );
+                    if response.clicked() {
+                        response.request_focus();
+                    }
+                    let focused = ui.memory(|memory| memory.has_focus(response.id));
+                    if focused {
+                        let mut data = Vec::new();
+                        let modifiers = ui.input(|input| input.modifiers);
+                        for event in ui.input(|input| input.events.clone()) {
+                            match event {
+                                egui::Event::Text(text)
+                                    if !modifiers.ctrl && !modifiers.alt && !modifiers.command =>
+                                {
+                                    data.extend_from_slice(text.as_bytes());
+                                }
+                                egui::Event::Key {
+                                    key,
+                                    pressed: true,
+                                    repeat: false,
+                                    modifiers,
+                                    ..
+                                } => {
+                                    if modifiers.ctrl {
+                                        match key {
+                                            egui::Key::C => data.push(0x03),
+                                            egui::Key::D => data.push(0x04),
+                                            egui::Key::L => data.push(0x0c),
+                                            egui::Key::Z => data.push(0x1a),
+                                            _ => {}
+                                        }
+                                    } else {
+                                        match key {
+                                            egui::Key::Enter => data.push(b'\r'),
+                                            egui::Key::Backspace => data.push(0x7f),
+                                            egui::Key::Tab => data.push(b'\t'),
+                                            egui::Key::Escape => data.push(0x1b),
+                                            egui::Key::ArrowUp => data.extend_from_slice(b"\x1b[A"),
+                                            egui::Key::ArrowDown => {
+                                                data.extend_from_slice(b"\x1b[B")
+                                            }
+                                            egui::Key::ArrowRight => {
+                                                data.extend_from_slice(b"\x1b[C")
+                                            }
+                                            egui::Key::ArrowLeft => {
+                                                data.extend_from_slice(b"\x1b[D")
+                                            }
+                                            egui::Key::Home => data.extend_from_slice(b"\x1b[H"),
+                                            egui::Key::End => data.extend_from_slice(b"\x1b[F"),
+                                            egui::Key::Delete => data.extend_from_slice(b"\x1b[3~"),
+                                            egui::Key::PageUp => data.extend_from_slice(b"\x1b[5~"),
+                                            egui::Key::PageDown => {
+                                                data.extend_from_slice(b"\x1b[6~")
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        if !data.is_empty() {
+                            actions.push(UiAction::SshInput {
+                                console_id: console.console_id.clone(),
+                                data,
+                            });
+                        }
+                    }
+                });
+            });
+        ui.label(
+            RichText::new(
+                "Click the terminal to type. Ctrl+C, arrows, Tab and Enter are forwarded.",
+            )
+            .size(9.0)
+            .color(dim_fg()),
+        );
     });
 }
 

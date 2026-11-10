@@ -168,7 +168,7 @@
 1. **HA precheck** ก่อน start (missing VDI/SR + `assert_can_boot_here` มีแล้ว)
 2. **แก้ VM พื้นฐาน**: disk move/attach existing VDI, VIF network/locking edit, boot options อื่น
 3. **Embedded RDP/SSH console** (revert และ bulk snapshot มีแล้ว)
-4. **Console SSH/text + embedded RDP** (external RDP และ clipboard มีแล้ว)
+4. **Embedded RDP** (SSH text console, external RDP และ clipboard มีแล้ว)
 5. **Diagnostics** (มี 34 read-only checks แล้ว; เทียบ semantics กับ upstream เพิ่มเติม)
 
 ### P1 — จัดการโครงสร้างพื้นฐาน

@@ -5,6 +5,7 @@ mod config;
 mod console;
 mod format;
 mod search;
+mod ssh;
 mod state;
 mod theme;
 mod views;

@@ -8,6 +8,7 @@ description = "Native egui desktop client for XCP-ng and XenServer"
 [dependencies]
 arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
 vnc-rs = "0.6"
+russh = { version = "0.65", default-features = false, features = ["ring", "rsa"] }
 eframe = { version = "0.37", default-features = false, features = [
     "default_fonts",
     "glow",
@@ -19,5 +20,5 @@ egui_extras = "0.37"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
+tokio = { version = "1", features = ["net", "rt-multi-thread", "sync", "time"] }
 xen-core = { path = "../crates/xen-core" }

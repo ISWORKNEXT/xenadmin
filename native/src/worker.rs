@@ -303,6 +303,20 @@ pub enum Command {
         connection_id: String,
         vm_uuid: String,
     },
+    OpenSshConsole {
+        console_id: String,
+        host: String,
+        port: u16,
+        username: String,
+        password: String,
+    },
+    SshInput {
+        console_id: String,
+        input: crate::ssh::SshInput,
+    },
+    CloseSshConsole {
+        console_id: String,
+    },
     ConsoleInput {
         console_id: String,
         input: crate::console::ConsoleInput,
@@ -486,6 +500,19 @@ pub enum Event {
         console_id: String,
         message: Option<String>,
     },
+    SshOpened {
+        console_id: String,
+        host: String,
+        username: String,
+    },
+    SshOutput {
+        console_id: String,
+        data: Vec<u8>,
+    },
+    SshClosed {
+        console_id: String,
+        message: Option<String>,
+    },
     Failed {
         context: String,
         message: String,
@@ -552,6 +579,7 @@ fn run_worker(mut commands: UnboundedReceiver<Command>, events: UnboundedSender<
             .unwrap_or_default();
         let workspace = Workspace::with_profiles(profiles);
         let consoles = crate::console::ConsoleHandles::default();
+        let ssh = crate::ssh::SshHandles::default();
         let _ = events.send(Event::Workspace(workspace.view().await));
 
         let mut tick = tokio::time::interval(Duration::from_millis(1_000));
@@ -565,7 +593,7 @@ fn run_worker(mut commands: UnboundedReceiver<Command>, events: UnboundedSender<
                         workspace.close().await;
                         break;
                     }
-                    dispatch(&workspace, &events, &path, &consoles, command);
+                    dispatch(&workspace, &events, &path, &consoles, &ssh, command);
                 }
                 _ = tick.tick() => {
                     let _ = events.send(Event::Workspace(workspace.view().await));
@@ -580,12 +608,14 @@ fn dispatch(
     events: &UnboundedSender<Event>,
     path: &Path,
     consoles: &crate::console::ConsoleHandles,
+    ssh: &crate::ssh::SshHandles,
     command: Command,
 ) {
     let workspace = workspace.clone();
     let events = events.clone();
     let path = path.to_path_buf();
     let consoles = consoles.clone();
+    let ssh = ssh.clone();
 
     tokio::spawn(async move {
         match command {
@@ -1248,6 +1278,36 @@ fn dispatch(
             }
             Command::CloseConsole { console_id } => {
                 crate::console::close(&consoles, &console_id);
+            }
+            Command::OpenSshConsole {
+                console_id,
+                host,
+                port,
+                username,
+                password,
+            } => {
+                if let Err(message) = crate::ssh::open(
+                    events.clone(),
+                    ssh,
+                    console_id.clone(),
+                    host,
+                    port,
+                    username,
+                    password,
+                )
+                .await
+                {
+                    let _ = events.send(Event::SshClosed {
+                        console_id,
+                        message: Some(message),
+                    });
+                }
+            }
+            Command::SshInput { console_id, input } => {
+                crate::ssh::send_input(&ssh, &console_id, input);
+            }
+            Command::CloseSshConsole { console_id } => {
+                crate::ssh::close(&ssh, &console_id);
             }
             Command::Shutdown => {}
         }

@@ -72,6 +72,9 @@ pub fn show(
     if state.ad_disable_dialog.is_some() {
         ad_disable_dialog(ctx, state, actions);
     }
+    if state.ssh_credentials.is_some() {
+        ssh_credentials_dialog(ctx, state, actions);
+    }
     if state.host_action_confirm.is_some() {
         host_action_confirm(ctx, state, actions);
     }
@@ -1298,6 +1301,98 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
     }
     if close {
         actions.push(UiAction::CancelHostAction);
+    }
+}
+
+fn ssh_credentials_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let mut close = false;
+    let mut connect = false;
+    let Some(dialog) = state.ssh_credentials.as_mut() else {
+        return;
+    };
+    let response = egui::Modal::new(egui::Id::unique("ssh-credentials-modal"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(560.0);
+            modal_title(
+                ui,
+                "Open SSH text console",
+                "Connects directly to the guest over SSH, separately from the VNC console.",
+            );
+            widgets::field_label(ui, "Host");
+            ui.add(
+                egui::TextEdit::singleline(&mut dialog.host)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("Guest IP address")
+                    .char_limit(255)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            ui.columns(2, |columns| {
+                widgets::field_label(&mut columns[0], "Port");
+                columns[0].add(
+                    egui::TextEdit::singleline(&mut dialog.port)
+                        .char_limit(5)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                widgets::field_label(&mut columns[1], "User");
+                columns[1].add(
+                    egui::TextEdit::singleline(&mut dialog.username)
+                        .char_limit(255)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+            });
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Password");
+            ui.add(
+                egui::TextEdit::singleline(&mut dialog.password)
+                    .desired_width(f32::INFINITY)
+                    .password(true)
+                    .char_limit(1024)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.label(
+                RichText::new(
+                    "The password is held only for this SSH session and is never saved by the app.",
+                )
+                .size(9.0)
+                .color(dim_fg()),
+            );
+            if let Some(error) = &dialog.error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(error).size(10.0).color(red()));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add(egui::Button::new(RichText::new("Cancel").size(11.0)))
+                    .clicked()
+                {
+                    close = true;
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            !dialog.host.trim().is_empty()
+                                && !dialog.username.trim().is_empty()
+                                && !dialog.password.is_empty(),
+                            widgets::primary_button("Connect"),
+                        )
+                        .clicked()
+                    {
+                        connect = true;
+                    }
+                });
+            });
+        });
+    if response.should_close() {
+        close = true;
+    }
+    if connect {
+        actions.push(UiAction::ConnectSsh);
+    }
+    if close {
+        actions.push(UiAction::CloseSshDialog);
     }
 }
 

@@ -813,6 +813,38 @@ impl App {
                         }
                     }
                 },
+                Event::SshOpened {
+                    console_id,
+                    host,
+                    username,
+                } => {
+                    if let Some(console) = self.state.ssh_console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.status = crate::state::SshStatus::Connected;
+                        console.host = host;
+                        console.username = username;
+                        console.message.clear();
+                    }
+                }
+                Event::SshOutput { console_id, data } => {
+                    if let Some(console) = self.state.ssh_console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.buffer.feed(&data);
+                    }
+                }
+                Event::SshClosed {
+                    console_id,
+                    message,
+                } => {
+                    if let Some(console) = self.state.ssh_console.as_mut()
+                        && console.console_id == console_id
+                    {
+                        console.status = crate::state::SshStatus::Closed;
+                        console.message = message.unwrap_or_else(|| "Disconnected.".into());
+                    }
+                }
                 Event::AdEnabled { result } => match result {
                     Ok(()) => {
                         self.state.ad_enable_dialog = None;
@@ -2108,6 +2140,99 @@ impl App {
                         connection_id,
                         vm_uuid,
                     });
+                }
+                UiAction::OpenSshDialog => {
+                    let Some(key) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .map(|tab| tab.key.clone())
+                    else {
+                        continue;
+                    };
+                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
+                        continue;
+                    };
+                    let host = self
+                        .state
+                        .vm_state
+                        .ready()
+                        .and_then(|details| details.guest_ips.first())
+                        .cloned()
+                        .unwrap_or_default();
+                    self.state.ssh_credentials = Some(crate::state::SshCredentialDialog {
+                        connection_id,
+                        vm_uuid,
+                        host,
+                        port: "22".into(),
+                        username: "root".into(),
+                        password: String::new(),
+                        error: None,
+                    });
+                }
+                UiAction::CloseSshDialog => self.state.ssh_credentials = None,
+                UiAction::ConnectSsh => {
+                    let Some(dialog) = self.state.ssh_credentials.as_mut() else {
+                        continue;
+                    };
+                    let Some(port) = dialog.port.trim().parse::<u16>().ok() else {
+                        dialog.error = Some("Enter a numeric SSH port.".into());
+                        continue;
+                    };
+                    if let Err(error) = crate::ssh::validate_credentials(
+                        &dialog.host,
+                        port,
+                        &dialog.username,
+                        &dialog.password,
+                    ) {
+                        dialog.error = Some(error);
+                        continue;
+                    }
+                    self.state.ssh_seq += 1;
+                    let console_id = format!("ssh-{}-{}", self.state.ssh_seq, dialog.vm_uuid);
+                    let connection_id = dialog.connection_id.clone();
+                    let vm_uuid = dialog.vm_uuid.clone();
+                    let host = dialog.host.trim().to_owned();
+                    let username = dialog.username.trim().to_owned();
+                    let password = std::mem::take(&mut dialog.password);
+                    self.state.ssh_console = Some(crate::state::SshConsoleState {
+                        console_id: console_id.clone(),
+                        connection_id,
+                        vm_uuid,
+                        host: host.clone(),
+                        username: username.clone(),
+                        status: crate::state::SshStatus::Connecting,
+                        message: String::new(),
+                        buffer: crate::ssh::TerminalBuffer::new(5000),
+                    });
+                    self.state.ssh_credentials = None;
+                    self.worker.send(Command::OpenSshConsole {
+                        console_id,
+                        host,
+                        port,
+                        username,
+                        password,
+                    });
+                }
+                UiAction::SshInput { console_id, data } => {
+                    self.worker.send(Command::SshInput {
+                        console_id,
+                        input: crate::ssh::SshInput::Data(data),
+                    });
+                }
+                UiAction::CloseSshConsole => {
+                    if let Some(console) = self.state.ssh_console.as_mut() {
+                        self.worker.send(Command::CloseSshConsole {
+                            console_id: console.console_id.clone(),
+                        });
+                        console.status = crate::state::SshStatus::Closed;
+                        console.message = "Disconnected by user.".into();
+                    }
+                }
+                UiAction::ClearSshConsole => {
+                    if let Some(console) = self.state.ssh_console.as_mut() {
+                        console.buffer.clear();
+                    }
                 }
                 UiAction::OpenAdEnable => {
                     let Some(connection_id) = self

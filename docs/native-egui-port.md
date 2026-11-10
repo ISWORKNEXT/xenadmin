@@ -44,7 +44,7 @@ dependency.
 | Host performance | Implemented | Upstream-style CPU (all cores), memory and network graphs with legends; 15 min / 1 h / 24 h, search, remaining metrics and gap handling |
 | Live inventory | Implemented | XenAPI event stream applied to a raw-record cache; heartbeat, reconnect and coordinator redirect |
 | VM performance | Implemented | VM RRD with per-vCPU CPU graph, memory/network graphs, remaining metrics and the same ranges |
-| VM console | Implemented | VNC over XenAPI HTTPS CONNECT tunnel; framebuffer, mouse/wheel, keyboard/Unicode text, Ctrl+Alt+Del, clipboard; external xfreerdp launcher |
+| VM console | Implemented | VNC HTTPS tunnel with framebuffer/input/clipboard; external RDP; embedded SSH text console with credential prompt and ANSI terminal |
 | VM editing | Implemented | Name/description/tags, BIOS/UEFI, secure boot, boot order/policy, after-crash policy, HA priority/delays/affinity; vCPUs/static memory while halted; dynamic memory live when allowed |
 | CD/DVD media | Implemented | List/eject/insert ISO media on existing virtual CD drives from the Storage tab |
 | VM network interfaces | Implemented | Add/remove VIFs, plug/unplug, next-free device slot and optional MAC |
