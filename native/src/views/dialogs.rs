@@ -527,6 +527,10 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                 "Edit virtual machine",
                 "Name and description can change while the VM is running.",
             );
+            egui::ScrollArea::vertical()
+                .max_height(560.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
             widgets::field_label(ui, "Name");
             ui.add_enabled(
                 !edit.submitting,
@@ -557,38 +561,57 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
             );
             ui.add_space(10.0);
             ui.columns(2, |columns| {
-                resources_field(
+                resources_slider(
                     &mut columns[0],
                     "vCPUs maximum",
                     &mut edit.vcpus_max,
+                    1..=64,
+                    " vCPU",
                     !edit.running && !edit.submitting,
                 );
-                resources_field(
+                resources_slider(
                     &mut columns[1],
                     "vCPUs at startup",
                     &mut edit.vcpus_at_startup,
+                    1..=64,
+                    " vCPU",
                     !edit.running && !edit.submitting,
                 );
             });
             ui.add_space(8.0);
-            resources_field(
+            resources_slider(
                 ui,
                 "Static memory maximum (MiB)",
                 &mut edit.memory_static_max_mib,
+                256..=1_048_576,
+                " MiB",
                 !edit.running && !edit.submitting,
             );
+            if edit.running {
+                ui.label(
+                    RichText::new(
+                        "Shut down the VM to change vCPUs or static memory. Dynamic memory can change while running.",
+                    )
+                    .size(9.0)
+                    .color(amber()),
+                );
+            }
             ui.add_space(8.0);
             ui.columns(2, |columns| {
-                resources_field(
+                resources_slider(
                     &mut columns[0],
                     "Dynamic memory minimum (MiB)",
                     &mut edit.memory_dynamic_min_mib,
+                    256..=1_048_576,
+                    " MiB",
                     !edit.submitting,
                 );
-                resources_field(
+                resources_slider(
                     &mut columns[1],
                     "Dynamic memory maximum (MiB)",
                     &mut edit.memory_dynamic_max_mib,
+                    256..=1_048_576,
+                    " MiB",
                     !edit.submitting,
                 );
             });
@@ -732,6 +755,7 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                     .size(9.0)
                     .color(if edit.running { amber() } else { dim_fg() }),
             );
+                });
             if let Some(error) = &edit.error {
                 ui.add_space(8.0);
                 ui.label(RichText::new(error).size(10.0).color(red()));
@@ -4686,6 +4710,31 @@ fn disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAct
                             });
                     });
                     ui.add_space(8.0);
+                    let free_gib = dialog
+                        .sr_uuid
+                        .as_ref()
+                        .and_then(|uuid| dialog.srs.iter().find(|(sr_uuid, _, _)| sr_uuid == uuid))
+                        .map(|(_, _, free)| (*free / (1024 * 1024 * 1024)).max(1))
+                        .unwrap_or(1024)
+                        .min(65536);
+                    let mut add_size = dialog
+                        .size_gib
+                        .trim()
+                        .parse::<u64>()
+                        .unwrap_or(10)
+                        .clamp(1, free_gib);
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting,
+                            egui::Slider::new(&mut add_size, 1..=free_gib)
+                                .suffix(" GiB")
+                                .logarithmic(true),
+                        )
+                        .changed()
+                    {
+                        dialog.size_gib = add_size.to_string();
+                    }
+                    ui.add_space(4.0);
                     disk_size_field(ui, "Size (GiB)", &mut dialog.size_gib, !dialog.submitting);
                     ui.add_space(8.0);
                     widgets::field_label(ui, "Disk name (optional)");
@@ -4718,6 +4767,24 @@ fn disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAct
                         .color(muted_fg()),
                     );
                     ui.add_space(8.0);
+                    let current = dialog.current_gib.max(1);
+                    let max = current.saturating_mul(4).clamp(64, 65536);
+                    let mut slider_value = dialog
+                        .size_gib
+                        .trim()
+                        .parse::<u64>()
+                        .unwrap_or(current.saturating_add(1))
+                        .clamp(current, max);
+                    if ui
+                        .add_enabled(
+                            !dialog.submitting,
+                            egui::Slider::new(&mut slider_value, current..=max).suffix(" GiB"),
+                        )
+                        .changed()
+                    {
+                        dialog.size_gib = slider_value.to_string();
+                    }
+                    ui.add_space(4.0);
                     disk_size_field(
                         ui,
                         "New size (GiB)",
@@ -5190,8 +5257,30 @@ fn iso_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiActi
     }
 }
 
-fn resources_field(ui: &mut Ui, label: &str, value: &mut String, enabled: bool) {
+fn resources_slider(
+    ui: &mut Ui,
+    label: &str,
+    value: &mut String,
+    range: std::ops::RangeInclusive<u64>,
+    suffix: &str,
+    enabled: bool,
+) {
     widgets::field_label(ui, label);
+    let (min, max) = (*range.start(), *range.end());
+    let current = value.trim().parse::<u64>().unwrap_or(min).clamp(min, max);
+    let mut slider_value = current;
+    let logarithmic = min.saturating_mul(8) < max;
+    if ui
+        .add_enabled(
+            enabled,
+            egui::Slider::new(&mut slider_value, range)
+                .suffix(suffix)
+                .logarithmic(logarithmic),
+        )
+        .changed()
+    {
+        *value = slider_value.to_string();
+    }
     ui.add_enabled(
         enabled,
         egui::TextEdit::singleline(value)

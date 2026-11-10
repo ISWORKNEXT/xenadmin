@@ -45,7 +45,7 @@ dependency.
 | Live inventory | Implemented | XenAPI event stream applied to a raw-record cache; heartbeat, reconnect and coordinator redirect |
 | VM performance | Implemented | VM RRD with per-vCPU CPU graph, memory/network graphs, remaining metrics and the same ranges |
 | VM console | Implemented | VNC HTTPS tunnel; embedded RDP (IronRDP) with framebuffer/input; embedded SSH text console with credential prompt; external RDP fallback |
-| VM editing | Implemented | Name/description/tags, BIOS/UEFI, secure boot, boot order/policy, after-crash policy, HA priority/delays/affinity; vCPUs/static memory while halted; dynamic memory live when allowed |
+| VM editing | Implemented | Quick actions + sliders for vCPUs/memory; name/description/tags, BIOS/UEFI, secure boot, boot order/policy, after-crash policy, HA priority/delays/affinity; static memory/CPU while halted; dynamic memory live |
 | CD/DVD media | Implemented | List/eject/insert ISO media on existing virtual CD drives from the Storage tab |
 | VM network interfaces | Implemented | Add/remove VIFs, plug/unplug, next-free device slot and optional MAC |
 | VM virtual disks | Implemented | Add/attach/move (live pool_migrate or offline copy/swap), grow/remove, RO/RW, bootable, hot-plug/unplug, empty CD drives |

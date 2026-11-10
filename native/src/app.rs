@@ -2110,7 +2110,6 @@ impl App {
                         self.apply(vec![UiAction::LoadVmPerformance]);
                     }
                     if tab == crate::state::VmTab::Console
-                        && self.state.console.is_none()
                         && let Some(key) = self
                             .state
                             .object_tabs
@@ -2119,6 +2118,9 @@ impl App {
                         && let Some((connection_id, vm_uuid)) = vm_key(&key)
                         && find_vm(&self.workspace, &connection_id, &vm_uuid)
                             .is_some_and(|(_, vm)| vm.kind == "vm" && vm.power_state == "Running")
+                        && self.state.console.as_ref().is_none_or(|console| {
+                            console.connection_id != connection_id || console.vm_uuid != vm_uuid
+                        })
                     {
                         self.apply(vec![UiAction::OpenConsole(connection_id, vm_uuid)]);
                     }

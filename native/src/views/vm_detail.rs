@@ -101,7 +101,16 @@ pub fn show(
     match tab {
         VmTab::General => {
             if let Some(details) = details_state(ui, state, actions) {
-                general(ui, connection, vm, &details, is_template, is_snapshot);
+                general(
+                    ui,
+                    connection,
+                    vm,
+                    &details,
+                    is_template,
+                    is_snapshot,
+                    read_only,
+                    actions,
+                );
             }
         }
         VmTab::Performance => performance(ui, state, actions),
@@ -197,6 +206,29 @@ fn header(
                 actions.push(UiAction::ReloadVmDetails);
                 if state.vm_subtab == VmTab::Performance {
                     actions.push(UiAction::LoadVmPerformance);
+                }
+            }
+            if !is_template && !is_snapshot {
+                if ui
+                    .add(widgets::primary_button("Console"))
+                    .on_hover_text("Open the VNC console (connects automatically when running)")
+                    .clicked()
+                {
+                    actions.push(UiAction::SetVmTab(VmTab::Console));
+                }
+                if ui
+                    .add(egui::Button::new(RichText::new("Disks").size(11.5)))
+                    .on_hover_text("Add, resize, move, plug or remove virtual disks")
+                    .clicked()
+                {
+                    actions.push(UiAction::SetVmTab(VmTab::Storage));
+                }
+                if ui
+                    .add(egui::Button::new(RichText::new("Network").size(11.5)))
+                    .on_hover_text("Add, edit, plug or remove virtual network interfaces")
+                    .clicked()
+                {
+                    actions.push(UiAction::SetVmTab(VmTab::Network));
                 }
             }
         });
@@ -470,9 +502,9 @@ fn action_bar(
         if ui
             .add_enabled(
                 can_edit,
-                egui::Button::new(RichText::new("Edit…").size(11.0)),
+                egui::Button::new(RichText::new("Edit / Resources…").size(11.0)),
             )
-            .on_hover_text("Edit the name, description, vCPUs and memory")
+            .on_hover_text("Edit name, description, vCPUs and memory with sliders")
             .clicked()
         {
             actions.push(UiAction::OpenVmEdit);
@@ -487,6 +519,7 @@ fn action_bar(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn general(
     ui: &mut Ui,
     connection: &xen_core::workspace::ConnectionView,
@@ -494,7 +527,64 @@ fn general(
     details: &VmDetails,
     is_template: bool,
     is_snapshot: bool,
+    read_only: bool,
+    actions: &mut Vec<UiAction>,
 ) {
+    if !is_template && !is_snapshot {
+        ui.add_space(8.0);
+        theme::card_frame().show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        widgets::section_title(ui, "Quick actions", None);
+        ui.add_space(4.0);
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .add(widgets::primary_button("VNC console"))
+                .on_hover_text("Open the VNC console; it connects automatically when the VM is running")
+                .clicked()
+            {
+                actions.push(UiAction::SetVmTab(VmTab::Console));
+            }
+            if ui
+                .add(egui::Button::new(RichText::new("Disks").size(11.0)))
+                .on_hover_text("Add, resize, move, plug or remove virtual disks")
+                .clicked()
+            {
+                actions.push(UiAction::SetVmTab(VmTab::Storage));
+            }
+            if ui
+                .add(egui::Button::new(RichText::new("Network").size(11.0)))
+                .on_hover_text("Add, edit, plug or remove virtual interfaces")
+                .clicked()
+            {
+                actions.push(UiAction::SetVmTab(VmTab::Network));
+            }
+            if ui
+                .add(egui::Button::new(RichText::new("Snapshots").size(11.0)))
+                .clicked()
+            {
+                actions.push(UiAction::SetVmTab(VmTab::Snapshots));
+            }
+            if ui
+                .add_enabled(
+                    !read_only,
+                    egui::Button::new(RichText::new("Edit / Resources…").size(11.0)),
+                )
+                .on_hover_text("Adjust vCPUs and memory with sliders")
+                .clicked()
+            {
+                actions.push(UiAction::OpenVmEdit);
+            }
+        });
+        ui.label(
+            RichText::new(
+                "Resource sliders are enabled when the VM is shut down; dynamic memory can change while running.",
+            )
+            .size(9.0)
+            .color(dim_fg()),
+        );
+    });
+        ui.add_space(8.0);
+    }
     ui.columns(2, |columns| {
         theme::card_frame().show(&mut columns[0], |ui| {
             ui.set_width(ui.available_width());
