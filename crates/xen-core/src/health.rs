@@ -77,6 +77,7 @@ pub(crate) fn evaluate(raw: &RawInventory) -> HealthReport {
         ha(raw),
         guest_tools(raw),
         vm_disks(raw),
+        vbd_consistency(raw),
     ];
     HealthReport {
         checks,
@@ -529,6 +530,86 @@ fn vm_disks(raw: &RawInventory) -> DiagnosticCheck {
     )
 }
 
+fn vbd_consistency(raw: &RawInventory) -> DiagnosticCheck {
+    let mut details = Vec::new();
+    let mut severity = Severity::Ok;
+    for (vm_ref, vm) in &raw.vms {
+        if vm["is_control_domain"].as_bool() == Some(true)
+            || vm["is_a_template"].as_bool() == Some(true)
+            || vm["is_a_snapshot"].as_bool() == Some(true)
+        {
+            continue;
+        }
+        let vm_name = text(vm, "name_label");
+        let mut devices = std::collections::HashMap::new();
+        let mut bootable = 0usize;
+        for vbd in raw
+            .vbds
+            .values()
+            .filter(|vbd| vbd["VM"].as_str() == Some(vm_ref.as_str()))
+        {
+            let device = text(vbd, "device");
+            if !device.is_empty() {
+                *devices.entry(device.clone()).or_insert(0usize) += 1;
+            }
+            if vbd["bootable"].as_bool() == Some(true) {
+                bootable += 1;
+            }
+            if vbd["empty"].as_bool() == Some(true) {
+                continue;
+            }
+            let Some(vdi) = raw.vdis.get(text(vbd, "VDI").as_str()) else {
+                continue;
+            };
+            if text(vbd, "type") == "CD" {
+                let sr = raw.storage.get(&text(vdi, "SR"));
+                let is_iso = text(vdi, "type") == "iso"
+                    || sr.is_some_and(|sr| text(sr, "content_type") == "iso");
+                if !is_iso {
+                    details.push(format!(
+                        "{vm_name}: CD drive {device} contains non-ISO media"
+                    ));
+                    severity = max_severity(severity, Severity::Warning);
+                }
+            }
+            if text(vbd, "type") == "Disk"
+                && vdi["read_only"].as_bool() == Some(true)
+                && text(vbd, "mode") != "RO"
+            {
+                details.push(format!(
+                    "{vm_name}: read-only disk {device} is attached read-write"
+                ));
+                severity = max_severity(severity, Severity::Warning);
+            }
+        }
+        for (device, count) in devices {
+            if count > 1 {
+                details.push(format!(
+                    "{vm_name}: device slot {device} is used by {count} VBDs"
+                ));
+                severity = max_severity(severity, Severity::Warning);
+            }
+        }
+        if bootable > 1 {
+            details.push(format!(
+                "{vm_name}: {bootable} bootable VBDs; boot order chooses the device"
+            ));
+            severity = max_severity(severity, Severity::Warning);
+        }
+    }
+    check(
+        "vbd-consistency",
+        "VBD / CD consistency",
+        severity,
+        if details.is_empty() {
+            "VBD slots, boot flags and CD media types are consistent.".into()
+        } else {
+            format!("{} VBD consistency issue(s).", details.len())
+        },
+        details,
+    )
+}
+
 fn number(record: &Value, key: &str) -> u64 {
     record[key]
         .as_u64()
@@ -679,6 +760,53 @@ mod tests {
                 .details
                 .iter()
                 .any(|detail| detail.contains("no PBD"))
+        );
+    }
+
+    #[test]
+    fn detects_vbd_slot_boot_and_cd_consistency_issues() {
+        let mut raw = base();
+        raw.vbds.insert(
+            "vbd2".into(),
+            json!({"VM":"vm","VDI":"vdi","device":"xvda","type":"Disk","empty":false,"bootable":true,"mode":"RW"}),
+        );
+        raw.vbds.get_mut("vbd").unwrap()["bootable"] = json!(true);
+        raw.vdis.get_mut("vdi").unwrap()["read_only"] = json!(true);
+        raw.vbds.get_mut("vbd").unwrap()["mode"] = json!("RW");
+        raw.vbds.insert(
+            "cd".into(),
+            json!({"VM":"vm","VDI":"vdi","device":"xvdd","type":"CD","empty":false,"bootable":false,"mode":"RO"}),
+        );
+        let report = evaluate(&raw);
+        let check = report
+            .checks
+            .iter()
+            .find(|check| check.id == "vbd-consistency")
+            .unwrap();
+        assert_eq!(check.severity, Severity::Warning);
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("device slot"))
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("bootable VBDs"))
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("non-ISO"))
+        );
+        assert!(
+            check
+                .details
+                .iter()
+                .any(|detail| detail.contains("read-only disk"))
         );
     }
 

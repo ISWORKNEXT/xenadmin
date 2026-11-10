@@ -422,6 +422,14 @@ fn toolbar(
                         ui.close();
                     }
                     if ui
+                        .add(egui::Button::new(RichText::new("Edit").size(9.5)).frame(false))
+                        .on_hover_text("Edit saved search")
+                        .clicked()
+                    {
+                        actions.push(UiAction::EditSavedSearch(index));
+                        ui.close();
+                    }
+                    if ui
                         .add(egui::Button::new(RichText::new("×").size(10.0)).frame(false))
                         .on_hover_text("Delete saved search")
                         .clicked()

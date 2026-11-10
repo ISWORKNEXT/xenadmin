@@ -696,11 +696,15 @@ fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
     let response = egui::Modal::new(egui::Id::unique("save-search-modal"))
         .frame(theme::modal_frame())
         .show(ctx, |ui| {
-            ui.set_width(480.0);
+            ui.set_width(540.0);
             modal_title(
                 ui,
-                "Save search",
-                "Saves the current query and grouping for this workspace.",
+                if dialog.editing.is_some() {
+                    "Edit saved search"
+                } else {
+                    "Save search"
+                },
+                "Saves the query and grouping for this workspace.",
             );
             widgets::field_label(ui, "Search name");
             ui.add(
@@ -709,6 +713,25 @@ fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
                     .char_limit(80)
                     .margin(egui::Margin::symmetric(8, 5)),
             );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Query");
+            ui.add(
+                egui::TextEdit::singleline(&mut dialog.query)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("e.g. power_state:running tag:prod")
+                    .char_limit(512)
+                    .margin(egui::Margin::symmetric(8, 5)),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Grouping");
+            egui::ComboBox::from_id_salt("save-search-group")
+                .selected_text(RichText::new(dialog.group_by.label()).size(11.0))
+                .width(ui.available_width())
+                .show_ui(ui, |ui| {
+                    for group in crate::config::GroupBy::ALL {
+                        ui.selectable_value(&mut dialog.group_by, group, group.label());
+                    }
+                });
             if let Some(error) = &dialog.error {
                 ui.add_space(8.0);
                 ui.label(RichText::new(error).size(10.0).color(red()));
@@ -725,7 +748,11 @@ fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
                     if ui
                         .add_enabled(
                             !dialog.name.trim().is_empty(),
-                            widgets::primary_button("Save search"),
+                            widgets::primary_button(if dialog.editing.is_some() {
+                                "Update search"
+                            } else {
+                                "Save search"
+                            }),
                         )
                         .clicked()
                     {

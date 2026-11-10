@@ -80,6 +80,25 @@ pub struct SavedSearch {
     pub group_by: GroupBy,
 }
 
+pub fn upsert_saved_search(
+    searches: &mut Vec<SavedSearch>,
+    saved: SavedSearch,
+    editing: Option<usize>,
+) {
+    if let Some(index) = editing.filter(|index| *index < searches.len()) {
+        searches[index] = saved;
+        return;
+    }
+    if let Some(existing) = searches
+        .iter_mut()
+        .find(|candidate| candidate.name.eq_ignore_ascii_case(&saved.name))
+    {
+        *existing = saved;
+    } else {
+        searches.push(saved);
+    }
+}
+
 pub fn load_saved_searches() -> Vec<SavedSearch> {
     read_saved_searches(&saved_searches_path())
 }
@@ -201,6 +220,44 @@ mod saved_search_tests {
         std::fs::write(&path, b"not json").unwrap();
         assert!(read_saved_searches(&path).is_empty());
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn saved_search_upsert_and_edit_replace_in_place() {
+        let mut searches = vec![SavedSearch {
+            name: "one".into(),
+            query: "name:a".into(),
+            group_by: GroupBy::None,
+        }];
+        upsert_saved_search(
+            &mut searches,
+            SavedSearch {
+                name: "ONE".into(),
+                query: "name:b".into(),
+                group_by: GroupBy::Host,
+            },
+            None,
+        );
+        assert_eq!(searches.len(), 1);
+        assert_eq!(searches[0].query, "name:b");
+        assert_eq!(searches[0].group_by, GroupBy::Host);
+        searches.push(SavedSearch {
+            name: "two".into(),
+            query: "name:c".into(),
+            group_by: GroupBy::Tag,
+        });
+        upsert_saved_search(
+            &mut searches,
+            SavedSearch {
+                name: "renamed".into(),
+                query: "name:d".into(),
+                group_by: GroupBy::PowerState,
+            },
+            Some(0),
+        );
+        assert_eq!(searches[0].name, "renamed");
+        assert_eq!(searches[0].query, "name:d");
+        assert_eq!(searches.len(), 2);
     }
 
     #[test]

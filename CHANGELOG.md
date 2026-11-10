@@ -38,7 +38,8 @@
 - Expand health diagnostics with HA configuration, guest tools, management PIFs/bridge duplication, local SR and unattached PBD checks.
 - Extend XenSearch with uuid/description/os/kind/connection and vcpus/memory comparator fields.
 - Add attach-existing-VDI with owner marking, a searchable VDI catalog, and a bootable VBD toggle.
-- Add VM/template grouping by connection/host/power/tag and persistent named searches.
+- Add VM/template grouping by connection/host/power/tag and persistent editable named searches.
+- Add VBD slot, multiple-bootable, CD media type and read-only disk consistency diagnostics.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

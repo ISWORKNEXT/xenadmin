@@ -726,6 +726,9 @@ pub struct SrActionConfirm {
 
 pub struct SaveSearchState {
     pub name: String,
+    pub query: String,
+    pub group_by: GroupBy,
+    pub editing: Option<usize>,
     pub error: Option<String>,
 }
 
@@ -1078,6 +1081,7 @@ pub enum UiAction {
     },
     ApplySavedSearch(usize),
     DeleteSavedSearch(usize),
+    EditSavedSearch(usize),
     OpenSaveSearch,
     CloseSaveSearch,
     SaveCurrentSearch,

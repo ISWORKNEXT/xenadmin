@@ -2012,6 +2012,17 @@ impl App {
                             .push(Toast::new("Saved search deleted.", ToastKind::Info));
                     }
                 }
+                UiAction::EditSavedSearch(index) => {
+                    if let Some(saved) = self.state.saved_searches.get(index) {
+                        self.state.save_search = Some(crate::state::SaveSearchState {
+                            name: saved.name.clone(),
+                            query: saved.query.clone(),
+                            group_by: saved.group_by,
+                            editing: Some(index),
+                            error: None,
+                        });
+                    }
+                }
                 UiAction::OpenSaveSearch => {
                     let suggested = if self.state.query.trim().is_empty() {
                         "All objects".to_owned()
@@ -2020,6 +2031,9 @@ impl App {
                     };
                     self.state.save_search = Some(crate::state::SaveSearchState {
                         name: suggested,
+                        query: self.state.query.clone(),
+                        group_by: self.state.group_by,
+                        editing: None,
                         error: None,
                     });
                 }
@@ -2036,19 +2050,14 @@ impl App {
                     }
                     let saved = crate::config::SavedSearch {
                         name: name.clone(),
-                        query: self.state.query.clone(),
-                        group_by: self.state.group_by,
+                        query: dialog.query.trim().to_owned(),
+                        group_by: dialog.group_by,
                     };
-                    if let Some(existing) = self
-                        .state
-                        .saved_searches
-                        .iter_mut()
-                        .find(|saved| saved.name.eq_ignore_ascii_case(&name))
-                    {
-                        *existing = saved;
-                    } else {
-                        self.state.saved_searches.push(saved);
-                    }
+                    crate::config::upsert_saved_search(
+                        &mut self.state.saved_searches,
+                        saved,
+                        dialog.editing,
+                    );
                     crate::config::save_saved_searches(&self.state.saved_searches);
                     self.state.toasts.push(Toast::new(
                         format!("Saved search “{name}”."),
