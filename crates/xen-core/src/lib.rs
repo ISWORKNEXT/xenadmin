@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod console;
 pub mod health;
 pub mod host;

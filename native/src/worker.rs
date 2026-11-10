@@ -131,6 +131,10 @@ pub enum Command {
         host_uuid: String,
         location: String,
     },
+    AuthInfo {
+        seq: u64,
+        connection_id: String,
+    },
     DeleteSnapshots {
         connection_id: String,
         vm_uuid: String,
@@ -361,6 +365,10 @@ pub enum Event {
     SrProbed {
         seq: u64,
         result: Result<xen_core::storage::SrProbe, String>,
+    },
+    AuthInfo {
+        seq: u64,
+        result: Result<xen_core::auth::AuthInfo, String>,
     },
     VmDetails {
         seq: u64,
@@ -646,6 +654,10 @@ fn dispatch(
                     action,
                     result,
                 });
+            }
+            Command::AuthInfo { seq, connection_id } => {
+                let result = workspace.auth_info(&connection_id).await;
+                let _ = events.send(Event::AuthInfo { seq, result });
             }
             Command::PbdCatalog {
                 seq,

@@ -156,6 +156,9 @@ pub enum ObjectKey {
     Health {
         connection_id: String,
     },
+    Auth {
+        connection_id: String,
+    },
     List {
         connection_id: Option<String>,
         kind: ListKind,
@@ -175,7 +178,8 @@ impl ObjectKey {
             | ObjectKey::Snapshot { connection_id, .. }
             | ObjectKey::Storage { connection_id, .. }
             | ObjectKey::Network { connection_id, .. }
-            | ObjectKey::Health { connection_id } => Some(connection_id),
+            | ObjectKey::Health { connection_id }
+            | ObjectKey::Auth { connection_id } => Some(connection_id),
             ObjectKey::List { connection_id, .. } => connection_id.as_deref(),
         }
     }
@@ -1016,6 +1020,8 @@ pub struct UiState {
     pub host_route: Option<HostRoute>,
     pub host_tab: HostTab,
     pub host_state: LoadState<HostDetails>,
+    pub auth_state: LoadState<xen_core::auth::AuthInfo>,
+    pub auth_seq: u64,
     pub host_seq: u64,
     pub perf_range: u64,
     pub perf_state: LoadState<HostPerformance>,
@@ -1108,6 +1114,8 @@ impl Default for UiState {
             host_route: None,
             host_tab: HostTab::General,
             host_state: LoadState::Idle,
+            auth_state: LoadState::Idle,
+            auth_seq: 0,
             host_seq: 0,
             perf_range: 900,
             perf_state: LoadState::Idle,
@@ -1259,6 +1267,7 @@ pub enum UiAction {
     },
     CancelDeleteVdi,
     ConfirmDeleteVdi,
+    LoadAuth,
     OpenHaEdit,
     CloseHaEdit,
     SaveHaEdit,

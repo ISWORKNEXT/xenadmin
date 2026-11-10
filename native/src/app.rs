@@ -25,6 +25,7 @@ pub(crate) struct StartupOptions {
     pub vm: Option<String>,
     pub vm_tab: Option<crate::state::VmTab>,
     pub health: bool,
+    pub auth: bool,
     pub sr: Option<String>,
     pub network: Option<String>,
     pub search: Option<String>,
@@ -42,6 +43,7 @@ pub struct App {
     pending_vm: Option<String>,
     pending_vm_tab: Option<crate::state::VmTab>,
     pending_health: bool,
+    pending_auth: bool,
     pending_sr: Option<String>,
     pending_network: Option<String>,
 }
@@ -57,6 +59,7 @@ impl App {
             vm: startup_vm,
             vm_tab: startup_vm_tab,
             health: startup_health,
+            auth: startup_auth,
             sr: startup_sr,
             network: startup_network,
             search: startup_search,
@@ -142,6 +145,7 @@ impl App {
             pending_vm: startup_vm,
             pending_vm_tab: startup_vm_tab,
             pending_health: startup_health,
+            pending_auth: startup_auth,
             pending_sr: startup_sr,
             pending_network: startup_network,
         }
@@ -194,6 +198,7 @@ impl App {
             } => crate::state::find_network(&self.workspace, connection_id, network_uuid)
                 .map_or_else(|| "Network".into(), |(_, network)| network.name.clone()),
             ObjectKey::Health { .. } => "Health & diagnostics".into(),
+            ObjectKey::Auth { .. } => "Authentication & RBAC".into(),
             ObjectKey::List { kind, host_ref, .. } => {
                 if let Some(host_ref) = host_ref {
                     let host = self
@@ -342,6 +347,9 @@ impl App {
                 self.state.view = View::Networks;
             }
             ObjectKey::Health { connection_id } => {
+                self.state.scope = Scope::Connection(connection_id.clone());
+            }
+            ObjectKey::Auth { connection_id } => {
                 self.state.scope = Scope::Connection(connection_id.clone());
             }
             ObjectKey::List {
@@ -578,6 +586,13 @@ impl App {
                             self.open_object(key, None);
                         }
                     }
+                    if self.pending_auth
+                        && let Some(connection_id) =
+                            self.state.scope.connection_id().map(str::to_owned)
+                    {
+                        self.pending_auth = false;
+                        self.open_object(ObjectKey::Auth { connection_id }, None);
+                    }
                     if let Some(uuid) = self.pending_network.clone() {
                         let mut found = None;
                         for connection in &self.workspace.connections {
@@ -764,6 +779,14 @@ impl App {
                         }
                     }
                 },
+                Event::AuthInfo { seq, result } => {
+                    if seq == self.state.auth_seq {
+                        self.state.auth_state = match result {
+                            Ok(info) => LoadState::Ready(info),
+                            Err(message) => LoadState::Error(message),
+                        };
+                    }
+                }
                 Event::PbdCatalog { seq, result } => {
                     if seq == self.state.pbd_catalog_seq {
                         self.state.pbd_catalog_loading = false;
@@ -1968,6 +1991,23 @@ impl App {
                     self.worker.send(Command::AddCdDrive {
                         connection_id,
                         vm_uuid,
+                    });
+                }
+                UiAction::LoadAuth => {
+                    let Some(connection_id) = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| tab.key.connection_id())
+                        .map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    self.state.auth_seq += 1;
+                    self.state.auth_state = LoadState::Loading;
+                    self.worker.send(Command::AuthInfo {
+                        seq: self.state.auth_seq,
+                        connection_id,
                     });
                 }
                 UiAction::LoadPbdCatalog {

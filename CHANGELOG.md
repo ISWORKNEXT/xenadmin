@@ -54,6 +54,7 @@
 - Add host-local file-backed SR creation, PBD reattach/detach and TRIM via the XAPI trim plugin, with path/name validation.
 - Add physical-interface plug/unplug with management-PIF protection, bond and VLAN creation, and VLAN/bond cleanup on network destroy.
 - Add PBD plug/unplug with running-VM guards, SR repair (plug detached PBDs) and file-path SR probing with XML result parsing.
+- Add a read-only Authentication & RBAC page with redacted external-auth config, subjects and public roles.
 - Add a 15-second heartbeat, in-memory-password reconnect and automatic `HOST_IS_SLAVE` coordinator redirect.
 - Make the main workspace scrollable and render each host-performance metric in its own bordered chart card.
 - Add native startup flags for connect, view, host details, VM detail, theme and deep links.

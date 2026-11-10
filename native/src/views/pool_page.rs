@@ -105,6 +105,19 @@ pub fn show(
                 });
             }
             if ui
+                .add(egui::Button::new(
+                    RichText::new("Authentication").size(11.5),
+                ))
+                .clicked()
+            {
+                actions.push(UiAction::OpenObject {
+                    key: ObjectKey::Auth {
+                        connection_id: connection_id.clone(),
+                    },
+                    title: "Authentication & RBAC".into(),
+                });
+            }
+            if ui
                 .add(egui::Button::new(RichText::new("Refresh").size(11.5)))
                 .clicked()
             {

@@ -32,6 +32,7 @@ pub fn show(
         ObjectKey::Storage { .. } => super::resource_page::storage(ui, state, workspace, actions),
         ObjectKey::Network { .. } => super::resource_page::network(ui, state, workspace, actions),
         ObjectKey::Health { .. } => super::health::show(ui, state, workspace, actions),
+        ObjectKey::Auth { .. } => super::auth::show(ui, state, workspace, actions),
     }
 }
 

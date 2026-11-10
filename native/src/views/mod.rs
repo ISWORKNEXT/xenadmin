@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod chrome;
 pub mod content;
 pub mod dialogs;
