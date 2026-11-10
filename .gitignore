@@ -6,3 +6,6 @@ target/
 
 __pycache__/
 *.py[cod]
+
+# Release packaging output
+dist/
