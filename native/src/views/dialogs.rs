@@ -208,17 +208,19 @@ fn connect(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                 ui.add_space(6.0);
 
                 widgets::field_label(ui, "Host address");
-                if ui
-                    .add(
-                        egui::TextEdit::singleline(&mut connect.settings.host)
-                            .hint_text("192.168.8.170")
-                            .desired_width(f32::INFINITY)
-                            .margin(egui::Margin::symmetric(8, 5)),
-                    )
-                    .changed()
-                    && normalized_host(&connect.settings.host) == "10.100.1.11" {
-                        connect.settings.read_only = true;
-                    }
+                let host = ui.add(
+                    egui::TextEdit::singleline(&mut connect.settings.host)
+                        .hint_text("192.168.8.170")
+                        .desired_width(f32::INFINITY)
+                        .margin(egui::Margin::symmetric(8, 5)),
+                );
+                if connect.focus_host {
+                    host.request_focus();
+                    connect.focus_host = false;
+                }
+                if host.changed() && normalized_host(&connect.settings.host) == "10.100.1.11" {
+                    connect.settings.read_only = true;
+                }
                 ui.add_space(6.0);
 
                 ui.columns(2, |columns| {

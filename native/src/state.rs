@@ -497,6 +497,7 @@ pub struct Intent {
 
 #[derive(Clone)]
 pub struct ConnectState {
+    pub focus_host: bool,
     pub profile_id: Option<String>,
     pub settings: ConnectionSettings,
     pub password: String,
@@ -508,6 +509,7 @@ pub struct ConnectState {
 impl ConnectState {
     pub fn empty() -> Self {
         Self {
+            focus_host: true,
             profile_id: None,
             settings: ConnectionSettings {
                 host: String::new(),
@@ -526,6 +528,7 @@ impl ConnectState {
 
     pub fn from_profile(profile_id: String, settings: ConnectionSettings) -> Self {
         Self {
+            focus_host: true,
             profile_id: Some(profile_id),
             proxy: settings.proxy.clone().unwrap_or_default(),
             settings,
