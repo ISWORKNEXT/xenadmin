@@ -1,0 +1,21 @@
+{
+  "pid": 3883811,
+  "args": [
+    "/tmp/xen-qa-runtime/usr/bin/Xvfb",
+    ":98",
+    "-screen",
+    "0",
+    "1600x1000x24",
+    "-nolisten",
+    "tcp",
+    "-ac",
+    "-noreset"
+  ],
+  "started_at_utc": "2026-11-11T14:58:11.477964+00:00",
+  "start_new_session": true,
+  "old_server_exit_cause": "INCONCLUSIVE",
+  "previous_native_writer_absent": true,
+  "old_socket_and_lock_absent_before_start": true,
+  "verified_running_after_parent_exit": true,
+  "evidence_copy_retried_after_wrong_cwd": true
+}

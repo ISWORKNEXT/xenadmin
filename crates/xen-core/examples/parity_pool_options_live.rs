@@ -24,7 +24,7 @@ import XenAPI,json
 s=XenAPI.xapi_local();s.xenapi.login_with_password('','','1.0','pool-option-independent-readback')
 try:
  v=s.xenapi.pool.get_record(s.xenapi.pool.get_by_uuid(UUID))
- print(json.dumps({k:v.get(k) for k in ['uuid','migration_compression','igmp_snooping_enabled','live_patching_disabled']}))
+ out={k:v.get(k) for k in ['uuid','migration_compression','igmp_snooping_enabled','live_patching_disabled']};out['vm_autostart']=v['other_config'].get('auto_poweron')=='true';print(json.dumps(out))
 finally:s.xenapi.session.logout()
 "#.replace("UUID",&serde_json::to_string(uuid)?);
     let mut child = Command::new("ssh")

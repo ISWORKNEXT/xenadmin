@@ -43,6 +43,9 @@ pub fn show(
                                 } else {
                                     ui.label("Live patching policy is unavailable on this server.");
                                 }
+                                ui.add_space(12.0);
+                                ui.checkbox(&mut data.vm_autostart, "Enable VM autostart for this pool");
+                                ui.label(egui::RichText::new("Applies to all hosts in the pool. Each VM also needs its own auto-start flag. Review HA restart policies separately.").small().color(theme::muted_fg()));
                             })
                             .response
                         }

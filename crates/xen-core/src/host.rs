@@ -833,7 +833,11 @@ fn general_groups(
             );
             g.fields.push(field(
                 "VM autostart",
-                display(&pool["other_config"]["auto_poweron"]),
+                if pool["other_config"]["auto_poweron"].as_str() == Some("true") {
+                    "Yes"
+                } else {
+                    "No"
+                },
             ));
             g.fields.push(field(
                 "Pool coordinator",

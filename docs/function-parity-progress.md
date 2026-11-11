@@ -41,6 +41,8 @@ Full independent VM/template copies to a selected same-connection SR, interrupti
 
 Pool migration-compression, IGMP-snooping and live-patching policy controls are qualified in [pool-options follow-up](pool-options-live-qualification-20261111.md). Their configuration writes and native controls are verified; the corresponding data-plane operations remain separate.
 
+[Pool-wide VM autostart](pool-autostart-live-qualification-20261111.md) adds the upstream host-entry configuration flag through the same Pool options owner. Real Host menu/Save, external-map preservation, automatic host Yes/No refresh and exact original-key/inventory restoration are verified. Reboot behavior and multi-host/HA interaction remain unqualified.
+
 ## Remaining functional coverage
 
 The remaining implementation groups include VM migration and copy, OVF and OVA import and export, advanced snapshots and VM properties, storage discovery and creation, host and pool administration, network configuration, recovery services, monitoring, and organization features. The individual gaps and upstream source links remain in the baseline capability tables and command crosswalks.

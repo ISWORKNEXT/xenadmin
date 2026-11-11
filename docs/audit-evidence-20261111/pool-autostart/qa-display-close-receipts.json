@@ -1,0 +1,30 @@
+[
+  {
+    "chunk_id": "272dad",
+    "wall_time_seconds": 3.291e-05,
+    "exit_code": 1,
+    "original_token_count": 211,
+    "output": "Warning: truncated output (original token count: 211)\nTotal output lines: 14\n\n{\"ok\": true, \"action\": {\"quit\": true}}\r\nTraceback (most recent call last):\r\n  File \"/home/tinnerkun/Desktop/xen/xenadmin/tools/audit_advanced_vm_ui.py\", line 127, in <module>\r\n    log.close();dpy.close()\r\n                ^^^^^^^^^^^\r\n  File \"/home/tinnerkun/.local/lib/python3.12/site-packages/Xlib/display.py\", line 161, in close\r\n    self.display.close()\r\n  File \"/home/tinnerkun/.local/lib/python3\u202611 tokens truncated\u2026, line 258, in close\r\n    self.flush()\r\n  File \"/home/tinnerkun/.local/lib/python3.12/site-packages/Xlib/protocol/display.py\", line 255, in flush\r\n    self.send_and_recv(flush = True)\r\n  File \"/home/tinnerkun/.local/lib/python3.12/site-packages/Xlib/protocol/display.py\", line 609, in send_and_recv\r\n    raise self.socket_error\r\nXlib.error.ConnectionClosedError: Display connection closed by server\r\n"
+  },
+  {
+    "chunk_id": "08196a",
+    "wall_time_seconds": 2.7918e-05,
+    "exit_code": 0,
+    "original_token_count": 82,
+    "output": "{\n  \"app_pid\": 3838412,\n  \"app_returncode\": 1,\n  \"clipboard_children\": [],\n  \"all_children_stopped\": true\n}\n3869258   13679 /bin/bash -c cat /tmp/xen-pool-autostart-ui-20261111/process-cleanup.json; ps -eo pid,ppid,args | rg 'Xvfb :98|audit_advanced_vm_ui|xen-native'\n3869261 3869258 rg Xvfb :98|audit_advanced_vm_ui|xen-native\n"
+  },
+  {
+    "chunk_id": "58457e",
+    "wall_time_seconds": 3.9616e-05,
+    "exit_code": 0,
+    "original_token_count": 0,
+    "output": ""
+  },
+  {
+    "chunk_id": "ee1209",
+    "wall_time_seconds": 1.001145048,
+    "session_id": 43735,
+    "original_token_count": 48,
+    "output": "Exact original absent key restored; sentinel removed; all global hashes/scalars/inventories exact; journal removed. Admission used process receipts and PID absence after X11 teardown error.\n"
+  }
+]

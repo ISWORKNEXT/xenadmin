@@ -9,6 +9,7 @@ pub struct PoolOptions {
     pub migration_compression: Option<bool>,
     pub igmp_snooping_enabled: Option<bool>,
     pub live_patching_disabled: Option<bool>,
+    pub vm_autostart: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -93,7 +94,20 @@ impl Connection {
         for (label, method, desired) in writes {
             self.request::<Value>(method, json!([self.session, reference, desired])).await.map_err(|error|ApiError::Xen(format!("Could not save {label}: {error}. Some settings may already have changed; reload before retrying.")))?;
         }
+        let autostart_changed = edit.original.vm_autostart != edit.edited.vm_autostart;
+        if autostart_changed {
+            let mut other: std::collections::BTreeMap<String,String> = self.request("pool.get_other_config", json!([self.session, reference])).await.map_err(|error|ApiError::Xen(format!("Could not read VM autostart: {error}. Some settings may already have changed; reload before retrying.")))?;
+            if (other.get("auto_poweron").map(String::as_str) == Some("true"))
+                != edit.edited.vm_autostart
+            {
+                other.insert("auto_poweron".into(), edit.edited.vm_autostart.to_string());
+                self.request::<Value>("pool.set_other_config", json!([self.session, reference, other])).await.map_err(|error|ApiError::Xen(format!("Could not save VM autostart: {error}. Some settings may already have changed; reload before retrying.")))?;
+            }
+        }
         let saved = self.pool_options(&edit.original.uuid).await?;
+        if autostart_changed && saved.vm_autostart != edit.edited.vm_autostart {
+            return Err(ApiError::Xen("The pool did not retain the requested VM autostart setting; reload the pool options.".into()));
+        }
         for ((label, _, original, desired, _), actual) in fields.into_iter().zip([
             saved.migration_compression,
             saved.igmp_snooping_enabled,
@@ -115,5 +129,6 @@ fn options(uuid: &str, record: &Value) -> PoolOptions {
         migration_compression: record["migration_compression"].as_bool(),
         igmp_snooping_enabled: record["igmp_snooping_enabled"].as_bool(),
         live_patching_disabled: record["live_patching_disabled"].as_bool(),
+        vm_autostart: record["other_config"]["auto_poweron"].as_str() == Some("true"),
     }
 }

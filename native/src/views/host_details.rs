@@ -93,6 +93,13 @@ pub fn show(
                     ui.separator();
                     prompt(ui, HostAction::Reboot);
                     prompt(ui, HostAction::Shutdown);
+                    ui.separator();
+                    if ui.button("VM autostart (pool-wide)…").clicked() {
+                        actions.push(UiAction::OpenPoolOptions {
+                            connection_id: route.connection_id.clone(),
+                        });
+                        ui.close();
+                    }
                 });
             }
             widgets::badge(

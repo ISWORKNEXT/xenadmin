@@ -1,0 +1,154 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "host-before-options",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1255,
+        180
+      ],
+      "snap": "host-actions-autostart-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1305,
+        440
+      ],
+      "wait": 2,
+      "snap": "pool-options-autostart"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        730,
+        400
+      ],
+      "wait": 2,
+      "snap": "pool-options-settled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        430,
+        525
+      ],
+      "snap": "pool-autostart-draft",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        965,
+        614
+      ],
+      "wait": 5,
+      "snap": "pool-autostart-saved"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        950,
+        700
+      ],
+      "scroll": 60,
+      "snap": "host-autostart-after-auto-refresh"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        950,
+        700
+      ],
+      "scroll": -80,
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1255,
+        180
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1305,
+        440
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1000,
+        720
+      ],
+      "wait": 3,
+      "snap": "pool-autostart-reopen-small"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        210,
+        415
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        745,
+        504
+      ],
+      "wait": 5,
+      "snap": "pool-autostart-off-small"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        900,
+        550
+      ],
+      "scroll": 60,
+      "snap": "host-autostart-disabled-refresh"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

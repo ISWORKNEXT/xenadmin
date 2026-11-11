@@ -528,10 +528,20 @@ impl App {
                     }
                     match result {
                         Ok(_) => {
+                            let saved_connection = self
+                                .state
+                                .pool_options
+                                .as_ref()
+                                .map(|dialog| dialog.connection_id.clone());
                             self.state.pool_options = None;
                             self.state
                                 .toasts
                                 .push(Toast::new("Saved pool options.", ToastKind::Success));
+                            if self.state.host_route.as_ref().is_some_and(|route| {
+                                Some(&route.connection_id) == saved_connection.as_ref()
+                            }) {
+                                self.apply(vec![UiAction::ReloadHostDetails]);
+                            }
                         }
                         Err(message) => {
                             if let Some(dialog) = self.state.pool_options.as_mut() {
