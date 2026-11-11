@@ -1,0 +1,380 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        713,
+        77
+      ],
+      "wait": 1,
+      "snap": "debug-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        713,
+        77
+      ],
+      "wait": 1,
+      "snap": "debug-menu2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "debug-modal",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        713,
+        77
+      ],
+      "snap": "menu-debug3"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "hover-paused",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        750
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        390,
+        370
+      ],
+      "snap": "direct-start-modal"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "direct-start-later",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        465,
+        540
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        713,
+        77
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "settled-menu",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        740,
+        154
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "paused-confirm-settled",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        960,
+        541
+      ],
+      "wait": 4
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "paused-result",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        125
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        713,
+        77
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "paused-menu-settled",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        740,
+        423
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "unpause-confirm",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        960,
+        541
+      ],
+      "wait": 4
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        125
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        713,
+        77
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "running-menu-settled",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        754,
+        193
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "checkpoint-confirm",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        700,
+        508
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-advanced-ui-checkpoint",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        960,
+        586
+      ],
+      "wait": 4
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "checkpoint-task",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "checkpoint-completed",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        125
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        558,
+        371
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "shutdown-confirm",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        960,
+        541
+      ],
+      "wait": 4
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        125
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        713,
+        77
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "halted-conversion-menu",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        750,
+        270
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "conversion-confirm",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        575
+      ],
+      "wait": 4
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "converted-task",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "conversion-completed",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

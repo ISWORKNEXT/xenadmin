@@ -277,11 +277,11 @@ pub fn storage(
             .id_salt("sr-vdi-table")
             .striped(true)
             .cell_layout(Layout::left_to_right(Align::Center))
-            .column(Column::remainder().at_least(160.0))
+            .column(Column::remainder().at_least(160.0).clip(true))
             .column(Column::exact(90.0))
-            .column(Column::exact(130.0))
+            .column(Column::exact(130.0).clip(true))
             .column(Column::exact(70.0))
-            .column(Column::exact(90.0))
+            .column(Column::exact(160.0))
             .header(26.0, |mut header| {
                 for title in ["Name", "Size", "Attached VM", "Type", "Actions"] {
                     header.col(|ui| {
@@ -339,6 +339,15 @@ pub fn storage(
                         ui.label(RichText::new(label).size(9.0).color(color));
                     });
                     row.col(|ui| {
+                        if ui.small_button("Properties…").clicked() {
+                            actions.push(UiAction::OpenProperties {
+                                connection_id: connection_id.clone(),
+                                target: xen_core::properties::ObjectTarget {
+                                    kind: xen_core::properties::ObjectKind::Disk,
+                                    uuid: vdi.uuid.clone(),
+                                },
+                            });
+                        }
                         let deletable = can_delete && vdi.attached_to.is_empty() && !vdi.missing;
                         if ui
                             .add_enabled(

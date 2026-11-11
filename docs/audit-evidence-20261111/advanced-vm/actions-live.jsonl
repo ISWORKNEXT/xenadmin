@@ -1,0 +1,9 @@
+{"prefix":"zz-parity-advanced-01a1c942-9021-75d2-ab13-a5a31ea2dd93"}
+{"check":"start-paused","state":"Paused","uuid":"902b89dc-6830-dd0e-6775-5f3d2ed0ce34"}
+{"data_disk":"90bd1b1c-a983-42dd-8cf7-3b872c5be8ae","operations":["sysprep","metadata_export","changing_VCPUs_live","changing_dynamic_range","migrate_send","pool_migrate","suspend","hard_reboot","hard_shutdown","clean_reboot","clean_shutdown","pause","checkpoint","snapshot"],"phase":"guest-ready","pv_version":"7.30.0.19","uuid":"902b89dc-6830-dd0e-6775-5f3d2ed0ce34"}
+{"check":"checkpoint","parent_running":true,"snapshot_state":"Suspended","uuid":"2773831f-b8da-d200-79e2-a33c1f793d2a"}
+{"check": "checkpoint-memory-image", "snapshot_uuid": "2773831f-b8da-d200-79e2-a33c1f793d2a", "memory_vdi_uuid": "dbe30bb4-11ea-40f7-bf6a-d8ed56e9b772", "bytes": 1459617792}
+{"check":"quiesce","error":"The host does not currently allow this operation. Refresh and check the VM state.","status":"NOT VERIFIED"}
+{"check":"convert-to-template","idempotent":true,"running_rejected":true,"same_disks":true,"uuid":"902b89dc-6830-dd0e-6775-5f3d2ed0ce34"}
+{"phase":"ready-for-ui","prefix":"zz-parity-advanced-01a1c942-9021-75d2-ab13-a5a31ea2dd93","uuid":"2129a478-7bbb-b7f4-0f1a-425b3c5db45a"}
+{"cleanup":"completed","result":{"Ok":"pass"}}

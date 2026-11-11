@@ -5,10 +5,29 @@ use serde_json::{Value, json};
 
 use crate::xapi::{ApiError, Connection};
 
+/// CPU, memory and boot values. Absent boot options retain their current values.
+#[derive(Clone, Debug)]
+pub struct VmResourceUpdate {
+    pub vcpus_max: u64,
+    pub vcpus_at_startup: u64,
+    pub memory_static_max_mib: u64,
+    pub memory_dynamic_min_mib: u64,
+    pub memory_dynamic_max_mib: u64,
+    pub boot_order: Option<String>,
+    pub firmware: Option<String>,
+    pub secure_boot: Option<bool>,
+    pub boot_policy: Option<String>,
+    pub after_crash: Option<String>,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum VmAction {
     Start,
+    StartPaused,
+    StartPausedOn {
+        host_ref: String,
+    },
     StartOn {
         host_ref: String,
     },
@@ -33,6 +52,13 @@ pub enum VmAction {
     Snapshot {
         name: String,
     },
+    Checkpoint {
+        name: String,
+    },
+    SnapshotWithQuiesce {
+        name: String,
+    },
+    ConvertToTemplate,
     Revert,
     Destroy {
         delete_disks: bool,
@@ -43,8 +69,8 @@ pub enum VmAction {
 impl VmAction {
     pub fn allowed_operation(&self) -> &'static str {
         match self {
-            Self::Start => "start",
-            Self::StartOn { .. } => "start_on",
+            Self::Start | Self::StartPaused => "start",
+            Self::StartOn { .. } | Self::StartPausedOn { .. } => "start_on",
             Self::Shutdown => "clean_shutdown",
             Self::Reboot => "clean_reboot",
             Self::ForceShutdown => "hard_shutdown",
@@ -56,6 +82,9 @@ impl VmAction {
             Self::ResumeOn { .. } => "resume_on",
             Self::Clone { .. } | Self::CreateFromSnapshot { .. } => "clone",
             Self::Snapshot { .. } => "snapshot",
+            Self::Checkpoint { .. } => "checkpoint",
+            Self::SnapshotWithQuiesce { .. } => "snapshot_with_quiesce",
+            Self::ConvertToTemplate => "make_into_template",
             Self::Revert => "revert",
             Self::Destroy { .. } => "destroy",
         }
@@ -64,6 +93,7 @@ impl VmAction {
     pub fn title(&self) -> &'static str {
         match self {
             Self::Start => "Start",
+            Self::StartPaused | Self::StartPausedOn { .. } => "Start paused",
             Self::StartOn { .. } => "Start on host",
             Self::Shutdown => "Shut down",
             Self::Reboot => "Reboot",
@@ -82,6 +112,9 @@ impl VmAction {
                 as_template: false, ..
             } => "Create VM from snapshot",
             Self::Snapshot { .. } => "Take snapshot",
+            Self::Checkpoint { .. } => "Take checkpoint",
+            Self::SnapshotWithQuiesce { .. } => "Take quiesced snapshot",
+            Self::ConvertToTemplate => "Convert to template",
             Self::Revert => "Revert snapshot",
             Self::Destroy { .. } => "Delete",
         }
@@ -90,11 +123,15 @@ impl VmAction {
     fn params(&self, session: &str, reference: &str) -> Result<Value, ApiError> {
         Ok(match self {
             Self::Start | Self::Resume => json!([session, reference, false, false]),
+            Self::StartPaused => json!([session, reference, true, false]),
+            Self::StartPausedOn { host_ref } => json!([session, reference, host_ref, true, false]),
             Self::StartOn { host_ref } | Self::ResumeOn { host_ref } => {
                 json!([session, reference, host_ref, false, false])
             }
             Self::Clone { name }
             | Self::Snapshot { name }
+            | Self::Checkpoint { name }
+            | Self::SnapshotWithQuiesce { name }
             | Self::CreateFromSnapshot { name, .. } => {
                 if name.trim().is_empty() || name.chars().count() > 255 {
                     return Err(ApiError::Xen(
@@ -111,8 +148,13 @@ impl VmAction {
 impl Connection {
     /// Re-read the record before submitting. A stale UI cannot grant an operation.
     pub async fn begin_vm_action(&self, uuid: &str, action: &VmAction) -> Result<String, ApiError> {
-        if matches!(action, VmAction::CreateFromSnapshot { .. }) {
-            return Err(ApiError::Xen("Snapshot creation must use create_from_snapshot so disk ownership and object type are configured.".into()));
+        if matches!(
+            action,
+            VmAction::CreateFromSnapshot { .. } | VmAction::ConvertToTemplate
+        ) {
+            return Err(ApiError::Xen(
+                "This operation requires its configured workspace action.".into(),
+            ));
         }
         if self.settings.read_only {
             return Err(ApiError::Xen(
@@ -159,14 +201,16 @@ impl Connection {
             action,
             VmAction::Start
                 | VmAction::StartOn { .. }
+                | VmAction::StartPaused
+                | VmAction::StartPausedOn { .. }
                 | VmAction::Resume
                 | VmAction::ResumeOn { .. }
         ) {
             self.preflight_boot(&reference).await?;
             let host_ref = match action {
-                VmAction::StartOn { host_ref } | VmAction::ResumeOn { host_ref } => {
-                    Some(host_ref.clone())
-                }
+                VmAction::StartOn { host_ref }
+                | VmAction::StartPausedOn { host_ref }
+                | VmAction::ResumeOn { host_ref } => Some(host_ref.clone()),
                 _ => {
                     let resident = record["resident_on"].as_str().unwrap_or_default();
                     let affinity = record["affinity"].as_str().unwrap_or_default();
@@ -834,39 +878,27 @@ impl Connection {
         Ok(new_uuid)
     }
 
-    /// Update the editable name/description and, when the VM is halted, its
-    /// vCPU and static-memory limits. Only changed values are submitted.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn update_vm(
+    /// Update CPU, memory and boot settings with host-state guards.
+    pub async fn update_vm_resources(
         &self,
         uuid: &str,
-        name: &str,
-        description: &str,
-        vcpus_max: u64,
-        vcpus_at_startup: u64,
-        memory_static_max_mib: u64,
-        memory_dynamic_min_mib: u64,
-        memory_dynamic_max_mib: u64,
-        boot_order: Option<String>,
-        firmware: Option<String>,
-        secure_boot: Option<bool>,
-        boot_policy: Option<String>,
-        after_crash: Option<String>,
+        resources: &VmResourceUpdate,
     ) -> Result<(), ApiError> {
+        let VmResourceUpdate {
+            vcpus_max,
+            vcpus_at_startup,
+            memory_static_max_mib,
+            memory_dynamic_min_mib,
+            memory_dynamic_max_mib,
+            boot_order,
+            firmware,
+            secure_boot,
+            boot_policy,
+            after_crash,
+        } = resources.clone();
         if self.settings.read_only {
             return Err(ApiError::Xen(
                 "This connection is read-only. Changes are blocked by the Rust backend.".into(),
-            ));
-        }
-        let name = name.trim();
-        if name.is_empty() || name.chars().count() > 255 {
-            return Err(ApiError::Xen(
-                "Enter a name between 1 and 255 characters.".into(),
-            ));
-        }
-        if description.chars().count() > 1024 {
-            return Err(ApiError::Xen(
-                "The description must be 1024 characters or fewer.".into(),
             ));
         }
         if vcpus_max < 1 || vcpus_at_startup < 1 || vcpus_at_startup > vcpus_max {
@@ -935,8 +967,6 @@ impl Connection {
             return Err(ApiError::Xen("Only virtual machines can be edited.".into()));
         }
 
-        let current_name = record["name_label"].as_str().unwrap_or_default();
-        let current_description = record["name_description"].as_str().unwrap_or_default();
         let current_vcpus_max = number(&record, "VCPUs_max");
         let current_vcpus_startup = number(&record, "VCPUs_at_startup");
         let current_static_min = number(&record, "memory_static_min");
@@ -981,7 +1011,10 @@ impl Connection {
             return Err(ApiError::Xen("Secure boot requires UEFI firmware.".into()));
         }
         let secure_desired = secure_boot.map(|secure| secure.to_string()).or_else(|| {
-            (effective_firmware == "bios" && current_secure != "false").then(|| "false".to_owned())
+            (firmware.as_deref() == Some("bios")
+                && current_firmware != "bios"
+                && current_secure != "false")
+                .then(|| "false".to_owned())
         });
         let boot_changed = boot_order
             .as_ref()
@@ -1005,9 +1038,24 @@ impl Connection {
         let dynamic_changed =
             dynamic_min != current_dynamic_min || dynamic_max != current_dynamic_max;
         let halted = record["power_state"].as_str() == Some("Halted");
-        if (vcpus_changed || static_changed) && !halted {
+        let live_vcpus_changed = vcpus_changed && !halted;
+        if static_changed && !halted {
             return Err(ApiError::Xen(
-                "Shut down the VM before changing its CPU or static memory settings.".into(),
+                "Shut down the VM before changing static memory.".into(),
+            ));
+        }
+        let guest_records = if live_vcpus_changed {
+            Some(self.records("VM_guest_metrics").await?)
+        } else {
+            None
+        };
+        if live_vcpus_changed
+            && (vcpus_max != current_vcpus_max
+                || vcpus_at_startup < current_vcpus_startup
+                || !crate::vm::vcpu_hotplug_allowed(&record, guest_records.as_ref()))
+        {
+            return Err(ApiError::Xen(
+                "Live CPU changes require a running supported guest and can only add vCPUs within its configured maximum. Shut down the VM for other CPU changes.".into(),
             ));
         }
         if dynamic_changed && !halted {
@@ -1022,19 +1070,13 @@ impl Connection {
             }
         }
 
-        if name != current_name {
-            self.request::<Value>("VM.set_name_label", json!([self.session, reference, name]))
-                .await?;
-        }
-        if description != current_description {
+        if live_vcpus_changed {
             self.request::<Value>(
-                "VM.set_name_description",
-                json!([self.session, reference, description]),
+                "VM.set_VCPUs_number_live",
+                json!([self.session, reference, vcpus_at_startup]),
             )
             .await?;
-        }
-
-        if vcpus_changed {
+        } else if vcpus_changed {
             if vcpus_max < current_vcpus_startup {
                 self.request::<Value>(
                     "VM.set_VCPUs_at_startup",
@@ -1404,22 +1446,6 @@ impl Connection {
         });
         self.async_task("Async.VBD.create", json!([self.session, vbd]))
             .await
-    }
-
-    /// Replace the set of tags on a VM or template.
-    pub async fn set_vm_tags(&self, uuid: &str, tags: Vec<String>) -> Result<(), ApiError> {
-        if self.settings.read_only {
-            return Err(ApiError::Xen(
-                "This connection is read-only. Changes are blocked by the Rust backend.".into(),
-            ));
-        }
-        let cleaned = clean_tags(tags)?;
-        let reference: String = self
-            .request("VM.get_by_uuid", json!([self.session, uuid]))
-            .await?;
-        self.request::<Value>("VM.set_tags", json!([self.session, reference, cleaned]))
-            .await?;
-        Ok(())
     }
 
     /// Update VM HA restart policy, boot/shutdown delays and affinity.
@@ -1849,9 +1875,20 @@ impl Connection {
         let vm: Value = self
             .request("VM.get_record", json!([self.session, vm_ref]))
             .await?;
-        if vm["power_state"].as_str() != Some("Halted") {
+        match vm["power_state"].as_str() {
+            Some("Halted" | "Running") => {}
+            _ => {
+                return Err(ApiError::Xen(
+                    "Resume or shut down the VM before resizing a disk.".into(),
+                ));
+            }
+        };
+        if vm["is_control_domain"].as_bool() != Some(false)
+            || vm["is_a_template"].as_bool() != Some(false)
+            || vm["is_a_snapshot"].as_bool() != Some(false)
+        {
             return Err(ApiError::Xen(
-                "Shut down the VM before resizing a disk.".into(),
+                "Only a normal VM's writable disk can be resized.".into(),
             ));
         }
         let vdi_ref: String = self
@@ -1860,6 +1897,17 @@ impl Connection {
         let vdi: Value = self
             .request("VDI.get_record", json!([self.session, vdi_ref]))
             .await?;
+        let operation = ["resize", "resize_online"].into_iter().find(|operation| {
+            vdi["allowed_operations"]
+                .as_array()
+                .is_some_and(|ops| ops.iter().any(|op| op.as_str() == Some(*operation)))
+        });
+        let Some(operation) = operation.filter(|_| vdi["read_only"].as_bool() == Some(false))
+        else {
+            return Err(ApiError::Xen(
+                "The storage backend does not currently allow resizing this disk.".into(),
+            ));
+        };
         let current = number(&vdi, "virtual_size");
         if size_bytes <= current {
             return Err(ApiError::Xen(
@@ -1870,13 +1918,22 @@ impl Connection {
         if !vbds.values().any(|vbd| {
             vbd["VM"].as_str() == Some(vm_ref.as_str())
                 && vbd["VDI"].as_str() == Some(vdi_ref.as_str())
+                && vbd["type"].as_str() == Some("Disk")
+                && vbd["mode"].as_str() == Some("RW")
         }) {
             return Err(ApiError::Xen(
                 "The selected disk is not attached to this VM.".into(),
             ));
         }
-        self.request::<Value>("VDI.resize", json!([self.session, vdi_ref, size_bytes]))
-            .await?;
+        self.request::<Value>(
+            if operation == "resize" {
+                "VDI.resize"
+            } else {
+                "VDI.resize_online"
+            },
+            json!([self.session, vdi_ref, size_bytes]),
+        )
+        .await?;
         Ok(())
     }
 
@@ -2587,28 +2644,6 @@ fn deletable_user_vdi(vdi: &Value) -> bool {
     text(vdi, "type") == "user" && vdi["read_only"].as_bool() != Some(true)
 }
 
-fn clean_tags(tags: Vec<String>) -> Result<Vec<String>, ApiError> {
-    if tags.len() > 64 {
-        return Err(ApiError::Xen("A VM can have at most 64 tags.".into()));
-    }
-    let mut cleaned = Vec::new();
-    for tag in tags {
-        let tag = tag.trim().to_owned();
-        if tag.is_empty() {
-            continue;
-        }
-        if tag.chars().count() > 64 {
-            return Err(ApiError::Xen(
-                "Each tag must be 64 characters or fewer.".into(),
-            ));
-        }
-        if !cleaned.contains(&tag) {
-            cleaned.push(tag);
-        }
-    }
-    Ok(cleaned)
-}
-
 fn valid_restart_priority(value: &str) -> bool {
     matches!(value, "" | "restart" | "best-effort" | "0" | "1")
 }
@@ -2894,20 +2929,6 @@ mod tests {
         assert!(!deletable_user_vdi(
             &json!({"type":"iso","read_only":false})
         ));
-    }
-
-    #[test]
-    fn cleans_and_validates_tags() {
-        let tags = clean_tags(vec![
-            " smoke ".into(),
-            "xen".into(),
-            "smoke".into(),
-            String::new(),
-        ])
-        .unwrap();
-        assert_eq!(tags, vec!["smoke".to_string(), "xen".to_string()]);
-        assert!(clean_tags(vec!["x".repeat(65)]).is_err());
-        assert!(clean_tags((0..65).map(|index| format!("tag{index}")).collect()).is_err());
     }
 
     #[test]

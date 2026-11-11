@@ -29,8 +29,12 @@ UI evidence includes the [VM creation task](audit-live-ui-evidence-20261111/snap
 
 The final [cleanup readback](audit-evidence-20261111/snapshot-actions/cleanup.json) found no test VMs or policies. Both the original VM UUID list and the entire VDI reference list matched the baseline. Format, Clippy across all targets, and the native build passed. No fixture suite was run for this follow-up.
 
+## Completion scope
+
+The user requested all remaining functions except permissions and certificates. Work and qualification are tracked in [the completion plan](parity-completion-plan.md) and [the decision trail](parity-decisions.tsv). New advanced VM operations are documented in [their live qualification](advanced-vm-live-qualification-20261111.md). VM resource/metadata ownership, long-description creation and common name, description and tag editing are tracked in [object-properties qualification](object-properties-live-qualification-20261111.md).
+
 ## Remaining functional coverage
 
-The remaining implementation groups include VM migration and copy, OVF and OVA import and export, advanced snapshots and VM properties, storage discovery and creation, host and pool administration, network configuration, access control, recovery services, monitoring, and organization features. The individual gaps and upstream source links remain in the baseline capability tables and command crosswalks.
+The remaining implementation groups include VM migration and copy, OVF and OVA import and export, advanced snapshots and VM properties, storage discovery and creation, host and pool administration, network configuration, recovery services, monitoring, and organization features. The individual gaps and upstream source links remain in the baseline capability tables and command crosswalks.
 
 The development lab currently supplies one host. The user confirmed that there is no second development host and directed work to continue on features that can be tested on `.170`. Cross-host migration, pool membership, HA failover, storage backends, and hardware-dependent behavior require suitable real targets before they can be qualified. This limitation does not mark those capabilities complete.

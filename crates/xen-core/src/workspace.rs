@@ -13,14 +13,15 @@ use uuid::Uuid;
 
 use crate::{
     network::PifSummary,
-    operations::{TaskStatus, VmAction},
+    operations::{TaskStatus, VmAction, VmResourceUpdate},
     storage::{PbdSummary, SrProbe},
     vm::{VdiSummary, VmDetails},
     xapi::{ApiError, Connection, ConnectionSettings, Inventory, RawInventory},
 };
 
-enum CloneMode {
+enum VmPreparation {
     Clone,
+    ConvertToTemplate,
     NewVm(crate::provisioning::CreateVmRequest),
     Snapshot { as_template: bool },
 }
@@ -122,6 +123,36 @@ pub struct Workspace {
 }
 
 impl Workspace {
+    pub async fn object_properties(
+        &self,
+        connection_id: &str,
+        target: &crate::properties::ObjectTarget,
+    ) -> Result<crate::properties::ObjectProperties, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .object_properties(target)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub async fn update_object_properties(
+        &self,
+        connection_id: &str,
+        properties: &crate::properties::ObjectPropertiesEdit,
+    ) -> Result<crate::properties::ObjectProperties, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        let saved = active
+            .connection
+            .update_object_properties(properties)
+            .await
+            .map_err(|error| error.to_string())?;
+        let _ = refresh_inventory_cache(&active).await;
+        Ok(saved)
+    }
+
     pub fn with_profiles(profiles: Vec<Profile>) -> Arc<Self> {
         Arc::new(Self {
             entries: RwLock::new(
@@ -328,23 +359,11 @@ impl Workspace {
             .map_err(|error| error.to_string())
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub async fn update_vm(
+    pub async fn update_vm_resources(
         &self,
         connection_id: &str,
         vm_uuid: &str,
-        name: String,
-        description: String,
-        vcpus_max: u64,
-        vcpus_at_startup: u64,
-        memory_static_max_mib: u64,
-        memory_dynamic_min_mib: u64,
-        memory_dynamic_max_mib: u64,
-        boot_order: Option<String>,
-        firmware: Option<String>,
-        secure_boot: Option<bool>,
-        boot_policy: Option<String>,
-        after_crash: Option<String>,
+        resources: VmResourceUpdate,
     ) -> Result<(), String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;
@@ -353,21 +372,7 @@ impl Workspace {
         }
         active
             .connection
-            .update_vm(
-                vm_uuid,
-                &name,
-                &description,
-                vcpus_max,
-                vcpus_at_startup,
-                memory_static_max_mib,
-                memory_dynamic_min_mib,
-                memory_dynamic_max_mib,
-                boot_order,
-                firmware,
-                secure_boot,
-                boot_policy,
-                after_crash,
-            )
+            .update_vm_resources(vm_uuid, &resources)
             .await
             .map_err(|error| error.to_string())?;
         match refresh_inventory_cache(&active).await {
@@ -1269,25 +1274,6 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
-    pub async fn set_vm_tags(
-        &self,
-        connection_id: &str,
-        vm_uuid: &str,
-        tags: Vec<String>,
-    ) -> Result<(), String> {
-        let active = self.active(connection_id).await?;
-        let _lease = active.lifecycle.read().await;
-        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
-            return Err("This virtual machine is not part of the selected connection.".into());
-        }
-        active
-            .connection
-            .set_vm_tags(vm_uuid, tags)
-            .await
-            .map_err(|error| error.to_string())?;
-        refresh_inventory_cache(&active).await
-    }
-
     pub async fn update_vm_ha(
         &self,
         connection_id: &str,
@@ -1875,18 +1861,28 @@ impl Workspace {
                 .start_destroy(connection_id, vm_uuid, delete_disks, delete_snapshots)
                 .await;
         }
+        if matches!(action, VmAction::ConvertToTemplate) {
+            return self
+                .start_vm_preparation(
+                    connection_id,
+                    vm_uuid,
+                    String::new(),
+                    VmPreparation::ConvertToTemplate,
+                )
+                .await;
+        }
         if let VmAction::Clone { name } = action {
             return self
-                .start_clone(connection_id, vm_uuid, name, CloneMode::Clone)
+                .start_vm_preparation(connection_id, vm_uuid, name, VmPreparation::Clone)
                 .await;
         }
         if let VmAction::CreateFromSnapshot { name, as_template } = action {
             return self
-                .start_clone(
+                .start_vm_preparation(
                     connection_id,
                     vm_uuid,
                     name,
-                    CloneMode::Snapshot { as_template },
+                    VmPreparation::Snapshot { as_template },
                 )
                 .await;
         }
@@ -1975,11 +1971,11 @@ impl Workspace {
         connection_id: String,
         request: crate::provisioning::CreateVmRequest,
     ) -> Result<Operation, String> {
-        self.start_clone(
+        self.start_vm_preparation(
             connection_id,
             request.template_uuid.clone(),
             request.name.clone(),
-            CloneMode::NewVm(request),
+            VmPreparation::NewVm(request),
         )
         .await
     }
@@ -2101,12 +2097,12 @@ impl Workspace {
         Ok(record)
     }
 
-    async fn start_clone(
+    async fn start_vm_preparation(
         self: &Arc<Self>,
         connection_id: String,
         vm_uuid: String,
         name: String,
-        mode: CloneMode,
+        mode: VmPreparation,
     ) -> Result<Operation, String> {
         let active = self.active(&connection_id).await?;
         let lease = active.lifecycle.clone().read_owned().await;
@@ -2133,6 +2129,12 @@ impl Workspace {
                 "This connection is read-only. Changes are blocked by the Rust backend.".into(),
             );
         }
+        let converting = matches!(&mode, VmPreparation::ConvertToTemplate);
+        let name = if converting {
+            object_name.clone()
+        } else {
+            name
+        };
         let record = Operation {
             id: Uuid::now_v7().to_string(),
             connection_id,
@@ -2141,10 +2143,11 @@ impl Workspace {
             remote_ref: String::new(),
             object_name,
             action: match &mode {
-                CloneMode::Clone => "Clone",
-                CloneMode::NewVm(_) => "Create VM",
-                CloneMode::Snapshot { as_template: true } => "Create template from snapshot",
-                CloneMode::Snapshot { as_template: false } => "Create VM from snapshot",
+                VmPreparation::Clone => "Clone",
+                VmPreparation::ConvertToTemplate => "Convert to template",
+                VmPreparation::NewVm(_) => "Create VM",
+                VmPreparation::Snapshot { as_template: true } => "Create template from snapshot",
+                VmPreparation::Snapshot { as_template: false } => "Create VM from snapshot",
             }
             .into(),
             status: TaskStatus::Running,
@@ -2170,14 +2173,19 @@ impl Workspace {
         let active_for_task = active.clone();
         tokio::spawn(async move {
             let result = match mode {
-                CloneMode::NewVm(request) => {
+                VmPreparation::ConvertToTemplate => active_for_task
+                    .connection
+                    .convert_vm_to_template(&vm_uuid)
+                    .await
+                    .map(|()| vm_uuid.clone()),
+                VmPreparation::NewVm(request) => {
                     active_for_task
                         .connection
                         .create_vm_from_template(&request)
                         .await
                 }
-                CloneMode::Clone => active_for_task.connection.clone_vm(&vm_uuid, &name).await,
-                CloneMode::Snapshot { as_template } => {
+                VmPreparation::Clone => active_for_task.connection.clone_vm(&vm_uuid, &name).await,
+                VmPreparation::Snapshot { as_template } => {
                     active_for_task
                         .connection
                         .create_from_snapshot(&vm_uuid, &name, as_template)
@@ -2186,7 +2194,11 @@ impl Workspace {
             };
             let result = match result {
                 Ok(new_uuid) => match refresh_inventory_cache(&active_for_task).await {
-                    Ok(()) => Ok(format!("Created {name} ({new_uuid}).")),
+                    Ok(()) => Ok(if converting {
+                        format!("Converted {name} ({new_uuid}) to a template.")
+                    } else {
+                        format!("Created {name} ({new_uuid}).")
+                    }),
                     Err(error) => Err(format!(
                         "The object was created, but the inventory refresh failed: {error}"
                     )),

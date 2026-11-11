@@ -1,0 +1,139 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        370
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "legacy-resource-form",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        822
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        990,
+        500
+      ],
+      "scroll": 80,
+      "snap": "legacy-resource-save-rejected",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        463,
+        836
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        792,
+        77
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1000,
+        720
+      ],
+      "snap": "properties-small-window-retry",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        157
+      ],
+      "key": "End",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "1",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        740,
+        648
+      ],
+      "snap": "small-window-conflict",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        313,
+        617
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "small-window-reloaded",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        740,
+        648
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1440,
+        940
+      ],
+      "snap": "reload-save-complete",
+      "wait": 3
+    }
+  }
+]

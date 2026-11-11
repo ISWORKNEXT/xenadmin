@@ -1,0 +1,121 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "initial-xvfb",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        466,
+        370
+      ],
+      "snap": "xvfb-start-on-menu",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        490,
+        447
+      ],
+      "snap": "xvfb-paused-host-confirm",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        554
+      ],
+      "snap": "xvfb-paused-host-task",
+      "wait": 6,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "0d519e7a-b2af-f269-0bda-fb3ade4bfc62",
+        "name_label": "zz-parity-advanced-01a1c95c-52b8-7065-a5f7-367cb4007421-vm",
+        "power_state": "Paused",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 4,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        125
+      ],
+      "snap": "paused-details-refreshed",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        710,
+        77
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        745,
+        616
+      ],
+      "snap": "force-stop-owned-vm",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        554
+      ],
+      "snap": "force-stop-result",
+      "wait": 3,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "0d519e7a-b2af-f269-0bda-fb3ade4bfc62",
+        "name_label": "zz-parity-advanced-01a1c95c-52b8-7065-a5f7-367cb4007421-vm",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 4,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

@@ -12,6 +12,16 @@ use xen_core::{
 
 /// Commands sent from the UI thread to the background workspace thread.
 pub enum Command {
+    ObjectProperties {
+        seq: u64,
+        connection_id: String,
+        target: xen_core::properties::ObjectTarget,
+    },
+    SaveObjectProperties {
+        seq: u64,
+        connection_id: String,
+        properties: xen_core::properties::ObjectPropertiesEdit,
+    },
     XvaTransfer {
         connection_id: String,
         request: xen_core::xva::XvaRequest,
@@ -309,22 +319,10 @@ pub enum Command {
         vm_uuid: String,
         range_seconds: u64,
     },
-    EditVm {
+    UpdateVmResources {
         connection_id: String,
         vm_uuid: String,
-        name: String,
-        description: String,
-        vcpus_max: u64,
-        vcpus_at_startup: u64,
-        memory_static_max_mib: u64,
-        memory_dynamic_min_mib: u64,
-        memory_dynamic_max_mib: u64,
-        boot_order: Option<String>,
-        firmware: Option<String>,
-        secure_boot: Option<bool>,
-        boot_policy: Option<String>,
-        after_crash: Option<String>,
-        tags: Vec<String>,
+        resources: xen_core::operations::VmResourceUpdate,
     },
     ChangeCd {
         connection_id: String,
@@ -478,6 +476,14 @@ pub enum Command {
 
 /// Results sent back to the UI thread.
 pub enum Event {
+    ObjectProperties {
+        seq: u64,
+        result: Result<xen_core::properties::ObjectProperties, String>,
+    },
+    ObjectPropertiesSaved {
+        seq: u64,
+        result: Result<xen_core::properties::ObjectProperties, String>,
+    },
     XvaQueued {
         result: Result<(), String>,
     },
@@ -594,7 +600,7 @@ pub enum Event {
         seq: u64,
         result: Result<Box<HostPerformance>, String>,
     },
-    VmEdited {
+    VmResourcesUpdated {
         vm_uuid: String,
         result: Result<(), String>,
     },
@@ -819,6 +825,24 @@ fn dispatch(
 
     tokio::spawn(async move {
         match command {
+            Command::ObjectProperties {
+                seq,
+                connection_id,
+                target,
+            } => {
+                let result = workspace.object_properties(&connection_id, &target).await;
+                let _ = events.send(Event::ObjectProperties { seq, result });
+            }
+            Command::SaveObjectProperties {
+                seq,
+                connection_id,
+                properties,
+            } => {
+                let result = workspace
+                    .update_object_properties(&connection_id, &properties)
+                    .await;
+                let _ = events.send(Event::ObjectPropertiesSaved { seq, result });
+            }
             Command::XvaTransfer {
                 connection_id,
                 request,
@@ -1498,46 +1522,15 @@ fn dispatch(
                     .map(Box::new);
                 let _ = events.send(Event::VmPerformance { seq, result });
             }
-            Command::EditVm {
+            Command::UpdateVmResources {
                 connection_id,
                 vm_uuid,
-                name,
-                description,
-                vcpus_max,
-                vcpus_at_startup,
-                memory_static_max_mib,
-                memory_dynamic_min_mib,
-                memory_dynamic_max_mib,
-                boot_order,
-                firmware,
-                secure_boot,
-                boot_policy,
-                after_crash,
-                tags,
+                resources,
             } => {
-                let result = async {
-                    workspace
-                        .update_vm(
-                            &connection_id,
-                            &vm_uuid,
-                            name,
-                            description,
-                            vcpus_max,
-                            vcpus_at_startup,
-                            memory_static_max_mib,
-                            memory_dynamic_min_mib,
-                            memory_dynamic_max_mib,
-                            boot_order,
-                            firmware,
-                            secure_boot,
-                            boot_policy,
-                            after_crash,
-                        )
-                        .await?;
-                    workspace.set_vm_tags(&connection_id, &vm_uuid, tags).await
-                }
-                .await;
-                let _ = events.send(Event::VmEdited { vm_uuid, result });
+                let result = workspace
+                    .update_vm_resources(&connection_id, &vm_uuid, resources)
+                    .await;
+                let _ = events.send(Event::VmResourcesUpdated { vm_uuid, result });
             }
             Command::ChangeCd {
                 connection_id,

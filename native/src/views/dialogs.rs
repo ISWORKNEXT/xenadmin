@@ -15,6 +15,9 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
+    if state.properties.is_some() {
+        super::properties::show(ctx, state, workspace, actions);
+    }
     if state.xva_dialog.is_some() {
         super::xva::show(ctx, state, workspace, actions);
     }
@@ -30,8 +33,8 @@ pub fn show(
     if state.record_dialog.is_some() {
         record(ctx, state);
     }
-    if state.vm_edit.is_some() {
-        vm_edit(ctx, state, actions);
+    if state.vm_resource_edit.is_some() {
+        vm_resources(ctx, state, workspace, actions);
     }
     if state.iso_dialog.is_some() {
         iso_dialog(ctx, state, actions);
@@ -412,7 +415,7 @@ fn intent(
                 widgets::field_label(
                     ui,
                     match intent.kind {
-                        crate::state::ActionKind::Snapshot => "Snapshot name",
+                        crate::state::ActionKind::Snapshot | crate::state::ActionKind::Checkpoint | crate::state::ActionKind::SnapshotWithQuiesce => "Snapshot name",
                         crate::state::ActionKind::SnapshotToTemplate => "New template name",
                         _ => "New machine name",
                     },
@@ -426,6 +429,15 @@ fn intent(
                         .char_limit(255)
                         .margin(egui::Margin::symmetric(8, 5)),
                 );
+            }
+            if intent.kind==crate::state::ActionKind::ConvertToTemplate {
+                ui.label("Converts this halted VM into a template. Its disks stay attached and the object appears under Templates.");
+            }
+            if intent.kind==crate::state::ActionKind::Checkpoint {
+                ui.label("Captures disks and memory. The VM may pause briefly while its state is saved.");
+            }
+            if intent.kind==crate::state::ActionKind::SnapshotWithQuiesce {
+                ui.label("Requires guest tools and a guest that supports quiesced snapshots.");
             }
             if intent.kind == crate::state::ActionKind::Revert {
                 ui.add_space(8.0);
@@ -474,7 +486,7 @@ fn intent(
                     );
                 }
             } else if intent.kind.destructive()
-                && intent.kind != crate::state::ActionKind::Revert
+                && !matches!(intent.kind, crate::state::ActionKind::Revert | crate::state::ActionKind::ConvertToTemplate)
             {
                 ui.add_space(8.0);
                 ui.label(
@@ -521,54 +533,33 @@ fn intent(
     }
 }
 
-fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+fn vm_resources(
+    ctx: &egui::Context,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
+) {
     let mut close = false;
     let mut save = false;
-    let Some(edit) = state.vm_edit.as_mut() else {
+    let Some(edit) = state.vm_resource_edit.as_mut() else {
         return;
     };
-    let response = egui::Modal::new(egui::Id::unique("vm-edit-modal"))
+    let response = egui::Modal::new(egui::Id::unique("vm-resources-modal"))
         .frame(theme::modal_frame())
         .show(ctx, |ui| {
             ui.set_width(520.0);
             modal_title(
                 ui,
-                "Edit virtual machine",
-                "Name and description can change while the VM is running.",
+                "Edit VM resources",
+                "Change CPU, memory and boot settings.",
             );
+            let display_name = find_vm(workspace, &edit.connection_id, &edit.vm_uuid).map(|(_, vm)| vm.name.as_str()).unwrap_or(&edit.vm_uuid);
+            ui.add(egui::Label::new(RichText::new(display_name).size(11.0)).truncate()).on_hover_text(&edit.vm_uuid);
+            ui.add_space(8.0);
             egui::ScrollArea::vertical()
-                .max_height(560.0)
+                .max_height((ctx.content_rect().height() - 230.0).max(100.0))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-            widgets::field_label(ui, "Name");
-            ui.add_enabled(
-                !edit.submitting,
-                egui::TextEdit::singleline(&mut edit.name)
-                    .desired_width(f32::INFINITY)
-                    .char_limit(255)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Description");
-            ui.add_enabled(
-                !edit.submitting,
-                egui::TextEdit::multiline(&mut edit.description)
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(3)
-                    .char_limit(1024)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Tags (comma separated)");
-            ui.add_enabled(
-                !edit.submitting,
-                egui::TextEdit::singleline(&mut edit.tags)
-                    .desired_width(f32::INFINITY)
-                    .hint_text("e.g. production, web, xensearch")
-                    .char_limit(1024)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(10.0);
             ui.columns(2, |columns| {
                 resources_slider(
                     &mut columns[0],
@@ -580,11 +571,11 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                 );
                 resources_slider(
                     &mut columns[1],
-                    "vCPUs at startup",
+                    if edit.running { "vCPUs online" } else { "vCPUs at startup" },
                     &mut edit.vcpus_at_startup,
-                    1..=64,
+                    if edit.running { edit.current_vcpus..=edit.vcpus_max.parse().unwrap_or(edit.current_vcpus) } else { 1..=64 },
                     " vCPU",
-                    !edit.running && !edit.submitting,
+                    (!edit.running || edit.can_hotplug_vcpus) && !edit.submitting,
                 );
             });
             ui.add_space(8.0);
@@ -599,7 +590,7 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
             if edit.running {
                 ui.label(
                     RichText::new(
-                        "Shut down the VM to change vCPUs or static memory. Dynamic memory can change while running.",
+                        "Supported running guests can add vCPUs up to the configured maximum. Shut down to reduce CPUs, change the maximum or change static memory.",
                     )
                     .size(9.0)
                     .color(amber()),
@@ -760,7 +751,7 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                 });
             }
             ui.label(
-                RichText::new("vCPU and static memory changes require the VM to be shut down. Dynamic memory can change while running when the host allows it. Firmware, secure boot and boot options take effect on the next start.")
+                RichText::new("Maximum CPU and static memory changes require shutdown. Supported running guests can add vCPUs and change dynamic memory when the host allows it. Boot options take effect on the next start.")
                     .size(9.0)
                     .color(if edit.running { amber() } else { dim_fg() }),
             );
@@ -783,7 +774,7 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui
                         .add_enabled(
-                            !edit.submitting && !edit.name.trim().is_empty(),
+                            !edit.submitting,
                             widgets::primary_button(if edit.submitting {
                                 "Saving…"
                             } else {
@@ -801,10 +792,10 @@ fn vm_edit(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>
         close = true;
     }
     if save {
-        actions.push(UiAction::SaveVmEdit);
+        actions.push(UiAction::SaveVmResources);
     }
     if close {
-        actions.push(UiAction::CloseVmEdit);
+        actions.push(UiAction::CloseVmResources);
     }
 }
 
@@ -4768,7 +4759,7 @@ fn disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAct
                     modal_title(
                         ui,
                         "Resize virtual disk",
-                        "Disks can be increased while the VM is shut down.",
+                        "Increase the disk size. Running VMs use online resize when the storage backend supports it. Extend the partition and filesystem inside the guest afterwards.",
                     );
                     ui.label(
                         RichText::new(format!(

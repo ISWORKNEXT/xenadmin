@@ -185,7 +185,7 @@ fn page(
             widgets::field_label(ui, "Description");
             ui.add(
                 egui::TextEdit::multiline(&mut draft.description)
-                    .char_limit(1024)
+                    .char_limit(xen_core::properties::MAX_DESCRIPTION_CHARS)
                     .desired_rows(4)
                     .desired_width(f32::INFINITY),
             );

@@ -1,0 +1,6 @@
+{"prefix":"zz-parity-advanced-01a1c95c-52b8-7065-a5f7-367cb4007421"}
+{"data_disk":"10c8b8bb-a699-454c-a5e0-e9750dd01731","operations":["sysprep","metadata_export","changing_VCPUs_live","changing_dynamic_range","migrate_send","pool_migrate","suspend","hard_reboot","hard_shutdown","clean_reboot","clean_shutdown","pause","checkpoint","snapshot"],"phase":"guest-ready","pv_version":"7.30.0.19","uuid":"0d519e7a-b2af-f269-0bda-fb3ade4bfc62"}
+{"check":"live-cpu","cpu_decrease_rejected":true,"cpu_maximum_rejected":true,"maximum":4,"uuid":"0d519e7a-b2af-f269-0bda-fb3ade4bfc62","vcpus":2,"vm_running":true}
+{"allowed_operations":["clone","snapshot"],"check":"live-disk-growth","reason":"Storage backend does not advertise resize or resize_online for this attached disk","status":"NOT VERIFIED","unsupported_rejected":true}
+{"phase":"ready-for-ui","prefix":"zz-parity-advanced-01a1c95c-52b8-7065-a5f7-367cb4007421","uuid":"0d519e7a-b2af-f269-0bda-fb3ade4bfc62"}
+{"cleanup":"completed","result":{"Ok":"pass"}}

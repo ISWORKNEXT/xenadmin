@@ -1,0 +1,4 @@
+{"prefix":"zz-parity-advanced-01a1c957-c29f-7442-ae55-d7d9c42205fd"}
+{"data_disk":"d9144ac5-dc31-487e-8928-3501c26101aa","operations":["sysprep","metadata_export","changing_VCPUs_live","changing_dynamic_range","migrate_send","pool_migrate","suspend","hard_reboot","hard_shutdown","clean_reboot","clean_shutdown","pause","checkpoint","snapshot"],"phase":"guest-ready","pv_version":"7.30.0.19","uuid":"fab7c365-d7ca-4efb-ca5e-a0a189718de7"}
+{"cleanup":"completed","result":{"Err":"The storage backend does not currently allow resizing this disk."}}
+Error: Xen("The storage backend does not currently allow resizing this disk.")

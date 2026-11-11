@@ -1,0 +1,23 @@
+{
+  "uuid": "0d519e7a-b2af-f269-0bda-fb3ade4bfc62",
+  "power_state": "Halted",
+  "boot_params": {
+    "firmware": "bios",
+    "order": "cd"
+  },
+  "platform": {
+    "timeoffset": "-25194",
+    "device-model": "qemu-upstream-compat",
+    "secureboot": "false",
+    "vga": "std",
+    "videoram": "8",
+    "viridian": "true",
+    "device_id": "0001",
+    "nx": "true",
+    "acpi": "1",
+    "apic": "true",
+    "pae": "true",
+    "hpet": "true"
+  },
+  "startup_vcpus": "2"
+}

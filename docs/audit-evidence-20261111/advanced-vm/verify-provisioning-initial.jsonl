@@ -1,0 +1,6 @@
+{"prefix":"zz-parity-advanced-01a1c9dd-6070-7564-b16e-3e8562a1f18a"}
+{"check":"create-with-changed-long-description","description_chars":2000,"status":"VERIFIED","uuid":"7e15445a-dcbb-3d73-09e7-3b94762b8840"}
+{"check": "seed-owned-legacy-template", "uuid": "7e15445a-dcbb-3d73-09e7-3b94762b8840", "description_chars": 40000, "exact_spaced_tag": true}
+{"check":"create-with-unchanged-legacy-description","description_chars":40000,"exact_spaced_tag":true,"status":"VERIFIED","uuid":"ed6d5010-db6b-f4b1-80c7-51139f2f74f3"}
+{"check":"changed-oversized-description-rejected-before-clone","error":"The description must be 32767 characters or fewer.","owned_object_set_unchanged":true,"status":"VERIFIED"}
+{"cleanup":"completed","result":{"Ok":"pass"}}

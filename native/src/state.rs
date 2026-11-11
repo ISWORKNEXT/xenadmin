@@ -247,6 +247,10 @@ impl VmTab {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ActionKind {
     Start,
+    StartPaused,
+    Checkpoint,
+    SnapshotWithQuiesce,
+    ConvertToTemplate,
     Shutdown,
     Reboot,
     ForceShutdown,
@@ -264,8 +268,12 @@ pub enum ActionKind {
 }
 
 impl ActionKind {
-    pub const MENU: [ActionKind; 12] = [
+    pub const MENU: [ActionKind; 16] = [
         ActionKind::Start,
+        ActionKind::StartPaused,
+        ActionKind::Checkpoint,
+        ActionKind::SnapshotWithQuiesce,
+        ActionKind::ConvertToTemplate,
         ActionKind::Shutdown,
         ActionKind::Reboot,
         ActionKind::Pause,
@@ -289,6 +297,10 @@ impl ActionKind {
     pub fn operation(self) -> &'static str {
         match self {
             ActionKind::Start => "start",
+            ActionKind::StartPaused => "start",
+            ActionKind::Checkpoint => "checkpoint",
+            ActionKind::SnapshotWithQuiesce => "snapshot_with_quiesce",
+            ActionKind::ConvertToTemplate => "make_into_template",
             ActionKind::Shutdown => "clean_shutdown",
             ActionKind::Reboot => "clean_reboot",
             ActionKind::ForceShutdown => "hard_shutdown",
@@ -308,6 +320,10 @@ impl ActionKind {
     pub fn label(self) -> &'static str {
         match self {
             ActionKind::Start => "Start",
+            ActionKind::StartPaused => "Start paused",
+            ActionKind::Checkpoint => "Take checkpoint",
+            ActionKind::SnapshotWithQuiesce => "Take quiesced snapshot",
+            ActionKind::ConvertToTemplate => "Convert to template",
             ActionKind::Shutdown => "Shut down",
             ActionKind::Reboot => "Reboot",
             ActionKind::ForceShutdown => "Force shut down",
@@ -329,6 +345,7 @@ impl ActionKind {
         matches!(
             self,
             ActionKind::ForceShutdown
+                | ActionKind::ConvertToTemplate
                 | ActionKind::ForceReboot
                 | ActionKind::Revert
                 | ActionKind::Destroy
@@ -340,6 +357,8 @@ impl ActionKind {
             self,
             ActionKind::Clone
                 | ActionKind::Snapshot
+                | ActionKind::Checkpoint
+                | ActionKind::SnapshotWithQuiesce
                 | ActionKind::SnapshotToVm
                 | ActionKind::SnapshotToTemplate
         )
@@ -353,6 +372,19 @@ impl ActionKind {
         host_ref: Option<&str>,
     ) -> VmAction {
         match self {
+            ActionKind::StartPaused => match host_ref {
+                Some(host_ref) => VmAction::StartPausedOn {
+                    host_ref: host_ref.to_owned(),
+                },
+                None => VmAction::StartPaused,
+            },
+            ActionKind::Checkpoint => VmAction::Checkpoint {
+                name: name.trim().to_owned(),
+            },
+            ActionKind::SnapshotWithQuiesce => VmAction::SnapshotWithQuiesce {
+                name: name.trim().to_owned(),
+            },
+            ActionKind::ConvertToTemplate => VmAction::ConvertToTemplate,
             ActionKind::Start => match host_ref {
                 Some(host_ref) => VmAction::StartOn {
                     host_ref: host_ref.to_owned(),
@@ -615,6 +647,16 @@ pub struct RecordDialog {
     pub subtitle: String,
     pub values: Vec<(String, String)>,
     pub groups: Vec<InfoGroup>,
+}
+
+pub struct PropertiesDialog {
+    pub connection_id: String,
+    pub target: xen_core::properties::ObjectTarget,
+    pub properties: LoadState<xen_core::properties::ObjectProperties>,
+    pub original: Option<xen_core::properties::ObjectProperties>,
+    pub new_tag: String,
+    pub submitting: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1200,11 +1242,9 @@ pub struct IsoDialog {
     pub error: Option<String>,
 }
 
-pub struct VmEditState {
+pub struct VmResourceEditState {
     pub connection_id: String,
     pub vm_uuid: String,
-    pub name: String,
-    pub description: String,
     pub vcpus_max: String,
     pub vcpus_at_startup: String,
     pub memory_static_max_mib: String,
@@ -1215,11 +1255,54 @@ pub struct VmEditState {
     pub secure_boot: bool,
     pub boot_policy: String,
     pub after_crash: String,
-    pub tags: String,
     pub is_hvm: bool,
     pub running: bool,
+    pub can_hotplug_vcpus: bool,
+    pub current_vcpus: u64,
     pub error: Option<String>,
     pub submitting: bool,
+}
+
+impl VmResourceEditState {
+    pub fn parse_resources(&self) -> Result<xen_core::operations::VmResourceUpdate, String> {
+        let parse = |value: &str, label: &str| {
+            value
+                .trim()
+                .parse::<u64>()
+                .map_err(|_| format!("Enter a whole number for {label}."))
+        };
+        let vcpus_max = parse(&self.vcpus_max, "the vCPU maximum")?;
+        let vcpus_at_startup = parse(&self.vcpus_at_startup, "vCPUs at startup")?;
+        let memory_static_max_mib = parse(&self.memory_static_max_mib, "static memory in MiB")?;
+        let memory_dynamic_min_mib =
+            parse(&self.memory_dynamic_min_mib, "the dynamic memory minimum")?;
+        let memory_dynamic_max_mib =
+            parse(&self.memory_dynamic_max_mib, "the dynamic memory maximum")?;
+        if vcpus_max == 0 || vcpus_at_startup == 0 || vcpus_at_startup > vcpus_max {
+            return Err("vCPUs at startup must be between 1 and the vCPU maximum.".into());
+        }
+        if memory_static_max_mib == 0 || memory_dynamic_min_mib == 0 || memory_dynamic_max_mib == 0
+        {
+            return Err("Memory must be greater than zero.".into());
+        }
+        if memory_dynamic_min_mib > memory_dynamic_max_mib
+            || memory_dynamic_max_mib > memory_static_max_mib
+        {
+            return Err("Dynamic memory must stay between the static minimum and maximum.".into());
+        }
+        Ok(xen_core::operations::VmResourceUpdate {
+            vcpus_max,
+            vcpus_at_startup,
+            memory_static_max_mib,
+            memory_dynamic_min_mib,
+            memory_dynamic_max_mib,
+            boot_order: self.is_hvm.then(|| self.boot_order.clone()),
+            firmware: self.is_hvm.then(|| self.firmware.clone()),
+            secure_boot: self.is_hvm.then_some(self.secure_boot),
+            boot_policy: self.is_hvm.then(|| self.boot_policy.clone()),
+            after_crash: Some(self.after_crash.clone()),
+        })
+    }
 }
 
 pub struct NewVmWizard {
@@ -1243,6 +1326,8 @@ pub struct XvaDialog {
 }
 
 pub struct UiState {
+    pub properties: Option<PropertiesDialog>,
+    pub properties_seq: u64,
     pub xva_dialog: Option<XvaDialog>,
     pub new_vm: Option<NewVmWizard>,
     pub new_vm_seq: u64,
@@ -1262,7 +1347,7 @@ pub struct UiState {
     pub console: Option<ConsoleState>,
     pub console_seq: u64,
     pub console_focus: bool,
-    pub vm_edit: Option<VmEditState>,
+    pub vm_resource_edit: Option<VmResourceEditState>,
     pub iso_dialog: Option<IsoDialog>,
     pub vif_dialog: Option<VifDialog>,
     pub vif_confirm: Option<VifConfirm>,
@@ -1362,6 +1447,8 @@ pub struct UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
+            properties: None,
+            properties_seq: 0,
             xva_dialog: None,
             new_vm: None,
             new_vm_seq: 0,
@@ -1384,7 +1471,7 @@ impl Default for UiState {
             console: None,
             console_seq: 0,
             console_focus: false,
-            vm_edit: None,
+            vm_resource_edit: None,
             iso_dialog: None,
             vif_dialog: None,
             vif_confirm: None,
@@ -1484,6 +1571,13 @@ impl Default for UiState {
 }
 
 pub enum UiAction {
+    OpenProperties {
+        connection_id: String,
+        target: xen_core::properties::ObjectTarget,
+    },
+    ReloadProperties,
+    SaveProperties,
+    CloseProperties,
     OpenXvaExport {
         connection_id: String,
         vm_uuid: String,
@@ -1540,9 +1634,9 @@ pub enum UiAction {
     ReloadVmDetails,
     LoadVmPerformance,
     SetVmPerfRange(u64),
-    OpenVmEdit,
-    CloseVmEdit,
-    SaveVmEdit,
+    OpenVmResources,
+    CloseVmResources,
+    SaveVmResources,
     OpenIsoDialog {
         vbd_uuid: String,
         drive: String,

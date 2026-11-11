@@ -350,15 +350,15 @@ impl App {
                 );
                 if !same {
                     self.state.vm_subtab = crate::state::VmTab::General;
-                    self.state.vm_seq += 1;
-                    self.state.vm_state = LoadState::Loading;
                     self.state.vm_perf_state = LoadState::Idle;
-                    self.worker.send(Command::VmDetails {
-                        seq: self.state.vm_seq,
-                        connection_id: connection_id.clone(),
-                        vm_uuid: vm_uuid.clone(),
-                    });
                 }
+                self.state.vm_seq += 1;
+                self.state.vm_state = LoadState::Loading;
+                self.worker.send(Command::VmDetails {
+                    seq: self.state.vm_seq,
+                    connection_id: connection_id.clone(),
+                    vm_uuid: vm_uuid.clone(),
+                });
             }
             ObjectKey::Storage { connection_id, .. } => {
                 self.state.scope = Scope::Connection(connection_id.clone());
@@ -508,10 +508,102 @@ impl App {
     fn drain_events(&mut self) {
         while let Ok(event) = self.worker.events.try_recv() {
             match event {
+                Event::ObjectProperties { seq, result } => {
+                    if seq == self.state.properties_seq
+                        && let Some(dialog) = self.state.properties.as_mut()
+                    {
+                        match result {
+                            Ok(properties) => {
+                                dialog.original = Some(properties.clone());
+                                dialog.new_tag.clear();
+                                dialog.properties = LoadState::Ready(properties);
+                            }
+                            Err(message) => dialog.properties = LoadState::Error(message),
+                        }
+                    }
+                }
+                Event::ObjectPropertiesSaved { seq, result } => {
+                    if seq != self.state.properties_seq {
+                        continue;
+                    }
+                    match result {
+                        Ok(properties) => {
+                            if let Some(dialog) = self.state.properties.take() {
+                                self.state.toasts.push(Toast::new(
+                                    format!("Saved properties for {}.", properties.name),
+                                    ToastKind::Success,
+                                ));
+                                self.state.sr_vdis_sr = None;
+                                let current = self
+                                    .state
+                                    .object_tabs
+                                    .get(self.state.active_tab)
+                                    .map(|tab| tab.key.clone());
+                                if let Some(key) = current
+                                    && key.connection_id() == Some(dialog.connection_id.as_str())
+                                {
+                                    if vm_key(&key).is_some() {
+                                        self.apply(vec![UiAction::ReloadVmDetails]);
+                                    } else if matches!(key, ObjectKey::Host { .. }) {
+                                        self.apply(vec![UiAction::ReloadHostDetails]);
+                                    }
+                                }
+                            }
+                        }
+                        Err(message) => {
+                            if let Some(dialog) = self.state.properties.as_mut() {
+                                dialog.submitting = false;
+                                dialog.error = Some(format!("Save failed: {message}"));
+                            }
+                        }
+                    }
+                }
                 Event::Workspace(workspace) => {
+                    let refresh_vm = self
+                        .state
+                        .object_tabs
+                        .get(self.state.active_tab)
+                        .and_then(|tab| vm_key(&tab.key))
+                        .is_some_and(|(connection_id, vm_uuid)| {
+                            workspace.tasks.iter().any(|task| {
+                                task.connection_id == connection_id
+                                    && task.vm_uuid == vm_uuid
+                                    && task.status.terminal()
+                                    && !self
+                                        .workspace
+                                        .tasks
+                                        .iter()
+                                        .any(|old| old.id == task.id && old.status.terminal())
+                            })
+                        });
                     self.workspace = workspace;
+                    let titles: Vec<_> = self
+                        .state
+                        .object_tabs
+                        .iter()
+                        .map(|tab| {
+                            matches!(
+                                tab.key,
+                                ObjectKey::Vm { .. }
+                                    | ObjectKey::Template { .. }
+                                    | ObjectKey::Snapshot { .. }
+                                    | ObjectKey::Host { .. }
+                                    | ObjectKey::Storage { .. }
+                                    | ObjectKey::Network { .. }
+                            )
+                            .then(|| self.object_title(&tab.key))
+                        })
+                        .collect();
+                    for (tab, title) in self.state.object_tabs.iter_mut().zip(titles) {
+                        if let Some(title) = title {
+                            tab.title = title;
+                        }
+                    }
                     self.state.loaded = true;
                     self.prune_missing_tabs();
+                    if refresh_vm {
+                        self.apply(vec![UiAction::ReloadVmDetails]);
+                    }
                     if let Some(id) = self.state.pending_scope.clone()
                         && find_connection(&self.workspace, &id).is_some_and(|connection| {
                             !matches!(
@@ -1632,10 +1724,10 @@ impl App {
                         };
                     }
                 }
-                Event::VmEdited { vm_uuid, result } => {
+                Event::VmResourcesUpdated { vm_uuid, result } => {
                     if !self
                         .state
-                        .vm_edit
+                        .vm_resource_edit
                         .as_ref()
                         .is_some_and(|edit| edit.vm_uuid == vm_uuid)
                     {
@@ -1643,25 +1735,15 @@ impl App {
                     }
                     match result {
                         Ok(()) => {
-                            let Some(edit) = self.state.vm_edit.take() else {
-                                continue;
-                            };
-                            if let Some(tab) = self.state.object_tabs.get_mut(self.state.active_tab)
-                                && matches!(
-                                    &tab.key,
-                                    ObjectKey::Vm { vm_uuid: active, .. } if active == &vm_uuid
-                                )
-                            {
-                                tab.title = edit.name.clone();
-                            }
+                            self.state.vm_resource_edit = None;
                             self.state.toasts.push(Toast::new(
-                                format!("Updated {}.", edit.name),
+                                "Saved VM resource settings.",
                                 ToastKind::Success,
                             ));
                             self.apply(vec![UiAction::ReloadVmDetails]);
                         }
                         Err(message) => {
-                            if let Some(edit) = self.state.vm_edit.as_mut() {
+                            if let Some(edit) = self.state.vm_resource_edit.as_mut() {
                                 edit.submitting = false;
                                 edit.error = Some(message);
                             }
@@ -1966,6 +2048,74 @@ impl App {
     fn apply(&mut self, actions: Vec<UiAction>) {
         for action in actions {
             match action {
+                UiAction::OpenProperties {
+                    connection_id,
+                    target,
+                } => {
+                    self.state.properties_seq += 1;
+                    self.state.properties = Some(crate::state::PropertiesDialog {
+                        connection_id: connection_id.clone(),
+                        target: target.clone(),
+                        properties: LoadState::Loading,
+                        original: None,
+                        new_tag: String::new(),
+                        submitting: false,
+                        error: None,
+                    });
+                    self.worker.send(Command::ObjectProperties {
+                        seq: self.state.properties_seq,
+                        connection_id,
+                        target,
+                    });
+                }
+                UiAction::ReloadProperties => {
+                    if let Some(dialog) = self.state.properties.as_mut()
+                        && !dialog.submitting
+                    {
+                        self.state.properties_seq += 1;
+                        dialog.properties = LoadState::Loading;
+                        dialog.error = None;
+                        self.worker.send(Command::ObjectProperties {
+                            seq: self.state.properties_seq,
+                            connection_id: dialog.connection_id.clone(),
+                            target: dialog.target.clone(),
+                        });
+                    }
+                }
+                UiAction::CloseProperties => {
+                    if !self
+                        .state
+                        .properties
+                        .as_ref()
+                        .is_some_and(|dialog| dialog.submitting)
+                    {
+                        self.state.properties = None;
+                        self.state.properties_seq += 1;
+                    }
+                }
+                UiAction::SaveProperties => {
+                    if let Some(dialog) = self.state.properties.as_mut()
+                        && !dialog.submitting
+                        && let LoadState::Ready(properties) = &mut dialog.properties
+                    {
+                        let Some(original) = dialog.original.clone() else {
+                            continue;
+                        };
+                        if !dialog.new_tag.trim().is_empty() {
+                            properties.tags.push(std::mem::take(&mut dialog.new_tag));
+                        }
+                        dialog.submitting = true;
+                        dialog.error = None;
+                        self.worker.send(Command::SaveObjectProperties {
+                            seq: self.state.properties_seq,
+                            connection_id: dialog.connection_id.clone(),
+                            properties: xen_core::properties::ObjectPropertiesEdit {
+                                original,
+                                edited: properties.clone(),
+                            },
+                        });
+                    }
+                }
                 UiAction::OpenXvaExport {
                     connection_id,
                     vm_uuid,
@@ -2213,7 +2363,9 @@ impl App {
                         ActionKind::Clone => format!("{first_name} copy"),
                         ActionKind::SnapshotToVm => format!("{first_name} VM"),
                         ActionKind::SnapshotToTemplate => format!("{first_name} template"),
-                        ActionKind::Snapshot => {
+                        ActionKind::Snapshot
+                        | ActionKind::Checkpoint
+                        | ActionKind::SnapshotWithQuiesce => {
                             format!("Snapshot {}", Local::now().format("%Y-%m-%d"))
                         }
                         _ => String::new(),
@@ -2405,7 +2557,7 @@ impl App {
                     self.state.vm_perf_range = range;
                     self.apply(vec![UiAction::LoadVmPerformance]);
                 }
-                UiAction::OpenVmEdit => {
+                UiAction::OpenVmResources => {
                     let Some(key) = self
                         .state
                         .object_tabs
@@ -2427,11 +2579,9 @@ impl App {
                     if details.is_template || details.is_snapshot {
                         continue;
                     }
-                    self.state.vm_edit = Some(crate::state::VmEditState {
+                    self.state.vm_resource_edit = Some(crate::state::VmResourceEditState {
                         connection_id,
                         vm_uuid,
-                        name: details.name.clone(),
-                        description: details.description.clone(),
                         vcpus_max: details.vcpus_max.to_string(),
                         vcpus_at_startup: details.vcpus_at_startup.to_string(),
                         memory_static_max_mib: (details.memory_static_max / (1024 * 1024))
@@ -2461,100 +2611,42 @@ impl App {
                         } else {
                             details.after_crash.clone()
                         },
-                        tags: details.tags.join(", "),
                         is_hvm: !details.hvm_boot_policy.is_empty()
                             || !details.hvm_boot_params.is_empty(),
                         running: details.power_state != "Halted",
+                        can_hotplug_vcpus: details.can_hotplug_vcpus,
+                        current_vcpus: details.vcpus_at_startup,
                         error: None,
                         submitting: false,
                     });
                 }
-                UiAction::CloseVmEdit => {
+                UiAction::CloseVmResources => {
                     if !self
                         .state
-                        .vm_edit
+                        .vm_resource_edit
                         .as_ref()
                         .is_some_and(|edit| edit.submitting)
                     {
-                        self.state.vm_edit = None;
+                        self.state.vm_resource_edit = None;
                     }
                 }
-                UiAction::SaveVmEdit => {
-                    let Some(edit) = self.state.vm_edit.as_mut() else {
+                UiAction::SaveVmResources => {
+                    let Some(edit) = self.state.vm_resource_edit.as_mut() else {
                         continue;
                     };
-                    let parse = |value: &str| value.trim().parse::<u64>().ok();
-                    let Some(vcpus_max) = parse(&edit.vcpus_max) else {
-                        edit.error = Some("Enter a whole number for the vCPU maximum.".into());
-                        continue;
+                    let resources = match edit.parse_resources() {
+                        Ok(resources) => resources,
+                        Err(message) => {
+                            edit.error = Some(message);
+                            continue;
+                        }
                     };
-                    let Some(vcpus_at_startup) = parse(&edit.vcpus_at_startup) else {
-                        edit.error = Some("Enter a whole number for vCPUs at startup.".into());
-                        continue;
-                    };
-                    let Some(memory_static_max_mib) = parse(&edit.memory_static_max_mib) else {
-                        edit.error = Some("Enter a whole number for static memory in MiB.".into());
-                        continue;
-                    };
-                    let Some(memory_dynamic_min_mib) = parse(&edit.memory_dynamic_min_mib) else {
-                        edit.error =
-                            Some("Enter a whole number for the dynamic memory minimum.".into());
-                        continue;
-                    };
-                    let Some(memory_dynamic_max_mib) = parse(&edit.memory_dynamic_max_mib) else {
-                        edit.error =
-                            Some("Enter a whole number for the dynamic memory maximum.".into());
-                        continue;
-                    };
-                    if edit.name.trim().is_empty() {
-                        edit.error = Some("Enter a name for the virtual machine.".into());
-                        continue;
-                    }
-                    if vcpus_max == 0 || vcpus_at_startup == 0 || vcpus_at_startup > vcpus_max {
-                        edit.error =
-                            Some("vCPUs at startup must be between 1 and the vCPU maximum.".into());
-                        continue;
-                    }
-                    if memory_static_max_mib == 0
-                        || memory_dynamic_min_mib == 0
-                        || memory_dynamic_max_mib == 0
-                    {
-                        edit.error = Some("Memory must be greater than zero.".into());
-                        continue;
-                    }
-                    if memory_dynamic_min_mib > memory_dynamic_max_mib
-                        || memory_dynamic_max_mib > memory_static_max_mib
-                    {
-                        edit.error = Some(
-                            "Dynamic memory must stay between the static minimum and maximum."
-                                .into(),
-                        );
-                        continue;
-                    }
                     edit.submitting = true;
                     edit.error = None;
-                    self.worker.send(Command::EditVm {
+                    self.worker.send(Command::UpdateVmResources {
                         connection_id: edit.connection_id.clone(),
                         vm_uuid: edit.vm_uuid.clone(),
-                        name: edit.name.trim().to_owned(),
-                        description: edit.description.clone(),
-                        vcpus_max,
-                        vcpus_at_startup,
-                        memory_static_max_mib,
-                        memory_dynamic_min_mib,
-                        memory_dynamic_max_mib,
-                        boot_order: edit.is_hvm.then(|| edit.boot_order.clone()),
-                        firmware: edit.is_hvm.then(|| edit.firmware.clone()),
-                        secure_boot: edit.is_hvm.then_some(edit.secure_boot),
-                        boot_policy: edit.is_hvm.then(|| edit.boot_policy.clone()),
-                        after_crash: Some(edit.after_crash.clone()),
-                        tags: edit
-                            .tags
-                            .split(',')
-                            .map(str::trim)
-                            .filter(|tag| !tag.is_empty())
-                            .map(str::to_owned)
-                            .collect(),
+                        resources,
                     });
                 }
                 UiAction::OpenIsoDialog { vbd_uuid, drive } => {

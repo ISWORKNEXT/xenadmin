@@ -457,6 +457,25 @@ fn action_bar(
                         ));
                         ui.close();
                     }
+                    if vm.power_state == "Halted"
+                        && ui
+                            .add_enabled(
+                                allowed,
+                                egui::Button::new(
+                                    RichText::new(format!("{} (paused)", host.name)).size(11.0),
+                                )
+                                .frame(false),
+                            )
+                            .clicked()
+                    {
+                        actions.push(UiAction::ProposeOnHost(
+                            ActionKind::StartPaused,
+                            vec![(connection_id.to_owned(), vm_uuid.to_owned())],
+                            host.reference.clone(),
+                            host.name.clone(),
+                        ));
+                        ui.close();
+                    }
                 }
             },
         );
@@ -531,12 +550,12 @@ fn action_bar(
         if ui
             .add_enabled(
                 can_edit,
-                egui::Button::new(RichText::new("Edit / Resources…").size(11.0)),
+                egui::Button::new(RichText::new("Resources…").size(11.0)),
             )
-            .on_hover_text("Edit name, description, vCPUs and memory with sliders")
+            .on_hover_text("Edit vCPUs, memory and boot settings")
             .clicked()
         {
-            actions.push(UiAction::OpenVmEdit);
+            actions.push(UiAction::OpenVmResources);
         }
         if running_task(workspace, connection_id, vm_uuid) {
             ui.label(
@@ -596,17 +615,17 @@ fn general(
             if ui
                 .add_enabled(
                     !read_only,
-                    egui::Button::new(RichText::new("Edit / Resources…").size(11.0)),
+                    egui::Button::new(RichText::new("Resources…").size(11.0)),
                 )
-                .on_hover_text("Adjust vCPUs and memory with sliders")
+                .on_hover_text("Edit vCPUs, memory and boot settings")
                 .clicked()
             {
-                actions.push(UiAction::OpenVmEdit);
+                actions.push(UiAction::OpenVmResources);
             }
         });
         ui.label(
             RichText::new(
-                "Resource sliders are enabled when the VM is shut down; dynamic memory can change while running.",
+                "Edit resources to change memory or add supported CPUs while running; other changes require shutdown.",
             )
             .size(9.0)
             .color(dim_fg()),
@@ -2099,8 +2118,8 @@ fn storage(
             .striped(true)
             .cell_layout(Layout::left_to_right(Align::Center))
             .column(Column::exact(70.0))
-            .column(Column::remainder().at_least(160.0))
-            .column(Column::initial(120.0))
+            .column(Column::remainder().at_least(160.0).clip(true))
+            .column(Column::initial(120.0).clip(true))
             .column(Column::exact(80.0))
             .column(Column::exact(55.0))
             .column(Column::exact(65.0))
@@ -2237,7 +2256,17 @@ fn storage(
                                         });
                                         ui.close();
                                     }
-                                    if ui.button(RichText::new("Resize…").size(10.5)).clicked() {
+                                    if ui
+                                        .add_enabled(
+                                            !disk.read_only
+                                                && disk.mode == "RW"
+                                                && disk.allowed_operations.iter().any(|op| {
+                                                    op == "resize" || op == "resize_online"
+                                                }),
+                                            egui::Button::new(RichText::new("Resize…").size(10.5)),
+                                        )
+                                        .clicked()
+                                    {
                                         actions.push(UiAction::OpenDiskResize {
                                             vdi_uuid: disk.vdi_uuid.clone(),
                                             name: if disk.vdi_name.is_empty() {
@@ -2269,8 +2298,7 @@ fn storage(
                                     }
                                 });
                             } else {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 4.0;
+                                ui.menu_button(RichText::new("Manage…").size(9.5), |ui| {
                                     if ui
                                         .add(
                                             egui::Button::new(
@@ -2291,6 +2319,25 @@ fn storage(
                                         actions.push(UiAction::SetVbdPlugged {
                                             vbd_uuid: disk.vbd_uuid.clone(),
                                             plugged: !disk.attached,
+                                        });
+                                    }
+                                    if ui
+                                        .add_enabled(
+                                            details.power_state == "Running"
+                                                && !disk.read_only
+                                                && disk.mode == "RW"
+                                                && disk.allowed_operations.iter().any(|op| {
+                                                    op == "resize" || op == "resize_online"
+                                                }),
+                                            egui::Button::new(RichText::new("Resize…").size(9.5))
+                                                .small(),
+                                        )
+                                        .clicked()
+                                    {
+                                        actions.push(UiAction::OpenDiskResize {
+                                            vdi_uuid: disk.vdi_uuid.clone(),
+                                            name: disk.vdi_name.clone(),
+                                            current_gib: gib,
                                         });
                                     }
                                     if ui

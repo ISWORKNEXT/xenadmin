@@ -8,6 +8,7 @@ pub mod inventory;
 pub mod overview;
 pub mod pool_page;
 pub mod pool_status;
+pub mod properties;
 pub mod resource_page;
 pub mod sidebar;
 pub mod tasks;

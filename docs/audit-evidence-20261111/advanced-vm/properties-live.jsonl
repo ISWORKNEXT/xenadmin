@@ -1,0 +1,12 @@
+{"prefix":"zz-parity-properties-01a1c98b-7d10-751a-8a16-5f87e5bc17e2"}
+{"rollback_journal":"/tmp/zz-parity-properties-01a1c98b-7d10-751a-8a16-5f87e5bc17e2-rollback.jsonl"}
+{"changed_and_read_back":true,"check":"object-properties","concurrent_unrelated_preserved":true,"invalid_request_unchanged":true,"kind":"Vm","restored":true,"same_field_conflict_rejected":true,"uuid":"0d519e7a-b2af-f269-0bda-fb3ade4bfc62"}
+{"changed_and_read_back":true,"check":"object-properties","concurrent_unrelated_preserved":true,"invalid_request_unchanged":true,"kind":"Disk","restored":true,"same_field_conflict_rejected":true,"uuid":"649f964d-171d-498f-8dd2-23ff545baa3e"}
+{"changed_and_read_back":true,"check":"object-properties","concurrent_unrelated_preserved":true,"invalid_request_unchanged":true,"kind":"Network","restored":true,"same_field_conflict_rejected":true,"uuid":"0364ba97-17de-3aff-373f-cec7ca555335"}
+{"changed_and_read_back":true,"check":"object-properties","concurrent_unrelated_preserved":true,"invalid_request_unchanged":true,"kind":"Storage","restored":true,"same_field_conflict_rejected":true,"uuid":"7a5a8cb4-7052-8de1-7473-4a8d9a36e272"}
+{"changed_and_read_back":true,"check":"object-properties","concurrent_unrelated_preserved":true,"invalid_request_unchanged":true,"kind":"Host","restored":true,"same_field_conflict_rejected":true,"uuid":"f2347fdf-e320-4d3b-994b-7eb12f860c58"}
+{"changed_and_read_back":true,"check":"object-properties","concurrent_unrelated_preserved":true,"invalid_request_unchanged":true,"kind":"Pool","restored":true,"same_field_conflict_rejected":true,"uuid":"366d4165-4bdd-84e8-3e5e-84542311b5c3"}
+{"changed_and_read_back":true,"check":"object-properties","concurrent_unrelated_preserved":true,"invalid_request_unchanged":true,"kind":"Vm","restored":true,"same_field_conflict_rejected":true,"uuid":"92c890d3-199d-08d8-4710-0dd398c849bd"}
+{"changed_and_read_back":true,"check":"object-properties","concurrent_unrelated_preserved":true,"invalid_request_unchanged":true,"kind":"Vm","restored":true,"same_field_conflict_rejected":true,"uuid":"18b3753a-6da9-12ac-209f-9f590eb8a031"}
+{"check":"source-preserved","same_disks":true,"same_name":true,"same_power":true,"uuid":"0d519e7a-b2af-f269-0bda-fb3ade4bfc62"}
+{"cleanup":"completed","result":{"Ok":"pass"}}

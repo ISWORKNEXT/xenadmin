@@ -58,22 +58,39 @@ async fn exercise(
     sr: &str,
     name: &str,
 ) -> Result<(), ApiError> {
+    let target = xen_core::properties::ObjectTarget {
+        kind: xen_core::properties::ObjectKind::Vm,
+        uuid: vm.to_owned(),
+    };
+    let original = c.object_properties(&target).await?;
+    let mut edited = original.clone();
+    edited.name = name.to_owned();
+    edited.description = "Live parity audit temporary VM".into();
     evidence(
-        "VM edit CPU/memory/name/description",
-        c.update_vm(
+        "VM name/description write",
+        c.update_object_properties(&xen_core::properties::ObjectPropertiesEdit {
+            original,
+            edited,
+        })
+        .await
+        .map(|_| ()),
+    );
+    evidence(
+        "VM edit CPU/memory",
+        c.update_vm_resources(
             vm,
-            name,
-            "Live parity audit temporary VM",
-            1,
-            1,
-            256,
-            256,
-            256,
-            None,
-            None,
-            None,
-            None,
-            None,
+            &xen_core::operations::VmResourceUpdate {
+                vcpus_max: 1,
+                vcpus_at_startup: 1,
+                memory_static_max_mib: 256,
+                memory_dynamic_min_mib: 256,
+                memory_dynamic_max_mib: 256,
+                boot_order: None,
+                firmware: None,
+                secure_boot: None,
+                boot_policy: None,
+                after_crash: None,
+            },
         )
         .await,
     );
@@ -88,7 +105,18 @@ async fn exercise(
     );
     evidence(
         "VM tags write",
-        c.set_vm_tags(vm, vec!["zz-parity-audit".into()]).await,
+        async {
+            let original = c.object_properties(&target).await?;
+            let mut edited = original.clone();
+            edited.tags = vec!["zz-parity-audit".into()];
+            c.update_object_properties(&xen_core::properties::ObjectPropertiesEdit {
+                original,
+                edited,
+            })
+            .await
+            .map(|_| ())
+        }
+        .await,
     );
     evidence(
         "VM tags readback",

@@ -24,6 +24,7 @@ pub struct VmDetails {
     pub affinity: String,
     pub vcpus_max: u64,
     pub vcpus_at_startup: u64,
+    pub can_hotplug_vcpus: bool,
     pub memory_static_max: u64,
     pub memory_static_min: u64,
     pub memory_dynamic_max: u64,
@@ -72,6 +73,7 @@ pub struct VmDisk {
     pub physical_utilisation: u64,
     pub read_only: bool,
     pub owner: bool,
+    pub allowed_operations: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -312,6 +314,7 @@ impl Connection {
                     physical_utilisation: number(vdi, "physical_utilisation"),
                     read_only: vdi["read_only"].as_bool().unwrap_or(false),
                     owner: vbd["other_config"].get("owner").is_some(),
+                    allowed_operations: strings(&vdi["allowed_operations"]),
                 });
             }
         }
@@ -427,6 +430,7 @@ impl Connection {
             affinity,
             vcpus_max: number(&vm, "VCPUs_max"),
             vcpus_at_startup: number(&vm, "VCPUs_at_startup"),
+            can_hotplug_vcpus: vcpu_hotplug_allowed(&vm, guests.as_ref()),
             memory_static_max: number(&vm, "memory_static_max"),
             memory_static_min: number(&vm, "memory_static_min"),
             memory_dynamic_max: number(&vm, "memory_dynamic_max"),
@@ -580,4 +584,55 @@ fn display(value: &Value) -> String {
         }
         _ => "—".into(),
     }
+}
+
+pub(crate) fn vcpu_hotplug_allowed(vm: &Value, guests: Option<&Records>) -> bool {
+    let current = related(guests, &text(vm, "guest_metrics"));
+    let previous_ref = vm["last_booted_record"]
+        .as_str()
+        .and_then(|record| record.split_once("'guest_metrics'"))
+        .and_then(|(_, rest)| rest.trim_start().strip_prefix("'"))
+        .and_then(|rest| rest.split_once("'"))
+        .map(|(reference, _)| reference)
+        .filter(|reference| {
+            reference
+                .strip_prefix("OpaqueRef:")
+                .is_some_and(|id| uuid::Uuid::parse_str(id).is_ok())
+        });
+    let previous = related(guests, previous_ref.unwrap_or_default());
+    let known_non_windows = [current, previous].iter().any(|guest| {
+        matches!(
+            guest["os_version"]["distro"]
+                .as_str()
+                .unwrap_or_default()
+                .to_ascii_lowercase()
+                .as_str(),
+            "debian"
+                | "rhel"
+                | "fedora"
+                | "centos"
+                | "scientific"
+                | "oracle"
+                | "sles"
+                | "lsb"
+                | "boot2docker"
+                | "freebsd"
+                | "ubuntu"
+                | "neokylin"
+                | "gooroom"
+                | "rocky"
+        ) || guest["os_version"]["uname"]
+            .as_str()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .contains("netscaler")
+    });
+    let windows = !known_non_windows
+        && !text(vm, "HVM_boot_policy").is_empty()
+        && matches!(vm["platform"]["viridian"].as_str(), Some("true" | "1"));
+    vm["power_state"].as_str() == Some("Running")
+        && !windows
+        && strings(&vm["allowed_operations"])
+            .iter()
+            .any(|op| op == "changing_VCPUs_live")
 }

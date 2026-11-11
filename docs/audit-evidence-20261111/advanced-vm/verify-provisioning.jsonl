@@ -1,0 +1,8 @@
+{"prefix":"zz-parity-advanced-01a1c9df-07e5-7055-be00-ef0b28fd5bad"}
+{"check":"create-with-changed-long-description","description_chars":2000,"status":"VERIFIED","uuid":"0aa57ca2-1c44-e9ca-594e-9e7aad5d5922"}
+{"check":"cpu-only-update-preserves-absent-secureboot-and-boot-maps","startup_vcpus":2,"status":"VERIFIED","uuid":"0aa57ca2-1c44-e9ca-594e-9e7aad5d5922"}
+{"check":"boot-order-change-preserves-other-map-keys","order":"cd","status":"VERIFIED","uuid":"0aa57ca2-1c44-e9ca-594e-9e7aad5d5922"}
+{"check": "seed-owned-legacy-template", "uuid": "0aa57ca2-1c44-e9ca-594e-9e7aad5d5922", "description_chars": 40000, "exact_spaced_tag": true}
+{"check":"create-with-unchanged-legacy-description","description_chars":40000,"exact_spaced_tag":true,"status":"VERIFIED","uuid":"32ee23b7-fa68-8bf8-8453-0372c7970809"}
+{"check":"changed-oversized-description-rejected-before-clone","error":"The description must be 32767 characters or fewer.","owned_object_set_unchanged":true,"status":"VERIFIED"}
+{"cleanup":"completed","result":{"Ok":"pass"}}

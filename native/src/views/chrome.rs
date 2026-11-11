@@ -471,6 +471,43 @@ fn context_actions(
         }
         _ => {}
     }
+    use xen_core::properties::{ObjectKind, ObjectTarget};
+    let target = match key {
+        ObjectKey::Vm { vm_uuid, .. }
+        | ObjectKey::Template { vm_uuid, .. }
+        | ObjectKey::Snapshot { vm_uuid, .. } => Some(ObjectTarget {
+            kind: ObjectKind::Vm,
+            uuid: vm_uuid.clone(),
+        }),
+        ObjectKey::Host { host_uuid, .. } => Some(ObjectTarget {
+            kind: ObjectKind::Host,
+            uuid: host_uuid.clone(),
+        }),
+        ObjectKey::Storage { sr_uuid, .. } => Some(ObjectTarget {
+            kind: ObjectKind::Storage,
+            uuid: sr_uuid.clone(),
+        }),
+        ObjectKey::Network { network_uuid, .. } => Some(ObjectTarget {
+            kind: ObjectKind::Network,
+            uuid: network_uuid.clone(),
+        }),
+        ObjectKey::Pool(connection_id) => find_connection(workspace, connection_id)
+            .and_then(connection_inventory)
+            .map(|inventory| ObjectTarget {
+                kind: ObjectKind::Pool,
+                uuid: inventory.pool_id.clone(),
+            }),
+        _ => None,
+    };
+    if let Some(target) = target
+        && let Some(connection_id) = key.connection_id()
+        && ui.button(RichText::new("Properties…").size(11.0)).clicked()
+    {
+        actions.push(UiAction::OpenProperties {
+            connection_id: connection_id.to_owned(),
+            target,
+        });
+    }
 }
 
 fn scope_pill(ui: &mut Ui, state: &UiState, workspace: &WorkspaceView) {

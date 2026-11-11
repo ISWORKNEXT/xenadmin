@@ -1,0 +1,157 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        792,
+        77
+      ],
+      "snap": "long-properties-open",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        720,
+        211
+      ],
+      "key": "End",
+      "text": "-ui",
+      "snap": "long-properties-name-review",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        720,
+        157
+      ],
+      "key": "End",
+      "text": "-ui",
+      "snap": "properties-name-and-description-review",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        960,
+        868
+      ],
+      "snap": "properties-saved",
+      "wait": 4
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        792,
+        77
+      ],
+      "snap": "properties-reopened",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "properties-tags-bottom",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        813
+      ],
+      "text": "ui",
+      "snap": "pending-tag-review",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        960,
+        868
+      ],
+      "snap": "pending-tag-saved",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        792,
+        77
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "tag-actions-before",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        940,
+        775
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        813
+      ],
+      "text": "add",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        940,
+        813
+      ],
+      "snap": "tag-add-remove-review",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        960,
+        868
+      ],
+      "snap": "tag-add-remove-saved",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

@@ -1,0 +1,349 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1440,
+        940
+      ],
+      "snap": "resource-owner-initial",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        369
+      ],
+      "snap": "resources-long-metadata",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        815,
+        334
+      ],
+      "key": "Control_L+a",
+      "text": "3",
+      "snap": "resource-cpu-draft",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        814
+      ],
+      "snap": "resource-cpu-saved",
+      "readback": true,
+      "wait": 3
+    },
+    "readback": [
+      {
+        "uuid": "0d519e7a-b2af-f269-0bda-fb3ade4bfc62",
+        "name_label": "zz-parity-advanced-01a1c95c-52b8-7065-a5f7-367cb4007421-vm-ui-external-x",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 4,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        620,
+        328
+      ],
+      "key": "Control_L+a",
+      "text": "1024",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        808,
+        221
+      ],
+      "key": "Control_L+a",
+      "text": "3",
+      "snap": "resource-startup-three",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        950,
+        870
+      ],
+      "snap": "resource-startup-three-saved",
+      "readback": true,
+      "wait": 3
+    },
+    "readback": [
+      {
+        "uuid": "0d519e7a-b2af-f269-0bda-fb3ade4bfc62",
+        "name_label": "zz-parity-advanced-01a1c95c-52b8-7065-a5f7-367cb4007421-vm-ui-external-x",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 4,
+        "VCPUs_at_startup": 3,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        369
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "resource-concurrent-open",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        810,
+        221
+      ],
+      "key": "Control_L+a",
+      "text": "2",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        950,
+        870
+      ],
+      "snap": "resource-concurrent-saved",
+      "readback": true,
+      "wait": 3
+    },
+    "readback": [
+      {
+        "uuid": "0d519e7a-b2af-f269-0bda-fb3ade4bfc62",
+        "name_label": "zz-parity-advanced-01a1c95c-52b8-7065-a5f7-367cb4007421-vm-ui-external-x-concurrent",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 4,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        369
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        982,
+        505
+      ],
+      "snap": "boot-options",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        401
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "resource-boot-form",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        982,
+        505
+      ],
+      "snap": "boot-options-open",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        490,
+        583
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        950,
+        870
+      ],
+      "snap": "boot-cd-saved",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        390,
+        400
+      ],
+      "snap": "resource-owner-start",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        951,
+        541
+      ],
+      "snap": "resource-owner-running",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        401
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "resource-owner-live-form",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        510,
+        126
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        401
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "resource-owner-live-form-open",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        805,
+        221
+      ],
+      "key": "Control_L+a",
+      "text": "3",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        951,
+        871
+      ],
+      "snap": "resource-owner-live-saved",
+      "readback": true,
+      "wait": 3
+    },
+    "readback": [
+      {
+        "uuid": "0d519e7a-b2af-f269-0bda-fb3ade4bfc62",
+        "name_label": "zz-parity-advanced-01a1c95c-52b8-7065-a5f7-367cb4007421-vm-ui-external-x-concurrent",
+        "power_state": "Running",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 4,
+        "VCPUs_at_startup": 3,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

@@ -1,0 +1,9 @@
+{"prefix":"zz-parity-properties-01a1c981-47a2-706a-b12b-a1b308ef32d8"}
+{"rollback_journal":"/tmp/zz-parity-properties-01a1c981-47a2-706a-b12b-a1b308ef32d8-rollback.jsonl"}
+{"changed_and_read_back":true,"check":"object-properties","invalid_request_unchanged":true,"kind":"Vm","restored":true,"uuid":"0d519e7a-b2af-f269-0bda-fb3ade4bfc62"}
+{"changed_and_read_back":true,"check":"object-properties","invalid_request_unchanged":true,"kind":"Disk","restored":true,"uuid":"649f964d-171d-498f-8dd2-23ff545baa3e"}
+{"changed_and_read_back":true,"check":"object-properties","invalid_request_unchanged":true,"kind":"Network","restored":true,"uuid":"7da32600-d66c-13f6-21d4-879df4f1bebc"}
+{"changed_and_read_back":true,"check":"object-properties","invalid_request_unchanged":true,"kind":"Storage","restored":true,"uuid":"7a5a8cb4-7052-8de1-7473-4a8d9a36e272"}
+{"changed_and_read_back":true,"check":"object-properties","invalid_request_unchanged":true,"kind":"Host","restored":true,"uuid":"f2347fdf-e320-4d3b-994b-7eb12f860c58"}
+{"cleanup":"completed","result":{"Err":"Enter a name between 1 and 255 characters."}}
+Error: Xen("Enter a name between 1 and 255 characters.")

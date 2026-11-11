@@ -134,6 +134,66 @@ fn configure_blueprint(
 }
 
 impl Connection {
+    pub async fn convert_vm_to_template(&self, uuid: &str) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen("This connection is read-only.".into()));
+        }
+        let reference: String = self
+            .request("VM.get_by_uuid", json!([self.session, uuid]))
+            .await?;
+        let record: Value = self
+            .request("VM.get_record", json!([self.session, reference]))
+            .await?;
+        if record["uuid"].as_str() != Some(uuid)
+            || record["is_control_domain"].as_bool() != Some(false)
+            || record["is_a_snapshot"].as_bool() != Some(false)
+        {
+            return Err(ApiError::Xen(
+                "Only a normal VM can be converted to a template.".into(),
+            ));
+        }
+        if record["is_a_template"].as_bool() == Some(true) {
+            self.request::<Value>(
+                "VM.update_allowed_operations",
+                json!([self.session, reference]),
+            )
+            .await?;
+            return Ok(());
+        }
+        if record["power_state"].as_str() != Some("Halted")
+            || !record["allowed_operations"].as_array().is_some_and(|ops| {
+                ops.iter()
+                    .any(|op| op.as_str() == Some("make_into_template"))
+            })
+        {
+            return Err(ApiError::Xen(
+                "Halt the VM and wait for its active tasks before converting it to a template."
+                    .into(),
+            ));
+        }
+        let mut config = record["other_config"]
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
+        config.insert("instant".into(), Value::String("true".into()));
+        self.request::<Value>(
+            "VM.set_other_config",
+            json!([self.session, reference, config]),
+        )
+        .await?;
+        self.request::<Value>(
+            "VM.set_is_a_template",
+            json!([self.session, reference, true]),
+        )
+        .await?;
+        self.request::<Value>(
+            "VM.update_allowed_operations",
+            json!([self.session, reference]),
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn create_from_snapshot(
         &self,
         snapshot_uuid: &str,
@@ -233,7 +293,6 @@ impl Connection {
         }
         if request.name.trim().is_empty()
             || request.name.chars().count() > 255
-            || request.description.chars().count() > 1024
             || request.vcpus == 0
             || request.memory_mib == 0
             || request.memory_mib.checked_mul(1024 * 1024).is_none()
@@ -261,6 +320,7 @@ impl Connection {
             ));
         }
         let details = self.vm_details(&request.template_uuid).await?;
+        crate::properties::validate_description_change(&details.description, &request.description)?;
         if !details.is_template || request.memory_mib * 1024 * 1024 < details.memory_static_min {
             return Err(ApiError::Xen(
                 "The memory is below the template's minimum.".into(),
@@ -440,20 +500,34 @@ impl Connection {
                 .await?;
             }
         }
-        self.update_vm(
+        let original = self
+            .object_properties(&crate::properties::ObjectTarget {
+                kind: crate::properties::ObjectKind::Vm,
+                uuid: uuid.to_owned(),
+            })
+            .await?;
+        let mut edited = original.clone();
+        edited.name = request.name.clone();
+        edited.description = request.description.clone();
+        self.update_object_properties(&crate::properties::ObjectPropertiesEdit {
+            original,
+            edited,
+        })
+        .await?;
+        self.update_vm_resources(
             uuid,
-            &request.name,
-            &request.description,
-            request.vcpus,
-            request.vcpus,
-            request.memory_mib,
-            request.memory_mib,
-            request.memory_mib,
-            None,
-            None,
-            None,
-            None,
-            None,
+            &crate::operations::VmResourceUpdate {
+                vcpus_max: request.vcpus,
+                vcpus_at_startup: request.vcpus,
+                memory_static_max_mib: request.memory_mib,
+                memory_dynamic_min_mib: request.memory_mib,
+                memory_dynamic_max_mib: request.memory_mib,
+                boot_order: None,
+                firmware: None,
+                secure_boot: None,
+                boot_policy: None,
+                after_crash: None,
+            },
         )
         .await?;
         self.update_vm_ha(uuid, "", 0, 0, request.affinity_host_uuid.as_deref())
