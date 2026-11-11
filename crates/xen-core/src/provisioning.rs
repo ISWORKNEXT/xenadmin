@@ -1,5 +1,8 @@
 //! Configured VM creation, template preparation and independent disk copies.
-use quick_xml::{Reader, Writer, events::Event};
+use quick_xml::{
+    Reader, Writer,
+    events::{BytesStart, Event},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -34,10 +37,114 @@ pub struct CreateVmRequest {
     pub cores_per_socket: Option<u64>,
     pub memory_mib: u64,
     pub sr_uuid: String,
+    // Legacy single-device callers inherit the source unless these lists are supplied.
+    pub disks: Option<Vec<CreateDisk>>,
+    pub interfaces: Option<Vec<CreateVif>>,
+    pub media: InstallationMedia,
+    pub pv_args: Option<String>,
+    pub copy_bios_from: Option<String>,
     pub new_disk_gib: Option<u64>,
     pub network_uuid: Option<String>,
     pub iso_uuid: Option<String>,
     pub affinity_host_uuid: Option<String>,
+}
+
+/// Source device identifies a cloned disk; None creates a new disk.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateDisk {
+    pub source_device: Option<String>,
+    pub name: String,
+    pub size_bytes: u64,
+    pub sr_uuid: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateVif {
+    pub network_uuid: String,
+    /// Empty means generate a MAC.
+    pub mac: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum InstallationMedia {
+    #[default]
+    Inherit,
+    Iso(String),
+    PhysicalDvd(String),
+    Network,
+}
+
+impl InstallationMedia {
+    pub fn boot_order(&self, existing: &str, diskless: bool) -> String {
+        let first = if diskless || matches!(self, Self::Network) {
+            'n'
+        } else if matches!(self, Self::Iso(_) | Self::PhysicalDvd(_)) {
+            'd'
+        } else {
+            return existing.into();
+        };
+        format!(
+            "{first}{}",
+            existing.chars().filter(|c| *c != first).collect::<String>()
+        )
+    }
+}
+
+impl CreateVmRequest {
+    pub fn disk_list(&self, template: &crate::vm::VmDetails) -> Vec<CreateDisk> {
+        if let Some(disks) = &self.disks {
+            return disks.clone();
+        }
+        let mut disks: Vec<_> = template
+            .disks
+            .iter()
+            .filter(|d| !d.is_cd)
+            .map(|d| CreateDisk {
+                source_device: Some(d.userdevice.clone()),
+                name: d.vdi_name.clone(),
+                size_bytes: d.virtual_size,
+                sr_uuid: self.sr_uuid.clone(),
+            })
+            .collect();
+        if disks.is_empty() && !template.provision_disks.is_empty() {
+            disks.extend(
+                template
+                    .provision_disks
+                    .iter()
+                    .enumerate()
+                    .map(|(i, d)| CreateDisk {
+                        source_device: Some(d.device.clone()),
+                        name: format!("{} disk {}", self.name, d.device),
+                        size_bytes: if i == 0 {
+                            self.new_disk_gib.map_or(d.size, |v| v * 1024 * 1024 * 1024)
+                        } else {
+                            d.size
+                        },
+                        sr_uuid: self.sr_uuid.clone(),
+                    }),
+            );
+        } else if let Some(size) = self.new_disk_gib {
+            disks.push(CreateDisk {
+                source_device: None,
+                name: format!("{} disk", self.name),
+                size_bytes: size * 1024 * 1024 * 1024,
+                sr_uuid: self.sr_uuid.clone(),
+            });
+        }
+        disks
+    }
+
+    pub fn vif_list(&self) -> Vec<CreateVif> {
+        self.interfaces.clone().unwrap_or_else(|| {
+            self.network_uuid
+                .iter()
+                .map(|uuid| CreateVif {
+                    network_uuid: uuid.clone(),
+                    mac: String::new(),
+                })
+                .collect()
+        })
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -143,50 +250,62 @@ pub(crate) fn provision_disks(xml: &str) -> Result<Vec<ProvisionDisk>, ApiError>
     Ok(disks)
 }
 
-fn configure_blueprint(
-    xml: &str,
-    sr_uuid: &str,
-    first_disk_size: Option<u64>,
-) -> Result<String, ApiError> {
+/// Replace the provisioning disk list before VM.provision, retaining the XML root
+/// and all attributes (including bootable/type) of retained template disks.
+fn configure_blueprint(xml: &str, disks: &[CreateDisk]) -> Result<String, ApiError> {
     provision_disks(xml)?;
     let mut reader = Reader::from_str(xml);
-    let mut writer = Writer::new(Vec::new());
-    let mut first = true;
+    let mut originals = std::collections::HashMap::new();
     loop {
-        let event = reader.read_event().map_err(|_| invalid_blueprint())?;
-        if event == Event::Eof {
-            break;
+        match reader.read_event().map_err(|_| invalid_blueprint())? {
+            Event::Start(e) | Event::Empty(e) if e.name().as_ref() == b"disk" => {
+                let device = e
+                    .try_get_attribute("device")
+                    .map_err(|_| invalid_blueprint())?
+                    .ok_or_else(invalid_blueprint)?
+                    .decoded_and_normalized_value(
+                        quick_xml::XmlVersion::Implicit1_0,
+                        reader.decoder(),
+                    )
+                    .map_err(|_| invalid_blueprint())?
+                    .into_owned();
+                originals.insert(device, e.into_owned());
+            }
+            Event::Eof => break,
+            _ => {}
         }
-        let is_start = matches!(&event, Event::Start(_));
-        let event = match event {
-            Event::Start(element) | Event::Empty(element) if element.name().as_ref() == b"disk" => {
-                let mut configured = element.to_owned();
-                configured.clear_attributes();
-                for attribute in element.attributes() {
-                    let attribute = attribute.map_err(|_| invalid_blueprint())?;
-                    if attribute.key.as_ref() != b"sr"
-                        && !(first
-                            && first_disk_size.is_some()
-                            && attribute.key.as_ref() == b"size")
-                    {
-                        configured.push_attribute(attribute);
-                    }
-                }
-                configured.push_attribute(("sr", sr_uuid));
-                if first && let Some(size) = first_disk_size {
-                    configured.push_attribute(("size", size.to_string().as_str()));
-                }
-                first = false;
-                if is_start {
-                    Event::Start(configured)
-                } else {
-                    Event::Empty(configured)
+    }
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(Event::Start(BytesStart::new("provision")))
+        .map_err(|_| invalid_blueprint())?;
+    for (index, disk) in disks.iter().enumerate() {
+        let original = disk
+            .source_device
+            .as_ref()
+            .and_then(|device| originals.get(device));
+        let mut element = BytesStart::new("disk");
+        if let Some(original) = original {
+            for attr in original.attributes() {
+                let attr = attr.map_err(|_| invalid_blueprint())?;
+                if !matches!(attr.key.as_ref(), b"device" | b"size" | b"sr") {
+                    element.push_attribute(attr);
                 }
             }
-            other => other.into_owned(),
-        };
-        writer.write_event(event).map_err(|_| invalid_blueprint())?;
+        } else {
+            element.push_attribute(("bootable", if index == 0 { "true" } else { "false" }));
+            element.push_attribute(("type", "system"));
+        }
+        element.push_attribute(("device", index.to_string().as_str()));
+        element.push_attribute(("size", disk.size_bytes.to_string().as_str()));
+        element.push_attribute(("sr", disk.sr_uuid.as_str()));
+        writer
+            .write_event(Event::Empty(element))
+            .map_err(|_| invalid_blueprint())?;
     }
+    writer
+        .write_event(Event::End(quick_xml::events::BytesEnd::new("provision")))
+        .map_err(|_| invalid_blueprint())?;
     String::from_utf8(writer.into_inner()).map_err(|_| invalid_blueprint())
 }
 
@@ -627,64 +746,102 @@ impl Connection {
                 "The memory is below the source's minimum.".into(),
             ));
         }
-        let sr = inventory
-            .storage
-            .iter()
-            .find(|sr| {
-                sr.uuid == request.sr_uuid
-                    && sr.content_type != "iso"
-                    && !matches!(sr.storage_type.as_str(), "udev" | "iso")
-                    && sr.pbd_attached > 0
-            })
-            .ok_or_else(|| {
-                ApiError::Xen("Select an attached storage repository for VM disks.".into())
-            })?;
-        let disk_bytes = request.new_disk_gib.unwrap_or(0) * 1024 * 1024 * 1024;
-        let installation =
-            details.disks.iter().all(|disk| disk.is_cd) && !details.provision_disks.is_empty();
-        let blueprint_bytes = details
-            .provision_disks
-            .iter()
-            .enumerate()
-            .try_fold(0_u64, |total, (index, disk)| {
-                total.checked_add(if index == 0 {
-                    request.new_disk_gib.map_or(disk.size, |_| disk_bytes)
-                } else {
-                    disk.size
-                })
-            })
-            .ok_or_else(|| ApiError::Xen("The template disks are too large.".into()))?;
-        let required_bytes = details
-            .disks
-            .iter()
-            .filter(|disk| !disk.is_cd)
-            .try_fold(
-                if installation {
-                    blueprint_bytes
-                } else {
-                    disk_bytes
-                },
-                |total, disk| total.checked_add(disk.virtual_size),
-            )
-            .ok_or_else(|| ApiError::Xen("The selected disks are too large.".into()))?;
-        if required_bytes > sr.total.saturating_sub(sr.used) {
-            return Err(ApiError::Xen(
-                "The selected storage does not have enough free space for these disks.".into(),
-            ));
+        let requested_disks = request.disk_list(&details);
+        let mut required = std::collections::HashMap::<&str, u64>::new();
+        let mut sources = std::collections::HashSet::new();
+        for disk in &requested_disks {
+            if disk.size_bytes == 0 || disk.name.chars().count() > 255 {
+                return Err(ApiError::Xen("Enter a valid disk name and size.".into()));
+            }
+            if let Some(device) = &disk.source_device {
+                if !sources.insert(device) {
+                    return Err(ApiError::Xen(
+                        "A source disk can only be selected once.".into(),
+                    ));
+                }
+                let installed = details
+                    .disks
+                    .iter()
+                    .find(|d| !d.is_cd && &d.userdevice == device);
+                if installed.is_none()
+                    && !details.provision_disks.iter().any(|d| &d.device == device)
+                {
+                    return Err(ApiError::Xen(
+                        "The source disk is no longer available.".into(),
+                    ));
+                }
+                if installed.is_some_and(|d| disk.size_bytes < d.virtual_size) {
+                    return Err(ApiError::Xen(
+                        "A cloned disk can only be increased in size.".into(),
+                    ));
+                }
+            }
+            let size = required.entry(&disk.sr_uuid).or_default();
+            *size = size
+                .checked_add(disk.size_bytes)
+                .ok_or_else(|| ApiError::Xen("The selected disks are too large.".into()))?;
         }
-        if let Some(uuid) = &request.network_uuid
-            && !inventory
+        for (uuid, bytes) in required {
+            let sr = inventory
+                .storage
+                .iter()
+                .find(|sr| {
+                    sr.uuid == uuid
+                        && sr.content_type != "iso"
+                        && !matches!(sr.storage_type.as_str(), "udev" | "iso")
+                        && sr.pbd_attached > 0
+                })
+                .ok_or_else(|| ApiError::Xen("Select attached storage for every disk.".into()))?;
+            if bytes > sr.total.saturating_sub(sr.used) {
+                return Err(ApiError::Xen(
+                    "The selected storage does not have enough free space for these disks.".into(),
+                ));
+            }
+        }
+        for vif in request.vif_list() {
+            if !inventory
                 .networks
                 .iter()
-                .any(|network| &network.uuid == uuid && network.bridge != "xenapi")
-        {
-            return Err(ApiError::Xen("Select an available guest network.".into()));
+                .any(|n| n.uuid == vif.network_uuid && n.bridge != "xenapi")
+            {
+                return Err(ApiError::Xen("Select an available guest network.".into()));
+            }
+            validate_creation_mac(&vif.mac)?;
         }
-        if let Some(uuid) = &request.iso_uuid
-            && !details.isos.iter().any(|iso| &iso.uuid == uuid)
+        let media = if request.media == InstallationMedia::Inherit {
+            request
+                .iso_uuid
+                .clone()
+                .map(InstallationMedia::Iso)
+                .unwrap_or_default()
+        } else {
+            request.media.clone()
+        };
+        match &media {
+            InstallationMedia::Iso(uuid) if !details.isos.iter().any(|iso| &iso.uuid == uuid) => {
+                return Err(ApiError::Xen(
+                    "The selected installation ISO is no longer available.".into(),
+                ));
+            }
+            InstallationMedia::PhysicalDvd(uuid)
+                if !details.physical_dvds.iter().any(|dvd| {
+                    &dvd.uuid == uuid && Some(&dvd.host_uuid) == request.affinity_host_uuid.as_ref()
+                }) =>
+            {
+                return Err(ApiError::Xen(
+                    "Select a physical DVD on the home server.".into(),
+                ));
+            }
+            _ => {}
+        }
+        if let Some(host) = &request.copy_bios_from
+            && (!details.is_default_template
+                || details.hvm_boot_policy.is_empty()
+                || !inventory.hosts.iter().any(|h| &h.uuid == host && h.enabled))
         {
             return Err(ApiError::Xen(
-                "The selected installation ISO is no longer available.".into(),
+                "BIOS strings can only be copied from an enabled server to a default HVM template."
+                    .into(),
             ));
         }
         if let Some(uuid) = &request.affinity_host_uuid
@@ -739,11 +896,7 @@ impl Connection {
         let installation =
             disks.disks.iter().all(|disk| disk.is_cd) && !provision_disks(xml)?.is_empty();
         if installation {
-            let configured = configure_blueprint(
-                xml,
-                &request.sr_uuid,
-                request.new_disk_gib.map(|size| size * 1024 * 1024 * 1024),
-            )?;
+            let configured = configure_blueprint(xml, &request.disk_list(template))?;
             let mut config = record["other_config"]
                 .as_object()
                 .cloned()
@@ -817,68 +970,123 @@ impl Connection {
         .await?;
         self.update_vm_ha(uuid, "", 0, 0, request.affinity_host_uuid.as_deref())
             .await?;
+        if let Some(host) = &request.copy_bios_from {
+            let host_ref: String = self
+                .request("host.get_by_uuid", json!([self.session, host]))
+                .await?;
+            self.request::<Value>(
+                "VM.copy_bios_strings",
+                json!([self.session, reference, host_ref]),
+            )
+            .await?;
+        }
+        let requested = request.disk_list(template);
         let details = self.vm_details(uuid).await?;
-        for disk in details.disks.iter().filter(|disk| !disk.is_cd) {
-            if disk.sr_uuid != request.sr_uuid {
-                self.move_disk(uuid, &disk.vbd_uuid, &request.sr_uuid)
+        if !installation {
+            for disk in details.disks.iter().filter(|d| !d.is_cd) {
+                let target = requested
+                    .iter()
+                    .find(|d| d.source_device.as_ref() == Some(&disk.userdevice));
+                if let Some(target) = target {
+                    if target.size_bytes > disk.virtual_size {
+                        self.resize_disk(uuid, &disk.vdi_uuid, target.size_bytes)
+                            .await?;
+                    }
+                    if target.sr_uuid != disk.sr_uuid {
+                        self.move_disk(uuid, &disk.vbd_uuid, &target.sr_uuid)
+                            .await?;
+                    }
+                } else {
+                    self.remove_disk(uuid, &disk.vbd_uuid, true).await?;
+                }
+            }
+            for disk in requested.iter().filter(|d| d.source_device.is_none()) {
+                self.add_disk(uuid, &disk.sr_uuid, disk.size_bytes, Some(&disk.name))
                     .await?;
             }
         }
-        if let Some(size) = request.new_disk_gib.filter(|_| !installation) {
-            self.add_disk(uuid, &request.sr_uuid, size * 1024 * 1024 * 1024, None)
-                .await?;
-            if details.disks.iter().all(|disk| disk.is_cd)
-                && let Some(disk) = self
-                    .vm_details(uuid)
-                    .await?
+        let current = self.vm_details(uuid).await?;
+        for (index, target) in requested.iter().enumerate() {
+            let disk = if installation {
+                current
                     .disks
                     .iter()
-                    .find(|disk| !disk.is_cd)
-            {
-                self.set_vbd_bootable(uuid, &disk.vbd_uuid, true).await?;
+                    .find(|d| !d.is_cd && d.userdevice == index.to_string())
+            } else if let Some(device) = &target.source_device {
+                current
+                    .disks
+                    .iter()
+                    .find(|d| !d.is_cd && &d.userdevice == device)
+            } else {
+                None
+            };
+            if let Some(disk) = disk {
+                let vdi: String = self
+                    .request("VDI.get_by_uuid", json!([self.session, disk.vdi_uuid]))
+                    .await?;
+                self.request::<Value>(
+                    "VDI.set_name_label",
+                    json!([self.session, vdi, target.name]),
+                )
+                .await?;
             }
+        }
+        if let Some(first) = current.disks.iter().find(|d| !d.is_cd) {
+            self.set_vbd_bootable(uuid, &first.vbd_uuid, true).await?;
         }
         for interface in &details.interfaces {
             self.remove_vif(uuid, &interface.uuid).await?;
         }
-        if let Some(network) = &request.network_uuid {
-            self.add_vif(uuid, network, None).await?;
+        for vif in request.vif_list() {
+            self.add_vif(uuid, &vif.network_uuid, Some(&vif.mac))
+                .await?;
         }
-        if let Some(iso) = &request.iso_uuid {
-            if details.disks.iter().all(|disk| !disk.is_cd) {
+        let media = if request.media == InstallationMedia::Inherit {
+            request
+                .iso_uuid
+                .clone()
+                .map(InstallationMedia::Iso)
+                .unwrap_or_default()
+        } else {
+            request.media.clone()
+        };
+        if let InstallationMedia::Iso(iso) | InstallationMedia::PhysicalDvd(iso) = &media {
+            if current.disks.iter().all(|d| !d.is_cd) {
                 self.add_cd_drive(uuid).await?;
             }
             let current = self.vm_details(uuid).await?;
             let cd = current
                 .disks
                 .iter()
-                .find(|disk| disk.is_cd)
+                .find(|d| d.is_cd)
                 .ok_or(ApiError::Protocol)?;
             self.change_cd(uuid, &cd.vbd_uuid, Some(iso)).await?;
-            if !current.hvm_boot_policy.is_empty() {
-                let mut boot = current.hvm_boot_params.clone();
-                let existing = boot.get("order").cloned().unwrap_or_else(|| "cdn".into());
-                boot.insert(
-                    "order".into(),
-                    format!(
-                        "d{}",
-                        existing
-                            .chars()
-                            .filter(|key| *key != 'd')
-                            .collect::<String>()
-                    ),
-                );
-                self.request::<Value>(
-                    "VM.set_HVM_boot_params",
-                    json!([self.session, reference, boot]),
-                )
-                .await?;
+        } else if media == InstallationMedia::Network {
+            for cd in current.disks.iter().filter(|d| d.is_cd && !d.empty) {
+                self.change_cd(uuid, &cd.vbd_uuid, None).await?;
             }
+        }
+        if !current.hvm_boot_policy.is_empty() {
+            let mut boot = current.hvm_boot_params.clone();
+            let existing = boot.get("order").cloned().unwrap_or_else(|| "cdn".into());
+            boot.insert(
+                "order".into(),
+                media.boot_order(&existing, requested.is_empty()),
+            );
+            self.request::<Value>(
+                "VM.set_HVM_boot_params",
+                json!([self.session, reference, boot]),
+            )
+            .await?;
         }
         self.update_vm_resources(
             uuid,
             &crate::operations::VmResourceUpdate {
-                pv_args: None,
+                pv_args: template
+                    .hvm_boot_policy
+                    .is_empty()
+                    .then(|| request.pv_args.clone())
+                    .flatten(),
                 auto_poweron: None,
                 vcpus_max: request.vcpus_max,
                 vcpus_at_startup: request.vcpus_at_startup,
@@ -907,5 +1115,131 @@ impl Connection {
             .await?;
         }
         Ok(())
+    }
+}
+
+fn validate_creation_mac(mac: &str) -> Result<(), ApiError> {
+    if mac.is_empty() {
+        return Ok(());
+    }
+    let octets: Option<Vec<u8>> = mac
+        .split(':')
+        .map(|part| {
+            if part.len() == 2 {
+                u8::from_str_radix(part, 16).ok()
+            } else {
+                None
+            }
+        })
+        .collect();
+    if !octets.is_some_and(|v| v.len() == 6 && v[0] & 1 == 0 && v.iter().any(|b| *b != 0)) {
+        return Err(ApiError::Xen("Enter a unicast MAC address like 02:00:00:00:00:01, or leave it empty to generate one.".into()));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod creation_tests {
+    use super::*;
+
+    #[test]
+    fn provision_xml_edits_delete_resize_move_and_add_disks() {
+        let xml = r#"<provision><disk device="0" size="100" sr="old" bootable="true" type="system"/><disk device="1" size="200" sr="old" bootable="false" type="user"/></provision>"#;
+        let disks = vec![
+            CreateDisk {
+                source_device: Some("1".into()),
+                name: "Renamed".into(),
+                size_bytes: 300,
+                sr_uuid: "a&b".into(),
+            },
+            CreateDisk {
+                source_device: None,
+                name: "Added".into(),
+                size_bytes: 400,
+                sr_uuid: "second".into(),
+            },
+        ];
+        let result = configure_blueprint(xml, &disks).unwrap();
+        let parsed = provision_disks(&result).unwrap();
+        assert_eq!(
+            parsed
+                .iter()
+                .map(|d| (d.device.as_str(), d.size))
+                .collect::<Vec<_>>(),
+            vec![("0", 300), ("1", 400)]
+        );
+        assert!(result.contains("sr=\"a&amp;b\""));
+        assert!(result.contains("type=\"user\""));
+        assert!(!result.contains("size=\"100\""));
+        assert!(
+            provision_disks(&configure_blueprint(xml, &[]).unwrap())
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn installation_media_boot_orders() {
+        assert_eq!(InstallationMedia::Network.boot_order("cdn", false), "ncd");
+        assert_eq!(
+            InstallationMedia::Iso("iso".into()).boot_order("cdn", false),
+            "dcn"
+        );
+        assert_eq!(
+            InstallationMedia::PhysicalDvd("dvd".into()).boot_order("ncd", false),
+            "dnc"
+        );
+        assert_eq!(InstallationMedia::Inherit.boot_order("cdn", true), "ncd");
+        assert_eq!(InstallationMedia::Inherit.boot_order("cdn", false), "cdn");
+    }
+
+    #[test]
+    fn vif_request_preserves_order_and_manual_or_automatic_mac() {
+        let vifs = vec![
+            CreateVif {
+                network_uuid: "same".into(),
+                mac: String::new(),
+            },
+            CreateVif {
+                network_uuid: "same".into(),
+                mac: "02:00:00:00:00:01".into(),
+            },
+        ];
+        let request = CreateVmRequest {
+            guest_setup: None,
+            start_automatically: false,
+            source: VmCreationSource::Template("template".into()),
+            name: "VM".into(),
+            description: String::new(),
+            vcpus_max: 1,
+            vcpus_at_startup: 1,
+            cores_per_socket: None,
+            memory_mib: 1024,
+            sr_uuid: "sr".into(),
+            disks: Some(Vec::new()),
+            interfaces: Some(vifs.clone()),
+            media: InstallationMedia::Network,
+            pv_args: None,
+            copy_bios_from: None,
+            new_disk_gib: None,
+            network_uuid: None,
+            iso_uuid: None,
+            affinity_host_uuid: None,
+        };
+        assert_eq!(request.vif_list(), vifs);
+        let mut allowed = vec!["10".into(), "1".into(), "0".into(), "2".into()];
+        for (index, _) in request.vif_list().iter().enumerate() {
+            assert_eq!(
+                crate::operations::next_vif_device(&mut allowed).unwrap(),
+                &index.to_string()
+            );
+            allowed.remove(0);
+        }
+        assert!(crate::operations::next_vif_device(&mut []).is_none());
+        for vif in request.vif_list() {
+            validate_creation_mac(&vif.mac).unwrap();
+        }
+        assert!(validate_creation_mac("01:00:00:00:00:01").is_err());
+        assert!(validate_creation_mac("02:00:00:00:00:xx").is_err());
     }
 }

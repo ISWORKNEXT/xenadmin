@@ -58,6 +58,9 @@ pub struct VmDetails {
     pub disks: Vec<VmDisk>,
     pub provision_disks: Vec<crate::provisioning::ProvisionDisk>,
     pub isos: Vec<VmIso>,
+    pub physical_dvds: Vec<PhysicalDvd>,
+    pub is_default_template: bool,
+    pub bios_strings_copied: bool,
     pub interfaces: Vec<VmInterface>,
     pub snapshots: Vec<VmSnapshot>,
     pub warnings: Vec<String>,
@@ -94,6 +97,13 @@ pub struct VmIso {
     pub name: String,
     pub sr_name: String,
     pub size: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PhysicalDvd {
+    pub uuid: String,
+    pub name: String,
+    pub host_uuid: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -413,6 +423,7 @@ impl Connection {
         }
 
         let mut isos = Vec::new();
+        let mut physical_dvds = Vec::new();
         if let Some(vdis) = vdis.as_ref() {
             for vdi in vdis.values() {
                 if vdi["is_a_snapshot"].as_bool() == Some(true)
@@ -422,6 +433,23 @@ impl Connection {
                 }
                 let sr = related(srs.as_ref(), &text(vdi, "SR"));
                 let is_iso = text(vdi, "type") == "iso" || text(sr, "content_type") == "iso";
+                if text(sr, "type") == "udev" && text(sr, "content_type") == "iso" {
+                    if let (Some(pbds), Some(hosts)) = (pbds.as_ref(), hosts.as_ref()) {
+                        for pbd in pbds.values().filter(|pbd| {
+                            text(pbd, "SR") == text(vdi, "SR")
+                                && pbd["currently_attached"].as_bool() == Some(true)
+                        }) {
+                            if let Some(host) = hosts.get(&text(pbd, "host")) {
+                                physical_dvds.push(PhysicalDvd {
+                                    uuid: text(vdi, "uuid"),
+                                    name: text(vdi, "name_label"),
+                                    host_uuid: text(host, "uuid"),
+                                });
+                            }
+                        }
+                    }
+                    continue;
+                }
                 if !is_iso {
                     continue;
                 }
@@ -573,6 +601,14 @@ impl Connection {
             disks,
             provision_disks,
             isos,
+            physical_dvds,
+            is_default_template: vm["other_config"].get("default_template").is_some(),
+            bios_strings_copied: vm["other_config"].get("default_template").is_none()
+                && vm["bios_strings"]
+                    .as_object()
+                    .is_some_and(|bios| !bios.is_empty())
+                && !(vm["bios_strings"]["bios-vendor"].as_str() == Some("Xen")
+                    && vm["bios_strings"]["system-manufacturer"].as_str() == Some("Xen")),
             interfaces,
             snapshots,
             warnings,

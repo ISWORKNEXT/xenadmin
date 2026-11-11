@@ -914,14 +914,21 @@ impl App {
                                     .div_ceil(1024 * 1024)
                                     .max(details.memory_static_min.div_ceil(1024 * 1024))
                                     .max(64);
-                                wizard.draft.new_disk_gib =
-                                    if details.disks.iter().all(|disk| disk.is_cd) {
-                                        Some(details.provision_disks.first().map_or(20, |disk| {
-                                            disk.size.div_ceil(1024 * 1024 * 1024)
-                                        }))
-                                    } else {
-                                        None
-                                    };
+                                wizard.draft.new_disk_gib = None;
+                                wizard.draft.disks = Some(wizard.draft.disk_list(&details));
+                                if wizard.draft.disks.as_ref().is_some_and(|d| d.is_empty())
+                                    && details.disks.iter().all(|d| d.is_cd)
+                                {
+                                    wizard.draft.disks =
+                                        Some(vec![xen_core::provisioning::CreateDisk {
+                                            source_device: None,
+                                            name: "New disk".into(),
+                                            size_bytes: 20 * 1024 * 1024 * 1024,
+                                            sr_uuid: wizard.draft.sr_uuid.clone(),
+                                        }]);
+                                }
+                                wizard.draft.pv_args = Some(details.pv_args.clone());
+                                wizard.copy_bios = details.bios_strings_copied;
                                 if wizard.draft.name.is_empty() {
                                     wizard.draft.name = format!("{} VM", details.name);
                                 }
@@ -2304,8 +2311,7 @@ impl App {
                     self.state.new_vm = Some(crate::state::NewVmWizard {
                         frame: Default::default(),
                         template_search: String::new(),
-                        edit_disk: false,
-                        edit_network: false,
+                        copy_bios: false,
                         connection_id,
                         draft: xen_core::provisioning::CreateVmRequest {
                             guest_setup: None,
@@ -2318,7 +2324,12 @@ impl App {
                             cores_per_socket: None,
                             memory_mib: 1024,
                             sr_uuid: String::new(),
-                            new_disk_gib: Some(20),
+                            new_disk_gib: None,
+                            disks: None,
+                            interfaces: Some(Vec::new()),
+                            media: Default::default(),
+                            pv_args: None,
+                            copy_bios_from: None,
                             network_uuid: None,
                             iso_uuid: None,
                             affinity_host_uuid: None,
@@ -2334,6 +2345,9 @@ impl App {
                         wizard.draft.source = source.clone();
                         wizard.template = LoadState::Loading;
                         wizard.draft.iso_uuid = None;
+                        wizard.draft.media = Default::default();
+                        wizard.draft.disks = None;
+                        wizard.draft.copy_bios_from = None;
                         wizard.error = None;
                         self.state.new_vm_seq += 1;
                         self.worker.send(Command::WizardTemplate {

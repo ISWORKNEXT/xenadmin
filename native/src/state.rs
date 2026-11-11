@@ -1396,10 +1396,9 @@ impl VmResourceEditState {
 }
 
 pub struct NewVmWizard {
+    pub copy_bios: bool,
     pub frame: crate::views::wizard::WizardState,
     pub template_search: String,
-    pub edit_disk: bool,
-    pub edit_network: bool,
     pub connection_id: String,
     pub draft: xen_core::provisioning::CreateVmRequest,
     pub template: LoadState<VmDetails>,

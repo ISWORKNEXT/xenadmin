@@ -1,0 +1,24 @@
+{
+  "uuid": "ced8eefc-08fa-4ff2-a5e2-b0f701be71f8",
+  "name": "zz-parity-M2e-debian11",
+  "power_state": "Running",
+  "affinity_set": true,
+  "disks": [
+    {
+      "uuid": "225663f1-b20a-4780-ba70-4b31009befc1",
+      "name": "zz-parity-M2e-debian11 disk 0",
+      "bytes": 11811160064,
+      "independent_from_source": true
+    }
+  ],
+  "ssh_returncode": 0,
+  "ssh_stdout": "paritytester\nGUEST_ACK_OK",
+  "seconds_from_finish": 43.2,
+  "within_five_minutes": true,
+  "free_ip_ping": "2 transmitted, 0 received before creation",
+  "guest_setup_network_keys_match": true,
+  "rejections_observed": [
+    "Guest Setup missing IPv4/gateway disables Next",
+    "Installed 10 GiB source disk cannot be shrunk to 9 GiB; wizard clamps to 10 GiB"
+  ]
+}

@@ -2317,18 +2317,12 @@ impl Connection {
         if network["uuid"].as_str() != Some(network_uuid) {
             return Err(ApiError::Protocol);
         }
-        let vifs = self.records("VIF").await?;
-        let mut used = std::collections::BTreeSet::new();
-        for vif in vifs.values() {
-            if vif["VM"].as_str() == Some(vm_ref.as_str())
-                && let Ok(device) = text(vif, "device").parse::<u8>()
-            {
-                used.insert(device);
-            }
-        }
-        let Some(device) = (0..4).find(|device| !used.contains(device)) else {
+        let mut devices: Vec<String> = self
+            .request("VM.get_allowed_VIF_devices", json!([self.session, vm_ref]))
+            .await?;
+        let Some(device) = next_vif_device(&mut devices) else {
             return Err(ApiError::Xen(
-                "This VM already has the maximum number of network interfaces.".into(),
+                "This VM has no free virtual network interface slots.".into(),
             ));
         };
         let mac = mac.unwrap_or_default().trim();
@@ -3103,6 +3097,12 @@ pub(crate) async fn wait_task_value(
     Err(ApiError::Xen(
         "The operation is still running on the host. Check the task list before retrying.".into(),
     ))
+}
+
+/// XenAPI device lists are unordered; creation fills numeric slots in order.
+pub(crate) fn next_vif_device(devices: &mut [String]) -> Option<&String> {
+    devices.sort_by_key(|device| device.parse::<u64>().unwrap_or(u64::MAX));
+    devices.first()
 }
 
 #[cfg(test)]

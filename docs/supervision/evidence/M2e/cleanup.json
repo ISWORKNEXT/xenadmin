@@ -1,0 +1,26 @@
+{
+  "removed": [
+    {
+      "vm_uuid": "0b2e1c73-8918-4478-e931-0eaaff5ea504",
+      "name": "zz-parity-M2e-multi",
+      "disk_uuids": [
+        "36c3e1d5-f5a1-4a51-a052-5da4887ecc4f",
+        "ca263393-3100-4ff8-84f1-42f0148bfe2b"
+      ]
+    },
+    {
+      "vm_uuid": "ced8eefc-08fa-4ff2-a5e2-b0f701be71f8",
+      "name": "zz-parity-M2e-debian11",
+      "disk_uuids": [
+        "225663f1-b20a-4780-ba70-4b31009befc1"
+      ]
+    }
+  ],
+  "owned_vms_absent": true,
+  "owned_disks_absent": true,
+  "preexisting_vm_template_count": 68,
+  "preexisting_configuration_fingerprints_unchanged": true,
+  "xenapi_responding": true,
+  "temporary_secrets_deleted": true,
+  "owned_ui_processes_stopped": true
+}

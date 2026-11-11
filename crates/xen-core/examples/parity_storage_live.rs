@@ -225,6 +225,11 @@ async fn exercise(
             memory_mib: 256,
             sr_uuid: original_sr.uuid.clone(),
             new_disk_gib: None,
+            disks: None,
+            interfaces: None,
+            media: Default::default(),
+            pv_args: None,
+            copy_bios_from: None,
             network_uuid: None,
             iso_uuid: None,
             affinity_host_uuid: None,
@@ -590,6 +595,11 @@ async fn exercise(
             memory_mib: 384,
             sr_uuid: target.uuid.clone(),
             new_disk_gib: None,
+            disks: None,
+            interfaces: None,
+            media: Default::default(),
+            pv_args: None,
+            copy_bios_from: None,
             network_uuid: inventory
                 .networks
                 .iter()

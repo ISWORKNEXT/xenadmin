@@ -1,0 +1,33 @@
+{
+  "uuid": "0b2e1c73-8918-4478-e931-0eaaff5ea504",
+  "name": "zz-parity-M2e-multi",
+  "power_state": "Halted",
+  "boot_order": "ncd",
+  "affinity_set": false,
+  "disks": [
+    {
+      "uuid": "36c3e1d5-f5a1-4a51-a052-5da4887ecc4f",
+      "device": "1",
+      "name": "zz-parity-M2e-multi disk 1",
+      "bytes": 2147483648
+    },
+    {
+      "uuid": "ca263393-3100-4ff8-84f1-42f0148bfe2b",
+      "device": "0",
+      "name": "zz-parity-M2e-multi disk 0",
+      "bytes": 1073741824
+    }
+  ],
+  "vifs": [
+    {
+      "device": "1",
+      "mac": "02:00:00:2e:00:01",
+      "network": "OpaqueRef:6e3da85b-5ecb-34ed-f0d5-650764a1880a"
+    },
+    {
+      "device": "0",
+      "mac": "ea:f0:6a:cc:c9:2d",
+      "network": "OpaqueRef:6e3da85b-5ecb-34ed-f0d5-650764a1880a"
+    }
+  ]
+}

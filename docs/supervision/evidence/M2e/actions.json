@@ -1,0 +1,865 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        170
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        578,
+        55
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        678,
+        290
+      ],
+      "text": "Other install media"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        640,
+        354
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        700,
+        313
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2e-multi"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 0.5,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        520,
+        382
+      ],
+      "snap": "03-installation-media"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        603,
+        351
+      ],
+      "key": "Control_L+a",
+      "text": "1",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Return"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        545,
+        404
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        603,
+        440
+      ],
+      "key": "Control_L+a",
+      "text": "2",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Return",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        977,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        977,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "key": "Control_L+a",
+      "text": "1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        283
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        545,
+        404
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "key": "Control_L+a",
+      "text": "2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        283
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        313
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2e-multi disk 0"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        404
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2e-multi disk 1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        283
+      ],
+      "snap": "01-storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        545,
+        306
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        545,
+        404
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        700,
+        444
+      ],
+      "text": "02:00:00:2e:00:01"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        283
+      ],
+      "snap": "02-networking"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        700,
+        313
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2e-multi"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "wait": 4,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        170
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        578,
+        55
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        678,
+        290
+      ],
+      "text": "Debian 11 Legacy"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        640,
+        354
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        700,
+        313
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2e-debian11"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        727
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        170
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        578,
+        55
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        678,
+        290
+      ],
+      "text": "Debian 11 Legacy"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        640,
+        354
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        700,
+        313
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2e-debian11"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        520,
+        365
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        545,
+        306
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        774
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        750,
+        329
+      ],
+      "text": "192.168.8.239"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        750,
+        368
+      ],
+      "text": "24"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        750,
+        406
+      ],
+      "text": "192.168.8.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        700,
+        445
+      ],
+      "text": "1.1.1.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        750,
+        523
+      ],
+      "text": "paritytester"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        520,
+        291
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        977,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        977,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        977,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "key": "Control_L+a",
+      "text": "9"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        283
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "key": "Control_L+a",
+      "text": "11"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        283
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        313
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2e-debian11 disk 0"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "wait": 3,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

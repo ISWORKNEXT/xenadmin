@@ -31,7 +31,7 @@ enum VmPreparation {
     },
     Copy(crate::provisioning::CopyVmRequest),
     ConvertToTemplate,
-    NewVm(crate::provisioning::CreateVmRequest),
+    NewVm(Box<crate::provisioning::CreateVmRequest>),
     Snapshot {
         as_template: bool,
     },
@@ -2113,7 +2113,7 @@ impl Workspace {
             connection_id,
             request.source.uuid().to_owned(),
             request.name.clone(),
-            VmPreparation::NewVm(request),
+            VmPreparation::NewVm(Box::new(request)),
         )
         .await
     }
