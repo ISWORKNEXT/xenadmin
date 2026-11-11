@@ -23,6 +23,8 @@ struct Input {
     qualify_retained_failure: bool,
     #[serde(default)]
     qualify_default_sr: bool,
+    #[serde(default)]
+    qualify_cpu_settings: bool,
 }
 
 fn ssh_json(script: &str) -> Result<Value, Error> {
@@ -56,6 +58,34 @@ try:
 finally:s.xenapi.session.logout()
 "#,
     )
+}
+fn cpu_state(uuid: &str, prefix: &str, seed: bool) -> Result<Value, Error> {
+    let helper =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/audit_vm_cpu_state.py");
+    let mut child = Command::new("python3")
+        .arg(helper)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    child
+        .stdin
+        .take()
+        .ok_or("Missing CPU probe input")?
+        .write_all(
+            json!({"vm_uuid":uuid,"prefix":prefix,"seed":seed})
+                .to_string()
+                .as_bytes(),
+        )?;
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "CPU probe failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(serde_json::from_slice(&output.stdout)?)
 }
 fn default_sr_state() -> Result<Value, Error> {
     ssh_json(
@@ -335,6 +365,135 @@ async fn exercise(
         "{}",
         json!({"check":"pbd-detach-repair-scan","sr_uuid":target.uuid,"pbd_uuid":pbd.uuid,"status":"VERIFIED"})
     );
+    if input.qualify_cpu_settings {
+        let original = cpu_state(&source, prefix, true)?;
+        let mut update = xen_core::operations::VmResourceUpdate {
+            vcpus_max: 4,
+            vcpus_at_startup: 2,
+            memory_static_max_mib: 256,
+            memory_dynamic_min_mib: 256,
+            memory_dynamic_max_mib: 256,
+            boot_order: None,
+            firmware: None,
+            secure_boot: None,
+            boot_policy: None,
+            after_crash: None,
+            cpu_weight: Some(512),
+            cores_per_socket: Some(2),
+        };
+        c.update_vm_resources(&source, &update).await?;
+        let actual = cpu_state(&source, prefix, false)?;
+        let mut expected = original.clone();
+        expected["VCPUs_max"] = json!("4");
+        expected["VCPUs_at_startup"] = json!("2");
+        expected["VCPUs_params"]["weight"] = json!("512");
+        expected["platform"]["cores-per-socket"] = json!("2");
+        if actual != expected {
+            return Err("CPU settings changed unrelated fields or did not apply".into());
+        }
+        let mut invalid = update.clone();
+        invalid.vcpus_max = 8;
+        invalid.cpu_weight = Some(0);
+        if c.update_vm_resources(&source, &invalid).await.is_ok()
+            || cpu_state(&source, prefix, false)? != actual
+        {
+            return Err("Invalid weight was applied or other fields changed".into());
+        }
+        invalid.cpu_weight = Some(512);
+        invalid.cores_per_socket = Some(3);
+        if c.update_vm_resources(&source, &invalid).await.is_ok()
+            || cpu_state(&source, prefix, false)? != actual
+        {
+            return Err("Invalid topology was applied or other fields changed".into());
+        }
+        invalid.vcpus_max = 3;
+        invalid.cpu_weight = None;
+        invalid.cores_per_socket = None;
+        if c.update_vm_resources(&source, &invalid).await.is_ok()
+            || cpu_state(&source, prefix, false)? != actual
+        {
+            return Err("CPU maximum bypassed unchanged topology validation".into());
+        }
+        update.cpu_weight = None;
+        update.cores_per_socket = None;
+        c.update_vm_resources(&source, &update).await?;
+        if cpu_state(&source, prefix, false)? != actual {
+            return Err("Omitted CPU options changed maps".into());
+        }
+        update.cpu_weight = Some(1024);
+        c.update_vm_resources(&source, &update).await?;
+        let mut expected = actual;
+        expected["VCPUs_params"]["weight"] = json!("1024");
+        if cpu_state(&source, prefix, false)? != expected {
+            return Err("Weight-only update changed topology or other fields".into());
+        }
+        let mut readonly_settings = input.settings.clone();
+        readonly_settings.read_only = true;
+        let readonly = Connection::login(readonly_settings, &input.password).await?;
+        let rejected = readonly
+            .update_vm_resources(&source, &update)
+            .await
+            .is_err();
+        readonly.logout().await?;
+        if !rejected {
+            return Err("Read-only CPU settings update admitted".into());
+        }
+        let start = c.begin_vm_action(&source, &VmAction::StartPaused).await?;
+        c.wait_task(&start).await?;
+        let unpause = c.begin_vm_action(&source, &VmAction::Unpause).await?;
+        c.wait_task(&unpause).await?;
+        let running = cpu_state(&source, prefix, false)?;
+        if running["power_state"] != "Running" {
+            return Err("Owned CPU test VM is not Running".into());
+        }
+        let mut expected_running = expected.clone();
+        expected_running["power_state"] = json!("Running");
+        let mut host_added_platform = serde_json::Map::new();
+        for key in ["device-model", "timeoffset"] {
+            if expected_running["platform"].get(key).is_none()
+                && let Some(value) = running["platform"].get(key)
+            {
+                expected_running["platform"][key] = value.clone();
+                host_added_platform.insert(key.into(), value.clone());
+            }
+        }
+        if running != expected_running {
+            println!(
+                "{}",
+                json!({"phase":"cpu-state-after-start-difference","expected":expected_running,"actual":running})
+            );
+            return Err("Starting the VM changed fields beyond the observed host defaults".into());
+        }
+        update.cpu_weight = Some(2048);
+        if c.update_vm_resources(&source, &update).await.is_ok()
+            || cpu_state(&source, prefix, false)? != running
+        {
+            return Err("Running CPU weight update changed fields".into());
+        }
+        update.cpu_weight = None;
+        update.cores_per_socket = Some(1);
+        if c.update_vm_resources(&source, &update).await.is_ok()
+            || cpu_state(&source, prefix, false)? != running
+        {
+            return Err("Running CPU topology update changed fields".into());
+        }
+        let stop = c.begin_vm_action(&source, &VmAction::ForceShutdown).await?;
+        c.wait_task(&stop).await?;
+        let final_state = cpu_state(&source, prefix, false)?;
+        let mut expected = expected_running;
+        expected["power_state"] = json!("Halted");
+        if final_state != expected {
+            println!(
+                "{}",
+                json!({"phase":"cpu-state-after-power-cycle-difference","expected":expected,"actual":final_state})
+            );
+            return Err("Halted CPU settings differ after Running rejection".into());
+        }
+        println!(
+            "{}",
+            json!({"check":"cpu-topology-weight","uuid":source,"initial":original,"final":final_state,"invalid_weight_rejected":true,"invalid_topology_rejected":true,"readonly_rejected":true,"running_changes_rejected":true,"omitted_options_preserved":true,"unrelated_maps_metadata_preserved":true,"host_added_platform_on_start":host_added_platform,"inherited_topology_checked_on_cpu_change":true,"status":"VERIFIED"})
+        );
+    }
     if input.qualify_default_sr {
         if let Some(iso) = inventory.storage.iter().find(|sr| sr.content_type == "iso")
             && c.sr_action(&iso.uuid, SrAction::SetDefault).await.is_ok()
@@ -456,7 +615,7 @@ async fn exercise(
                 .vms
                 .iter()
                 .find(|vm| vm.name == request.name)
-                .ok_or("Failed output was deleted")?;
+                .ok_or_else(||format!("No failed output was found. Creation returned: {failure}. If preflight rejected the request before cloning, output retention was not exercised."))?;
             if !failure.contains(&retained.uuid) || !failure.contains("retained") {
                 return Err("Failure did not identify retained VM".into());
             }

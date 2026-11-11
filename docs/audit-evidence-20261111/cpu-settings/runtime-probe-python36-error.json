@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-11-11T12:34:05.011Z",
+  "ordinal": 10995,
+  "type": "response_item",
+  "payload": {
+    "type": "custom_tool_call_output",
+    "id": "ctco_01a1ca99-e253-7942-bb29-ef020039ad19",
+    "call_id": "call_edcd39c5617b47cba7ac55f701ef9e40",
+    "output": [
+      {
+        "type": "input_text",
+        "text": "Script completed\nWall time 1.1 seconds\nOutput:\n"
+      },
+      {
+        "type": "input_text",
+        "text": "{\"chunk_id\":\"9fa56e\",\"wall_time_seconds\":0.00003845,\"exit_code\":0,\"original_token_count\":64,\"output\":\"1  Traceback (most recent call last):\\n  File \\\"<stdin>\\\", line 23, in <module>\\n  File \\\"/usr/lib64/python3.6/subprocess.py\\\", line 423, in run\\n    with Popen(*popenargs, **kwargs) as process:\\nTypeError: __init__() got an unexpected keyword argument 'text'\\n\\n\\n\"}"
+      },
+      {
+        "type": "input_text",
+        "text": "{\"chunk_id\":\"6e6396\",\"wall_time_seconds\":1.00111198,\"session_id\":98895,\"original_token_count\":64,\"output\":\"{\\\"ok\\\": true, \\\"action\\\": {\\\"size\\\": [1440, 940], \\\"wait\\\": 2, \\\"snap\\\": \\\"cpu-restored-wide\\\"}}\\r\\n{\\\"click\\\":[1382,201],\\\"wait\\\":3,\\\"snap\\\":\\\"cpu-running-page\\\"}\\r\\n{\\\"click\\\":[843,410],\\\"wait\\\":3,\\\"snap\\\":\\\"cpu-running-resources\\\"}\\r\\n{\\\"wait\\\":2,\\\"snap\\\":\\\"cpu-running-resources-settled\\\"}\\r\\n\"}"
+      }
+    ],
+    "internal_chat_message_metadata_passthrough": {
+      "turn_id": "01a1c92f-efd7-7b93-87e7-bc82706133d0",
+      "create_time": 1794400445.01165
+    }
+  },
+  "metadata": {
+    "client_authored": false,
+    "fallback_token_limit_override": 12000
+  }
+}

@@ -24,6 +24,9 @@ pub struct VmDetails {
     pub affinity: String,
     pub vcpus_max: u64,
     pub vcpus_at_startup: u64,
+    pub cpu_weight: String,
+    pub cores_per_socket: String,
+    pub max_cores_per_socket: u64,
     pub can_hotplug_vcpus: bool,
     pub memory_static_max: u64,
     pub memory_static_min: u64,
@@ -260,7 +263,7 @@ impl Connection {
             ));
         }
 
-        let (vbds, vdis, srs, vifs, networks, guests, hosts, all_vms) = tokio::join!(
+        let (vbds, vdis, srs, vifs, networks, guests, hosts, all_vms, pbds, host_metrics) = tokio::join!(
             self.records("VBD"),
             self.records("VDI"),
             self.records("SR"),
@@ -268,7 +271,9 @@ impl Connection {
             self.records("network"),
             self.records("VM_guest_metrics"),
             self.records("host"),
-            self.records("VM")
+            self.records("VM"),
+            self.records("PBD"),
+            self.records("host_metrics")
         );
 
         let mut warnings = Vec::new();
@@ -280,6 +285,39 @@ impl Connection {
         let guests = dependency(guests, "Guest tools", "guest metrics", &mut warnings);
         let hosts = dependency(hosts, "General", "host records", &mut warnings);
         let all_vms = dependency(all_vms, "Snapshots", "VM records", &mut warnings);
+        let pbds = dependency(pbds, "CPU topology", "PBD records", &mut warnings);
+        let host_metrics = dependency(host_metrics, "CPU topology", "host metrics", &mut warnings);
+        let cpu_topology_limit = match (
+            hosts.as_ref(),
+            vbds.as_ref(),
+            vdis.as_ref(),
+            srs.as_ref(),
+            pbds.as_ref(),
+            host_metrics.as_ref(),
+            all_vms.as_ref(),
+        ) {
+            (
+                Some(hosts),
+                Some(vbds),
+                Some(vdis),
+                Some(srs),
+                Some(pbds),
+                Some(metrics),
+                Some(vms),
+            ) => max_cores_per_socket(
+                &vm,
+                &CpuTopologyRecords {
+                    hosts,
+                    vbds,
+                    vdis,
+                    srs,
+                    pbds,
+                    metrics,
+                    vms,
+                },
+            ),
+            _ => 0,
+        };
 
         let resident_ref = text(&vm, "resident_on");
         let affinity_ref = text(&vm, "affinity");
@@ -430,6 +468,15 @@ impl Connection {
             affinity,
             vcpus_max: number(&vm, "VCPUs_max"),
             vcpus_at_startup: number(&vm, "VCPUs_at_startup"),
+            cpu_weight: vm["VCPUs_params"]["weight"]
+                .as_str()
+                .unwrap_or("256")
+                .to_owned(),
+            cores_per_socket: vm["platform"]["cores-per-socket"]
+                .as_str()
+                .unwrap_or("1")
+                .to_owned(),
+            max_cores_per_socket: cpu_topology_limit,
             can_hotplug_vcpus: vcpu_hotplug_allowed(&vm, guests.as_ref()),
             memory_static_max: number(&vm, "memory_static_max"),
             memory_static_min: number(&vm, "memory_static_min"),
@@ -635,4 +682,95 @@ pub(crate) fn vcpu_hotplug_allowed(vm: &Value, guests: Option<&Records>) -> bool
         && strings(&vm["allowed_operations"])
             .iter()
             .any(|op| op == "changing_VCPUs_live")
+}
+
+pub(crate) struct CpuTopologyRecords<'a> {
+    pub hosts: &'a Records,
+    pub vbds: &'a Records,
+    pub vdis: &'a Records,
+    pub srs: &'a Records,
+    pub pbds: &'a Records,
+    pub metrics: &'a Records,
+    pub vms: &'a Records,
+}
+
+pub(crate) fn host_cores_per_socket(host: &Value) -> u64 {
+    let sockets = number(&host["cpu_info"], "socket_count");
+    number(&host["cpu_info"], "cpu_count")
+        .checked_div(sockets)
+        .unwrap_or(0)
+}
+
+/// Same home precedence as upstream VM.Home: resident, local storage, live affinity.
+pub(crate) fn max_cores_per_socket(vm: &Value, records: &CpuTopologyRecords<'_>) -> u64 {
+    let mut source = vm;
+    let mut visited = std::collections::HashSet::new();
+    while source["is_a_snapshot"].as_bool() == Some(true) {
+        let parent = text(source, "snapshot_of");
+        if !visited.insert(parent.clone()) {
+            return 0;
+        }
+        let Some(parent) = records.vms.get(&parent) else {
+            return records
+                .hosts
+                .values()
+                .map(host_cores_per_socket)
+                .max()
+                .unwrap_or(0);
+        };
+        source = parent;
+    }
+    let home = if source["is_a_template"].as_bool() == Some(true) {
+        None
+    } else if matches!(source["power_state"].as_str(), Some("Running" | "Paused")) {
+        records.hosts.get(&text(source, "resident_on"))
+    } else {
+        let storage_home = source["VBDs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find_map(|reference| {
+                let vbd = records.vbds.get(reference.as_str()?)?;
+                let vdi = records.vdis.get(&text(vbd, "VDI"))?;
+                if vdi["missing"].as_bool() == Some(true) || vdi["managed"].as_bool() != Some(true)
+                {
+                    return None;
+                }
+                let sr = records.srs.get(&text(vdi, "SR"))?;
+                if sr["shared"].as_bool() == Some(true) {
+                    return None;
+                }
+                let pbds = sr["PBDs"].as_array()?;
+                if pbds.len() != 1 {
+                    return None;
+                }
+                let pbd = records.pbds.get(pbds[0].as_str()?)?;
+                records.hosts.get(&text(pbd, "host"))
+            });
+        storage_home.or_else(|| {
+            let host = records.hosts.get(&text(source, "affinity"))?;
+            let metric = records.metrics.get(&text(host, "metrics"))?;
+            (metric["live"].as_bool() == Some(true)).then_some(host)
+        })
+    };
+    home.map(host_cores_per_socket).unwrap_or_else(|| {
+        records
+            .hosts
+            .values()
+            .map(host_cores_per_socket)
+            .max()
+            .unwrap_or(0)
+    })
+}
+
+pub fn validate_cpu_topology(vcpus: u64, cores: u64, host_limit: u64) -> Result<(), ApiError> {
+    if cores == 0
+        || vcpus == 0
+        || !vcpus.is_multiple_of(cores)
+        || vcpus / cores > 16
+        || (host_limit > 0 && cores > host_limit)
+    {
+        return Err(ApiError::Xen("Choose cores per socket that divide the vCPU maximum, use at most 16 sockets and fit the home server's CPU topology.".into()));
+    }
+    Ok(())
 }

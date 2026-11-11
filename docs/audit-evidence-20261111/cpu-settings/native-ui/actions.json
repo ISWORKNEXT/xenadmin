@@ -1,0 +1,301 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "cpu-source",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        843,
+        410
+      ],
+      "wait": 3,
+      "snap": "cpu-resources"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "cpu-resources-settled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        557,
+        333
+      ],
+      "key": "Control_L+a",
+      "text": "2048",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        854,
+        333
+      ],
+      "key": "Control_L+a",
+      "text": "1",
+      "wait": 1,
+      "snap": "cpu-ui-edited"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        875
+      ],
+      "wait": 4,
+      "snap": "cpu-ui-saved",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "419b2321-b009-ebbf-6932-e1b626deeeb0",
+        "name_label": "zz-parity-storage-01a1ca8e-164e-7317-9998-5fd2c66d6759-source",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 4,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "710f41d5-dd60-c985-7df1-9679a88e98b8",
+        "name_label": "zz-parity-storage-01a1ca8e-164e-7317-9998-5fd2c66d6759-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "59884d3d-d5bc-e945-bdbf-b9e0874db320",
+        "name_label": "zz-parity-storage-01a1ca8e-164e-7317-9998-5fd2c66d6759-template-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        842,
+        410
+      ],
+      "wait": 3,
+      "snap": "cpu-authoritative-reopen"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "cpu-authoritative-settled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1000,
+        720
+      ],
+      "wait": 3,
+      "snap": "cpu-small"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "cpu-small-settled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        339,
+        329
+      ],
+      "key": "Control_L+a",
+      "text": "0",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        738,
+        651
+      ],
+      "wait": 2,
+      "snap": "cpu-invalid-weight"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "cpu-invalid-weight-settled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        341,
+        314
+      ],
+      "key": "Control_L+a",
+      "text": "1024",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        636,
+        314
+      ],
+      "key": "Control_L+a",
+      "text": "2",
+      "wait": 1,
+      "snap": "cpu-restore-draft"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        736,
+        667
+      ],
+      "wait": 4,
+      "snap": "cpu-restored-small"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1440,
+        940
+      ],
+      "wait": 2,
+      "snap": "cpu-restored-wide"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1382,
+        201
+      ],
+      "wait": 3,
+      "snap": "cpu-running-page"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        843,
+        410
+      ],
+      "wait": 3,
+      "snap": "cpu-running-resources"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "cpu-running-resources-settled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        462,
+        875
+      ],
+      "wait": 1,
+      "snap": "closed-before-runtime-retry"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1382,
+        201
+      ],
+      "wait": 3,
+      "snap": "cpu-running-page-verified"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        843,
+        410
+      ],
+      "wait": 3,
+      "snap": "cpu-running-resources-verified"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "cpu-running-resources-verified-settled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        871
+      ],
+      "wait": 3,
+      "snap": "cpu-running-noop-saved"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

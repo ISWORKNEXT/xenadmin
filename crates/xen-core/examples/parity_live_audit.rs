@@ -90,6 +90,8 @@ async fn exercise(
                 secure_boot: None,
                 boot_policy: None,
                 after_crash: None,
+                cpu_weight: None,
+                cores_per_socket: None,
             },
         )
         .await,

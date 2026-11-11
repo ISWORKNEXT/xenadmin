@@ -585,6 +585,12 @@ fn vm_resources(
                 );
             });
             ui.add_space(8.0);
+            ui.columns(2,|columns| {
+                resources_slider(&mut columns[0],"CPU scheduling weight",&mut edit.cpu_weight,1..=65535,"",!edit.running && !edit.submitting);
+                resources_slider(&mut columns[1],"Cores per socket",&mut edit.cores_per_socket,1..=edit.max_cores_per_socket.clamp(1,64),"",!edit.running && !edit.submitting);
+            });
+            ui.label(RichText::new("Topology must divide the vCPU maximum and use at most 16 sockets. Stop the VM to change topology or scheduling weight.").size(9.0).color(dim_fg()));
+            ui.add_space(8.0);
             resources_slider(
                 ui,
                 "Static memory maximum (MiB)",

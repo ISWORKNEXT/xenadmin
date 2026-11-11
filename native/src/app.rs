@@ -2743,6 +2743,12 @@ impl App {
                         vm_uuid,
                         vcpus_max: details.vcpus_max.to_string(),
                         vcpus_at_startup: details.vcpus_at_startup.to_string(),
+                        cpu_weight: details.cpu_weight.clone(),
+                        original_cpu_weight: details.cpu_weight.clone(),
+                        cores_per_socket: details.cores_per_socket.clone(),
+                        original_cores_per_socket: details.cores_per_socket.clone(),
+                        original_vcpus_max: details.vcpus_max,
+                        max_cores_per_socket: details.max_cores_per_socket,
                         memory_static_max_mib: (details.memory_static_max / (1024 * 1024))
                             .to_string(),
                         memory_dynamic_min_mib: (details.memory_dynamic_min / (1024 * 1024))

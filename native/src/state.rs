@@ -1262,6 +1262,12 @@ pub struct VmResourceEditState {
     pub vm_uuid: String,
     pub vcpus_max: String,
     pub vcpus_at_startup: String,
+    pub cpu_weight: String,
+    pub original_cpu_weight: String,
+    pub cores_per_socket: String,
+    pub original_cores_per_socket: String,
+    pub original_vcpus_max: u64,
+    pub max_cores_per_socket: u64,
     pub memory_static_max_mib: String,
     pub memory_dynamic_min_mib: String,
     pub memory_dynamic_max_mib: String,
@@ -1305,6 +1311,29 @@ impl VmResourceEditState {
         {
             return Err("Dynamic memory must stay between the static minimum and maximum.".into());
         }
+        let cpu_weight = if self.cpu_weight != self.original_cpu_weight {
+            let weight = self
+                .cpu_weight
+                .trim()
+                .parse::<u16>()
+                .map_err(|_| "CPU weight must be between 1 and 65535.")?;
+            if weight == 0 {
+                return Err("CPU weight must be between 1 and 65535.".into());
+            }
+            Some(weight)
+        } else {
+            None
+        };
+        let cores_per_socket = if self.cores_per_socket != self.original_cores_per_socket
+            || vcpus_max != self.original_vcpus_max
+        {
+            let cores = parse(&self.cores_per_socket, "cores per socket")?;
+            xen_core::vm::validate_cpu_topology(vcpus_max, cores, self.max_cores_per_socket)
+                .map_err(|e| e.to_string())?;
+            Some(cores)
+        } else {
+            None
+        };
         Ok(xen_core::operations::VmResourceUpdate {
             vcpus_max,
             vcpus_at_startup,
@@ -1316,6 +1345,8 @@ impl VmResourceEditState {
             secure_boot: self.is_hvm.then_some(self.secure_boot),
             boot_policy: self.is_hvm.then(|| self.boot_policy.clone()),
             after_crash: Some(self.after_crash.clone()),
+            cpu_weight,
+            cores_per_socket,
         })
     }
 }

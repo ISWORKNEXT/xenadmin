@@ -1,0 +1,130 @@
+[
+  {
+    "timestamp": "2026-11-11T12:23:55.645Z",
+    "ordinal": 10803,
+    "type": "response_item",
+    "payload": {
+      "type": "custom_tool_call_output",
+      "id": "ctco_01a1ca90-95fd-77d2-896f-78b8e3b3f2f4",
+      "call_id": "call_f73fcb02acf44211a9ca88a2da340d2d",
+      "output": [
+        {
+          "type": "input_text",
+          "text": "Script completed\nWall time 0.9 seconds\nOutput:\n"
+        },
+        {
+          "type": "input_text",
+          "text": "{\"chunk_id\":\"2ba3e4\",\"wall_time_seconds\":0.000056406,\"exit_code\":1,\"original_token_count\":577,\"output\":\"Warning: truncated output (original token count: 577)\\nTotal output lines: 39\\n\\n\\r\\nTraceback (most recent call last):\\r\\n  File \\\"/home/tinnerkun/.local/lib/python3.12/site-packages/Xlib/support/unix_connect.py\\\", line 104, in get_socket\\r\\n    s = _get_unix_socket(address)\\r\\n        ^^^^^^^^^^^^^^^^^^^^^^^^^\\r\\n  File \\\"/home/tinnerkun/.local/lib/python3.12/site-packages/Xlib/support/unix_connect.py\\\", line 82, in _get_unix_socket\\r\\n    s.connect(address)\\r\\nConnectionRefusedError: [Errno \u2026377 tokens truncated\u20267, in get_socket\\r\\n    return mod.get_socket(dname, protocol, host, dno)\\r\\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\r\\n  File \\\"/home/tinnerkun/.local/lib/python3.12/site-packages/Xlib/support/unix_connect.py\\\", line 112, in get_socket\\r\\n    raise error.DisplayConnectionError(dname, str(val))\\r\\nXlib.error.DisplayConnectionError: Can't connect to display \\\":98\\\": [Errno 111] Connection refused\\r\\n\"}"
+        },
+        {
+          "type": "input_text",
+          "text": "{\"chunk_id\":\"896406\",\"wall_time_seconds\":0.648273556,\"exit_code\":0,\"original_token_count\":11,\"output\":\"Saved authoritative before-UI CPU map state\\n\"}"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a1c92f-efd7-7b93-87e7-bc82706133d0",
+        "create_time": 1794399835.645677
+      }
+    },
+    "metadata": {
+      "client_authored": false,
+      "fallback_token_limit_override": 12000
+    }
+  },
+  {
+    "timestamp": "2026-11-11T12:24:01.975Z",
+    "ordinal": 10810,
+    "type": "response_item",
+    "payload": {
+      "type": "custom_tool_call_output",
+      "id": "ctco_01a1ca90-aeb7-7121-9917-d8b1c6249f50",
+      "call_id": "call_37ddad12ae65419fbb7679f24290535d",
+      "output": [
+        {
+          "type": "input_text",
+          "text": "Script completed\nWall time 0.1 seconds\nOutput:\n"
+        },
+        {
+          "type": "input_text",
+          "text": "{\"chunk_id\":\"ed8512\",\"wall_time_seconds\":0.000029632,\"exit_code\":0,\"original_token_count\":0,\"output\":\"\"}"
+        },
+        {
+          "type": "input_text",
+          "text": "{\"chunk_id\":\"1e2af7\",\"wall_time_seconds\":0.000043143,\"exit_code\":2,\"original_token_count\":67,\"output\":\"3495944 /bin/bash -c ps -eo pid,args | rg 'Xvfb :98|Xwayland :97'; ls -l /tmp/.X11-unix/X98 /tmp/.X98-lock\\n3495946 rg Xvfb :98|Xwayland :97\\nls: cannot access '/tmp/.X11-unix/X98': No such file or directory\\nls: cannot access '/tmp/.X98-lock': No such file or directory\\n\"}"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a1c92f-efd7-7b93-87e7-bc82706133d0",
+        "create_time": 1794399841.9754279
+      }
+    },
+    "metadata": {
+      "client_authored": false,
+      "fallback_token_limit_override": 12000
+    }
+  },
+  {
+    "timestamp": "2026-11-11T12:24:14.021Z",
+    "ordinal": 10816,
+    "type": "response_item",
+    "payload": {
+      "type": "custom_tool_call_output",
+      "id": "ctco_01a1ca90-ddc5-7f41-8487-3315de4c381e",
+      "call_id": "call_4857fc5b5c9240a497043bd09bd73845",
+      "output": [
+        {
+          "type": "input_text",
+          "text": "Script completed\nWall time 1.2 seconds\nOutput:\n"
+        },
+        {
+          "type": "input_text",
+          "text": "{\"chunk_id\":\"bb9bb7\",\"wall_time_seconds\":1.00117369,\"session_id\":80505,\"original_token_count\":0,\"output\":\"\"}"
+        },
+        {
+          "type": "input_text",
+          "text": "{\"chunk_id\":\"4c433d\",\"wall_time_seconds\":0.000010266,\"exit_code\":0,\"original_token_count\":96,\"output\":\"   Compiling xen-native v0.1.0 (/home/tinnerkun/Desktop/xen/xenadmin/native)\\n    Finished `dev` profile [unoptimized] target(s) in 5.97s\\nwarning: the following packages contain code that will be rejected by a future version of Rust: russh v0.54.5\\nnote: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`\\n\"}"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a1c92f-efd7-7b93-87e7-bc82706133d0",
+        "create_time": 1794399854.0210857
+      }
+    },
+    "metadata": {
+      "client_authored": false,
+      "fallback_token_limit_override": 12000
+    }
+  },
+  {
+    "timestamp": "2026-11-11T12:24:25.157Z",
+    "ordinal": 10823,
+    "type": "response_item",
+    "payload": {
+      "type": "custom_tool_call_output",
+      "id": "ctco_01a1ca91-0945-73c0-a752-08d00723b06d",
+      "call_id": "call_b6042b3025124cbb980fa32b1fd75296",
+      "output": [
+        {
+          "type": "input_text",
+          "text": "Script completed\nWall time 1.3 seconds\nOutput:\n"
+        },
+        {
+          "type": "input_text",
+          "text": "{\"chunk_id\":\"3358c4\",\"wall_time_seconds\":1.001139125,\"session_id\":78696,\"original_token_count\":10,\"output\":\"Authorized dev-host password (hidden): \"}"
+        },
+        {
+          "type": "input_text",
+          "text": "{\"chunk_id\":\"bccbd5\",\"wall_time_seconds\":0.000029169,\"exit_code\":0,\"original_token_count\":56,\"output\":\"3496416 /tmp/xen-qa-runtime/usr/bin/Xvfb :98 -screen 0 1600x1000x24 -nolisten tcp -ac -noreset\\n3496922 /bin/bash -c ps -eo pid,args | rg '/tmp/xen-qa-runtime/usr/bin/Xvfb :98'\\n3496928 rg /tmp/xen-qa-runtime/usr/bin/Xvfb :98\\n\"}"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a1c92f-efd7-7b93-87e7-bc82706133d0",
+        "create_time": 1794399865.15711
+      }
+    },
+    "metadata": {
+      "client_authored": false,
+      "fallback_token_limit_override": 12000
+    }
+  }
+]

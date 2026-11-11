@@ -176,6 +176,8 @@ async fn provisioning_descriptions(c: &Connection, prefix: &str) -> Result<(), E
         secure_boot: None,
         boot_policy: None,
         after_crash: None,
+        cpu_weight: None,
+        cores_per_socket: None,
     };
     c.update_vm_resources(&source, &update).await?;
     if owned_boot_state(&source, false)? != before_boot
@@ -707,6 +709,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
             secure_boot: None,
             boot_policy: None,
             after_crash: None,
+            cpu_weight: None,
+            cores_per_socket: None,
         },
     )
     .await?;
@@ -760,6 +764,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
                     secure_boot: None,
                     boot_policy: None,
                     after_crash: None,
+                    cpu_weight: None,
+                    cores_per_socket: None,
                 },
             )
             .await;
@@ -787,6 +793,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
                 secure_boot: None,
                 boot_policy: None,
                 after_crash: None,
+                cpu_weight: None,
+                cores_per_socket: None,
             },
         )
         .await?;
@@ -808,6 +816,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
                     secure_boot: None,
                     boot_policy: None,
                     after_crash: None,
+                    cpu_weight: None,
+                    cores_per_socket: None,
                 },
             )
             .await;
@@ -825,6 +835,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
                     secure_boot: None,
                     boot_policy: None,
                     after_crash: None,
+                    cpu_weight: None,
+                    cores_per_socket: None,
                 },
             )
             .await;

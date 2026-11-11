@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use crate::xapi::{ApiError, Connection};
 
-/// CPU, memory and boot values. Absent boot options retain their current values.
+/// CPU, memory and boot values. Absent optional fields retain their current values.
 #[derive(Clone, Debug)]
 pub struct VmResourceUpdate {
     pub vcpus_max: u64,
@@ -18,6 +18,8 @@ pub struct VmResourceUpdate {
     pub secure_boot: Option<bool>,
     pub boot_policy: Option<String>,
     pub after_crash: Option<String>,
+    pub cpu_weight: Option<u16>,
+    pub cores_per_socket: Option<u64>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -940,6 +942,8 @@ impl Connection {
             secure_boot,
             boot_policy,
             after_crash,
+            cpu_weight,
+            cores_per_socket,
         } = resources.clone();
         if self.settings.read_only {
             return Err(ApiError::Xen(
@@ -1013,6 +1017,59 @@ impl Connection {
         }
 
         let current_vcpus_max = number(&record, "VCPUs_max");
+        if cpu_weight == Some(0) {
+            return Err(ApiError::Xen(
+                "CPU scheduling weight must be between 1 and 65535.".into(),
+            ));
+        }
+        if cores_per_socket.is_some() || vcpus_max != current_vcpus_max {
+            let cores=match cores_per_socket {
+                Some(cores)=>cores,
+                None=>record["platform"]["cores-per-socket"].as_str().unwrap_or("1").parse().map_err(|_|ApiError::Xen("The existing topology is invalid. Select valid cores per socket before changing the CPU maximum.".into()))?,
+            };
+            let hosts = self.records("host").await?;
+            let limit = if hosts.len() == 1 {
+                hosts
+                    .values()
+                    .next()
+                    .map_or(0, crate::vm::host_cores_per_socket)
+            } else {
+                let (vbds, vdis, srs, pbds, metrics, vms) = tokio::try_join!(
+                    self.records("VBD"),
+                    self.records("VDI"),
+                    self.records("SR"),
+                    self.records("PBD"),
+                    self.records("host_metrics"),
+                    self.records("VM")
+                )?;
+                crate::vm::max_cores_per_socket(
+                    &record,
+                    &crate::vm::CpuTopologyRecords {
+                        hosts: &hosts,
+                        vbds: &vbds,
+                        vdis: &vdis,
+                        srs: &srs,
+                        pbds: &pbds,
+                        metrics: &metrics,
+                        vms: &vms,
+                    },
+                )
+            };
+            crate::vm::validate_cpu_topology(vcpus_max, cores, limit)?;
+        }
+        let current_weight = record["VCPUs_params"]["weight"].as_str().unwrap_or("256");
+        let current_cores = record["platform"]["cores-per-socket"]
+            .as_str()
+            .unwrap_or("1");
+        let weight_changed = cpu_weight.is_some_and(|weight| weight.to_string() != current_weight);
+        let topology_changed =
+            cores_per_socket.is_some_and(|cores| cores.to_string() != current_cores);
+        if (weight_changed || topology_changed) && record["power_state"].as_str() != Some("Halted")
+        {
+            return Err(ApiError::Xen(
+                "Shut down the VM before changing CPU topology or scheduling weight.".into(),
+            ));
+        }
         let current_vcpus_startup = number(&record, "VCPUs_at_startup");
         let current_static_min = number(&record, "memory_static_min");
         let current_static_max = number(&record, "memory_static_max");
@@ -1192,14 +1249,46 @@ impl Connection {
             )
             .await?;
         }
-        if secure_changed && let Some(secure) = secure_desired {
-            let mut platform = record["platform"].as_object().cloned().unwrap_or_default();
-            platform.insert("secureboot".into(), Value::String(secure));
+        if secure_changed || topology_changed {
+            let mut platform: std::collections::BTreeMap<String, String> = self
+                .request("VM.get_platform", json!([self.session, reference]))
+                .await?;
+            if secure_changed && let Some(secure) = secure_desired {
+                platform.insert("secureboot".into(), secure);
+            }
+            if topology_changed && let Some(cores) = cores_per_socket {
+                platform.insert("cores-per-socket".into(), cores.to_string());
+            }
             self.request::<Value>(
                 "VM.set_platform",
-                json!([self.session, reference, Value::Object(platform)]),
+                json!([self.session, reference, platform]),
             )
             .await?;
+        }
+        if weight_changed && let Some(weight) = cpu_weight {
+            let mut params: std::collections::BTreeMap<String, String> = self
+                .request("VM.get_VCPUs_params", json!([self.session, reference]))
+                .await?;
+            params.insert("weight".into(), weight.to_string());
+            self.request::<Value>(
+                "VM.set_VCPUs_params",
+                json!([self.session, reference, params]),
+            )
+            .await?;
+        }
+        if weight_changed || topology_changed {
+            let actual: Value = self
+                .request("VM.get_record", json!([self.session, reference]))
+                .await?;
+            if (weight_changed
+                && actual["VCPUs_params"]["weight"].as_str()
+                    != cpu_weight.map(|v| v.to_string()).as_deref())
+                || (topology_changed
+                    && actual["platform"]["cores-per-socket"].as_str()
+                        != cores_per_socket.map(|v| v.to_string()).as_deref())
+            {
+                return Err(ApiError::Xen("CPU settings changed before readback. Refresh and review the current configuration.".into()));
+            }
         }
         if crash_changed && let Some(after_crash) = after_crash {
             self.request::<Value>(

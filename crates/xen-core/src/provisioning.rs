@@ -598,6 +598,10 @@ impl Connection {
             ));
         }
         crate::properties::validate_description_change(&details.description, &request.description)?;
+        if request.vcpus != details.vcpus_max {
+            let cores=details.cores_per_socket.parse().map_err(|_|ApiError::Xen("The source CPU topology is invalid. Correct the source topology before changing CPU count.".into()))?;
+            crate::vm::validate_cpu_topology(request.vcpus, cores, details.max_cores_per_socket)?;
+        }
         if request.memory_mib * 1024 * 1024 < details.memory_static_min {
             return Err(ApiError::Xen(
                 "The memory is below the source's minimum.".into(),
@@ -804,6 +808,8 @@ impl Connection {
                 secure_boot: None,
                 boot_policy: None,
                 after_crash: None,
+                cpu_weight: None,
+                cores_per_socket: None,
             },
         )
         .await?;
