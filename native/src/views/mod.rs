@@ -18,3 +18,5 @@ pub mod new_vm;
 pub mod xva;
 
 pub mod vm_copy;
+
+pub mod pool_options;

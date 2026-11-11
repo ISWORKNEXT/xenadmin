@@ -125,6 +125,38 @@ pub struct Workspace {
 }
 
 impl Workspace {
+    pub async fn pool_options(
+        &self,
+        connection_id: &str,
+        uuid: &str,
+    ) -> Result<crate::pool_options::PoolOptions, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if active.snapshot.read().await.pool_id != uuid {
+            return Err("The selected pool is not present in this connection.".into());
+        }
+        active
+            .connection
+            .pool_options(uuid)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn update_pool_options(
+        &self,
+        connection_id: &str,
+        edit: &crate::pool_options::PoolOptionsEdit,
+    ) -> Result<crate::pool_options::PoolOptions, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if active.snapshot.read().await.pool_id != edit.original.uuid {
+            return Err("The selected pool is not present in this connection.".into());
+        }
+        let result = active.connection.update_pool_options(edit).await;
+        let _ = refresh_inventory_cache(&active).await;
+        result.map_err(|e| e.to_string())
+    }
+
     pub async fn object_properties(
         &self,
         connection_id: &str,

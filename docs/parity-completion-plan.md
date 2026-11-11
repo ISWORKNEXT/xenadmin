@@ -42,3 +42,7 @@ The known lab has one host and one management PIF. Multi-host and hardware-depen
 The next shared seam is a typed editor for names, descriptions and tags on VMs (including templates and snapshots), disks, SRs, networks, hosts and pools. A closed object-kind enum selects the XenAPI class; the UI cannot send an arbitrary method or raw record. Reads return only the editable fields. Writes re-resolve UUIDs on the selected connection, validate all input before mutation and update only changed fields. A successful response must include server readback. Existing state guards and unrelated configuration stay intact.
 
 This unit follows completion of advanced VM qualification. Hardware-specific and cross-host operations remain separate workstreams.
+
+## Legacy pool RPC follow-up
+
+The new Pool options owner uses canonical lowercase `pool` RPC names. Legacy HA/WLB and VLAN paths still contain SDK-style uppercase `Pool` prefixes. Their spelling-only correction was deferred after review found that enabling the HA path also activates unsafe ambiguous-error rollback to zero tolerated failures. Resolve the workflow state and recovery rules together before qualifying those paths. The known one-host/one-management-PIF lab does not qualify HA, WLB service integration or management-interface VLAN creation.

@@ -35,6 +35,8 @@ The user requested all remaining functions except permissions and certificates. 
 
 Full independent VM/template copies to a selected same-connection SR, interruption recovery, manual Reconnect and automatic session-expiry reconnect are tracked in [full-copy qualification](full-copy-live-qualification-20261111.md). Running/cross-pool copying, cancellation, another SR and larger/multiple disks remain outside that qualified path.
 
+Pool migration-compression, IGMP-snooping and live-patching policy controls are qualified in [pool-options follow-up](pool-options-live-qualification-20261111.md). Their configuration writes and native controls are verified; the corresponding data-plane operations remain separate.
+
 ## Remaining functional coverage
 
 The remaining implementation groups include VM migration and copy, OVF and OVA import and export, advanced snapshots and VM properties, storage discovery and creation, host and pool administration, network configuration, recovery services, monitoring, and organization features. The individual gaps and upstream source links remain in the baseline capability tables and command crosswalks.

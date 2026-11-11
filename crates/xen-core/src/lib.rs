@@ -7,6 +7,7 @@ pub mod network;
 pub mod operations;
 pub mod performance;
 pub mod pool_actions;
+pub mod pool_options;
 pub mod pool_status;
 pub mod properties;
 pub mod provisioning;

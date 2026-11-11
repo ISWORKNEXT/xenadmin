@@ -1,0 +1,5 @@
+{"phase": "baseline", "options": {"uuid": "366d4165-4bdd-84e8-3e5e-84542311b5c3", "migration_compression": false, "igmp_snooping_enabled": false, "live_patching_disabled": false}, "equals_baseline": true}
+{"phase": "changed-through-native", "options": {"uuid": "366d4165-4bdd-84e8-3e5e-84542311b5c3", "migration_compression": true, "igmp_snooping_enabled": true, "live_patching_disabled": true}, "equals_baseline": false}
+{"phase": "restored", "options": {"uuid": "366d4165-4bdd-84e8-3e5e-84542311b5c3", "migration_compression": false, "igmp_snooping_enabled": false, "live_patching_disabled": false}, "equals_baseline": true}
+{"phase": "after-reload-noop-save", "options": {"uuid": "366d4165-4bdd-84e8-3e5e-84542311b5c3", "migration_compression": false, "igmp_snooping_enabled": false, "live_patching_disabled": false}}
+{"phase": "after-close-discard", "options": {"uuid": "366d4165-4bdd-84e8-3e5e-84542311b5c3", "migration_compression": false, "igmp_snooping_enabled": false, "live_patching_disabled": false}}

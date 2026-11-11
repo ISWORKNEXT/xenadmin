@@ -1242,6 +1242,15 @@ pub struct IsoDialog {
     pub error: Option<String>,
 }
 
+pub struct PoolOptionsDialog {
+    pub connection_id: String,
+    pub uuid: String,
+    pub original: Option<xen_core::pool_options::PoolOptions>,
+    pub data: LoadState<xen_core::pool_options::PoolOptions>,
+    pub error: Option<String>,
+    pub submitting: bool,
+}
+
 pub struct VmCopyDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -1355,6 +1364,8 @@ pub struct UiState {
     pub console_focus: bool,
     pub vm_resource_edit: Option<VmResourceEditState>,
     pub vm_copy: Option<VmCopyDialog>,
+    pub pool_options: Option<PoolOptionsDialog>,
+    pub pool_options_seq: u64,
     pub iso_dialog: Option<IsoDialog>,
     pub vif_dialog: Option<VifDialog>,
     pub vif_confirm: Option<VifConfirm>,
@@ -1480,6 +1491,8 @@ impl Default for UiState {
             console_focus: false,
             vm_resource_edit: None,
             vm_copy: None,
+            pool_options: None,
+            pool_options_seq: 0,
             iso_dialog: None,
             vif_dialog: None,
             vif_confirm: None,
@@ -1649,6 +1662,12 @@ pub enum UiAction {
     },
     CloseVmCopy,
     SubmitVmCopy,
+    OpenPoolOptions {
+        connection_id: String,
+    },
+    ReloadPoolOptions,
+    SavePoolOptions,
+    ClosePoolOptions,
     OpenVmResources,
     CloseVmResources,
     SaveVmResources,

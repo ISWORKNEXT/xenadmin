@@ -1,0 +1,8 @@
+{"options":{"igmp_snooping_enabled":false,"live_patching_disabled":false,"migration_compression":false,"uuid":"366d4165-4bdd-84e8-3e5e-84542311b5c3"},"phase":"baseline","rollback_journal":"/tmp/zz-parity-pool-options-01a1ca14-4649-757a-8f6d-341bc269e56e.json"}
+{"check":"pool-option-roundtrip","original":false,"other_options_preserved":true,"restored":true,"setting":"migration_compression","status":"VERIFIED","temporary":true}
+{"check":"pool-option-roundtrip","original":false,"other_options_preserved":true,"restored":true,"setting":"igmp_snooping_enabled","status":"VERIFIED","temporary":true}
+{"check":"pool-option-roundtrip","original":false,"other_options_preserved":true,"restored":true,"setting":"live_patching_disabled","status":"VERIFIED","temporary":true}
+{"check":"invalid-pool-options-rejected-before-writes","status":"VERIFIED"}
+{"check":"pool-options-preserve-external-unchanged-field-and-retry","status":"VERIFIED"}
+{"check":"read-only-pool-options-rejected","status":"VERIFIED"}
+{"options":{"igmp_snooping_enabled":false,"live_patching_disabled":false,"migration_compression":false,"uuid":"366d4165-4bdd-84e8-3e5e-84542311b5c3"},"phase":"restored","result":{"Ok":"pass"},"rollback_journal_removed":true}

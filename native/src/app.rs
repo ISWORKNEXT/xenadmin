@@ -508,6 +508,40 @@ impl App {
     fn drain_events(&mut self) {
         while let Ok(event) = self.worker.events.try_recv() {
             match event {
+                Event::PoolOptions { seq, result } => {
+                    if seq != self.state.pool_options_seq {
+                        continue;
+                    }
+                    if let Some(dialog) = self.state.pool_options.as_mut() {
+                        match result {
+                            Ok(data) => {
+                                dialog.original = Some(data.clone());
+                                dialog.data = LoadState::Ready(data);
+                            }
+                            Err(message) => dialog.data = LoadState::Error(message),
+                        }
+                    }
+                }
+                Event::PoolOptionsSaved { seq, result } => {
+                    if seq != self.state.pool_options_seq {
+                        continue;
+                    }
+                    match result {
+                        Ok(_) => {
+                            self.state.pool_options = None;
+                            self.state
+                                .toasts
+                                .push(Toast::new("Saved pool options.", ToastKind::Success));
+                        }
+                        Err(message) => {
+                            if let Some(dialog) = self.state.pool_options.as_mut() {
+                                dialog.submitting = false;
+                                dialog.error = Some(message);
+                            }
+                        }
+                    }
+                }
+
                 Event::ObjectProperties { seq, result } => {
                     if seq == self.state.properties_seq
                         && let Some(dialog) = self.state.properties.as_mut()
@@ -2603,6 +2637,75 @@ impl App {
                         },
                     });
                     self.open_object(ObjectKey::Tasks, None);
+                }
+
+                UiAction::OpenPoolOptions { connection_id } => {
+                    let Some(inventory) = find_connection(&self.workspace, &connection_id)
+                        .and_then(crate::state::connection_inventory)
+                    else {
+                        continue;
+                    };
+                    let uuid = inventory.pool_id.clone();
+                    self.state.pool_options = Some(crate::state::PoolOptionsDialog {
+                        connection_id,
+                        uuid,
+                        original: None,
+                        data: LoadState::Loading,
+                        error: None,
+                        submitting: false,
+                    });
+                    self.apply(vec![UiAction::ReloadPoolOptions]);
+                }
+                UiAction::ReloadPoolOptions => {
+                    let Some(dialog) = self.state.pool_options.as_mut() else {
+                        continue;
+                    };
+                    if dialog.submitting {
+                        continue;
+                    }
+                    dialog.original = None;
+                    dialog.data = LoadState::Loading;
+                    dialog.error = None;
+                    self.state.pool_options_seq += 1;
+                    self.worker.send(Command::PoolOptions {
+                        seq: self.state.pool_options_seq,
+                        connection_id: dialog.connection_id.clone(),
+                        uuid: dialog.uuid.clone(),
+                    });
+                }
+                UiAction::SavePoolOptions => {
+                    let Some(dialog) = self.state.pool_options.as_mut() else {
+                        continue;
+                    };
+                    if dialog.submitting {
+                        continue;
+                    }
+                    let (Some(original), LoadState::Ready(edited)) =
+                        (&dialog.original, &dialog.data)
+                    else {
+                        continue;
+                    };
+                    let edit = xen_core::pool_options::PoolOptionsEdit {
+                        original: original.clone(),
+                        edited: edited.clone(),
+                    };
+                    dialog.submitting = true;
+                    dialog.error = None;
+                    self.worker.send(Command::SavePoolOptions {
+                        seq: self.state.pool_options_seq,
+                        connection_id: dialog.connection_id.clone(),
+                        edit,
+                    });
+                }
+                UiAction::ClosePoolOptions => {
+                    if !self
+                        .state
+                        .pool_options
+                        .as_ref()
+                        .is_some_and(|d| d.submitting)
+                    {
+                        self.state.pool_options = None;
+                    }
                 }
                 UiAction::OpenVmResources => {
                     let Some(key) = self

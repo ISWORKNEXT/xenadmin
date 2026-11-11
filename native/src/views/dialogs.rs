@@ -15,6 +15,9 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
+    if state.pool_options.is_some() {
+        super::pool_options::show(ctx, state, workspace, actions);
+    }
     if state.vm_copy.is_some() {
         super::vm_copy::show(ctx, state, workspace, actions);
     }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add field-limited Pool options for migration compression, IGMP snooping and live-patching policy, with native Save/Reload/Close controls, changed-field preservation and authoritative readback.
+
 - Add paused starts (including a selected host), memory checkpoints, capability-gated quiesced snapshots and in-place VM-to-template conversion.
 - Add supported live vCPU increases, with guest-metrics detection and host/state guards.
 - Add shared name, description and exact-tag editing for VMs, templates, snapshots, disks, SRs, networks, hosts and pools, with changed-field validation and optimistic conflict checks.

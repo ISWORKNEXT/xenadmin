@@ -1,0 +1,19 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1440,
+        940
+      ],
+      "snap": "published-linux-connected",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

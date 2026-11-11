@@ -148,6 +148,11 @@ pub fn show(
             }
         });
     });
+    if ui.button("Pool options…").clicked() {
+        actions.push(UiAction::OpenPoolOptions {
+            connection_id: connection_id.clone(),
+        });
+    }
     ui.add_space(10.0);
 
     let storage_total: u64 = inventory.storage.iter().map(|sr| sr.total).sum();

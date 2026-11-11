@@ -12,6 +12,16 @@ use xen_core::{
 
 /// Commands sent from the UI thread to the background workspace thread.
 pub enum Command {
+    PoolOptions {
+        seq: u64,
+        connection_id: String,
+        uuid: String,
+    },
+    SavePoolOptions {
+        seq: u64,
+        connection_id: String,
+        edit: xen_core::pool_options::PoolOptionsEdit,
+    },
     ObjectProperties {
         seq: u64,
         connection_id: String,
@@ -479,6 +489,14 @@ pub enum Command {
 
 /// Results sent back to the UI thread.
 pub enum Event {
+    PoolOptions {
+        seq: u64,
+        result: Result<xen_core::pool_options::PoolOptions, String>,
+    },
+    PoolOptionsSaved {
+        seq: u64,
+        result: Result<xen_core::pool_options::PoolOptions, String>,
+    },
     ObjectProperties {
         seq: u64,
         result: Result<xen_core::properties::ObjectProperties, String>,
@@ -828,6 +846,23 @@ fn dispatch(
 
     tokio::spawn(async move {
         match command {
+            Command::PoolOptions {
+                seq,
+                connection_id,
+                uuid,
+            } => {
+                let result = workspace.pool_options(&connection_id, &uuid).await;
+                let _ = events.send(Event::PoolOptions { seq, result });
+            }
+            Command::SavePoolOptions {
+                seq,
+                connection_id,
+                edit,
+            } => {
+                let result = workspace.update_pool_options(&connection_id, &edit).await;
+                let _ = events.send(Event::PoolOptionsSaved { seq, result });
+            }
+
             Command::ObjectProperties {
                 seq,
                 connection_id,

@@ -4,7 +4,7 @@ Mutations go through native UI input. The independent readback only reports owne
 Requires python-xlib and Pillow, an X11 display and XEN_AUDIT_OUTPUT.
 Select a VM, host, SR or network with XEN_AUDIT_*_UUID; omit for the pool.
 """
-import getpass,json,os,ssl,subprocess,tempfile,time,urllib.request
+import datetime,getpass,hashlib,json,os,ssl,subprocess,tempfile,time,urllib.request
 from pathlib import Path
 from PIL import Image
 from Xlib import X,XK,display
@@ -42,6 +42,8 @@ with tempfile.TemporaryDirectory(prefix='xen-live-clicks-') as t:
  args=[os.environ.get('XEN_AUDIT_BINARY', str(repo/'target/debug/xen-native')),'--connect-stdin']
  for flag,value in targets:args.extend([flag,value])
  app=subprocess.Popen(args,env=env,stdin=subprocess.PIPE,stdout=log,stderr=log,text=True)
+ binary=Path(args[0]).resolve()
+ (out/'startup.json').write_text(json.dumps({'started_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'args':args,'pid':app.pid,'host':'192.168.8.170','display':env.get('DISPLAY')},indent=2)+'\n')
  app.stdin.write(json.dumps({'settings':{'host':'192.168.8.170','username':'root','label':'AUTHORIZED DEV UI AUDIT','read_only':False,'tls':{'bypass_certificate_verification':True}},'password':password})+'\n');app.stdin.close();time.sleep(7)
  def window():
   for w in windows(root):
