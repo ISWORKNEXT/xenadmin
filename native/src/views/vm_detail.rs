@@ -7,10 +7,11 @@ use xen_core::{
 };
 
 use super::host_details::{chart, is_cpu_core, is_memory_metric, is_network_metric, multi_chart};
+use super::sidebar::TreeIcon;
 use crate::format;
 use crate::state::{
     ActionKind, LoadState, ObjectKey, UiAction, UiState, VmTab, action_allowed, connection_id,
-    connection_inventory, connection_name, find_connection, find_vm, is_read_only, running_task,
+    connection_inventory, find_vm, is_read_only,
 };
 use crate::theme;
 use crate::theme::*;
@@ -30,15 +31,15 @@ pub fn show(
         ObjectKey::Vm {
             connection_id,
             vm_uuid,
-        } => (connection_id, vm_uuid, "Virtual machine", false, false),
+        } => (connection_id, vm_uuid, TreeIcon::Vm, false, false),
         ObjectKey::Template {
             connection_id,
             vm_uuid,
-        } => (connection_id, vm_uuid, "Template", true, false),
+        } => (connection_id, vm_uuid, TreeIcon::Template, true, false),
         ObjectKey::Snapshot {
             connection_id,
             vm_uuid,
-        } => (connection_id, vm_uuid, "Snapshot", false, true),
+        } => (connection_id, vm_uuid, TreeIcon::Snapshot, false, true),
         _ => return,
     };
     let Some((connection, vm)) = find_vm(workspace, &connection_id, &vm_uuid) else {
@@ -51,48 +52,33 @@ pub fn show(
     };
     let read_only = is_read_only(connection);
 
-    header(
-        ui,
-        connection,
-        vm,
-        kind,
-        is_template,
-        is_snapshot,
-        read_only,
-        state,
-        actions,
-    );
-
-    let tabs: &[VmTab] = if is_template || is_snapshot {
-        &VmTab::ALL[..6]
+    let object_type = if is_template {
+        1
+    } else if is_snapshot {
+        2
     } else {
-        &VmTab::ALL
+        0
     };
-    let labels: Vec<&str> = tabs.iter().map(|tab| tab.label()).collect();
-    let mut index = tabs
-        .iter()
-        .position(|tab| *tab == state.vm_subtab)
-        .unwrap_or(0);
-    widgets::tab_bar(ui, &labels, &mut index);
-    ui.add_space(4.0);
-    let tab = tabs[index];
+    super::object_page::title_strip(ui, connection, &vm.name, kind, &vm.power_state);
+    let has_provision_xml = connection_inventory(connection)
+        .and_then(|inventory| inventory.navigation.get(&vm.uuid))
+        .is_some_and(|metadata| metadata.default_template);
+    let selection = if is_snapshot {
+        super::object_page::Selection::Snapshot
+    } else if is_template {
+        super::object_page::Selection::Template { has_provision_xml }
+    } else {
+        super::object_page::Selection::Vm
+    };
+    let tabs = super::object_page::tabs_for(selection);
+    let mut tab = state.vm_subtab;
+    super::object_page::tab_strip(ui, &tabs, &mut tab);
     if tab != state.vm_subtab {
         actions.push(UiAction::SetVmTab(tab));
     }
     state.vm_subtab = tab;
-
-    action_bar(
-        ui,
-        workspace,
-        &connection_id,
-        &vm_uuid,
-        vm,
-        read_only,
-        is_template,
-        is_snapshot,
-        actions,
-    );
-    ui.add_space(8.0);
+    state.vm_last_tabs[object_type] = tab;
+    ui.add_space(4.0);
 
     match tab {
         VmTab::General => {
@@ -114,6 +100,7 @@ pub fn show(
             if let Some(details) = details_state(ui, state, actions) {
                 storage(
                     ui,
+                    &connection_id,
                     read_only,
                     is_template,
                     is_snapshot,
@@ -129,104 +116,15 @@ pub fn show(
                 network(ui, &details.interfaces, editable, actions);
             }
         }
-        VmTab::Ha => {
+        VmTab::Memory => {
             if let Some(details) = details_state(ui, state, actions) {
                 let editable = !read_only && !is_template && !is_snapshot;
-                ha(ui, &details, editable, vm.power_state == "Running", actions);
+                memory(ui, &details, editable, actions);
             }
         }
         VmTab::Snapshots => snapshots(ui, state, workspace, connection, vm, read_only, actions),
         VmTab::Console => console(ui, state, &connection_id, &vm_uuid, vm, actions),
     }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn header(
-    ui: &mut Ui,
-    connection: &xen_core::workspace::ConnectionView,
-    vm: &xen_core::xapi::VirtualMachine,
-    kind: &str,
-    is_template: bool,
-    is_snapshot: bool,
-    read_only: bool,
-    _state: &UiState,
-    actions: &mut Vec<UiAction>,
-) {
-    ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(Vec2::splat(42.0), Sense::hover());
-        ui.painter()
-            .rect_filled(rect, egui::CornerRadius::same(11), panel_2());
-        ui.painter().rect_stroke(
-            rect,
-            egui::CornerRadius::same(11),
-            egui::Stroke::new(1.0, border()),
-            egui::StrokeKind::Inside,
-        );
-        ui.painter().text(
-            rect.center(),
-            egui::Align2::CENTER_CENTER,
-            if is_template {
-                "T"
-            } else if is_snapshot {
-                "S"
-            } else {
-                "V"
-            },
-            egui::FontId::proportional(17.0),
-            accent(),
-        );
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            ui.label(RichText::new(kind.to_uppercase()).size(9.5).color(dim_fg()));
-            ui.label(RichText::new(&vm.name).size(24.0).strong());
-            ui.horizontal(|ui| {
-                widgets::power_badge(ui, &vm.power_state);
-                ui.label(RichText::new("·").size(10.0).color(dim_fg()));
-                ui.label(
-                    RichText::new(connection_name(connection))
-                        .size(10.5)
-                        .color(muted_fg()),
-                );
-                ui.label(RichText::new("·").size(10.0).color(dim_fg()));
-                ui.label(RichText::new(&vm.host_name).size(10.5).color(muted_fg()));
-                if read_only {
-                    widgets::badge(ui, "Read-only", amber());
-                }
-            });
-        });
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if !is_template && !is_snapshot {
-                if ui
-                    .add(widgets::primary_button("Console"))
-                    .on_hover_text("Open the VNC console (connects automatically when running)")
-                    .clicked()
-                {
-                    actions.push(UiAction::SetVmTab(VmTab::Console));
-                }
-                if ui
-                    .add(egui::Button::new(RichText::new("Disks").size(11.5)))
-                    .on_hover_text("Add, resize, move, plug or remove virtual disks")
-                    .clicked()
-                {
-                    actions.push(UiAction::SetVmTab(VmTab::Storage));
-                }
-                if ui
-                    .add(egui::Button::new(RichText::new("Network").size(11.5)))
-                    .on_hover_text("Add, edit, plug or remove virtual network interfaces")
-                    .clicked()
-                {
-                    actions.push(UiAction::SetVmTab(VmTab::Network));
-                }
-            }
-        });
-    });
-    ui.label(
-        RichText::new(&vm.uuid)
-            .monospace()
-            .size(9.0)
-            .color(dim_fg()),
-    );
-    ui.add_space(8.0);
 }
 
 fn details_state(
@@ -263,320 +161,6 @@ fn details_state(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn action_bar(
-    ui: &mut Ui,
-    workspace: &WorkspaceView,
-    connection_id: &str,
-    vm_uuid: &str,
-    vm: &xen_core::xapi::VirtualMachine,
-    read_only: bool,
-    is_template: bool,
-    is_snapshot: bool,
-    actions: &mut Vec<UiAction>,
-) {
-    ui.horizontal(|ui| {
-        if ui
-            .add_enabled(
-                vm.power_state == "Halted"
-                    && action_allowed(workspace, connection_id, vm, "export"),
-                egui::Button::new("Export XVA…"),
-            )
-            .clicked()
-        {
-            actions.push(UiAction::OpenXvaExport {
-                connection_id: connection_id.to_owned(),
-                vm_uuid: vm_uuid.to_owned(),
-            });
-        }
-    });
-    if !is_snapshot
-        && ui
-            .add_enabled(
-                vm.power_state == "Halted" && action_allowed(workspace, connection_id, vm, "copy"),
-                egui::Button::new("Full copy…"),
-            )
-            .on_hover_text("Copy all disks to a selected storage repository, preserving the source VM or template")
-            .clicked()
-    {
-        actions.push(UiAction::OpenVmCopy {
-            connection_id: connection_id.to_owned(),
-            vm_uuid: vm_uuid.to_owned(),
-        });
-    }
-    if is_template {
-        ui.horizontal(|ui| {
-            let can_clone = action_allowed(workspace, connection_id, vm, "clone");
-            if ui
-                .add_enabled(can_clone, widgets::primary_button("New VM from template"))
-                .clicked()
-            {
-                actions.push(UiAction::Propose(
-                    ActionKind::Clone,
-                    vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-                ));
-            }
-            let can_delete = action_allowed(workspace, connection_id, vm, "destroy");
-            if ui
-                .add_enabled(
-                    can_delete,
-                    egui::Button::new(RichText::new("Delete template…").size(11.0)),
-                )
-                .clicked()
-            {
-                actions.push(UiAction::Propose(
-                    ActionKind::Destroy,
-                    vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-                ));
-            }
-            ui.label(
-                RichText::new("Creating a VM copies the template's configuration and disks.")
-                    .size(10.0)
-                    .color(dim_fg()),
-            );
-            if read_only {
-                widgets::badge(ui, "Read-only", amber());
-            }
-        });
-        return;
-    }
-    if is_snapshot {
-        ui.horizontal_wrapped(|ui| {
-            for kind in [ActionKind::SnapshotToVm, ActionKind::SnapshotToTemplate] {
-                if ui
-                    .add_enabled(
-                        action_allowed(workspace, connection_id, vm, "clone"),
-                        egui::Button::new(kind.label()),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::Propose(
-                        kind,
-                        vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-                    ));
-                }
-            }
-            let allowed =
-                action_allowed(workspace, connection_id, vm, ActionKind::Revert.operation());
-            if ui
-                .add_enabled(allowed, widgets::primary_button("Revert to this snapshot"))
-                .clicked()
-            {
-                actions.push(UiAction::Propose(
-                    ActionKind::Revert,
-                    vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-                ));
-            }
-            let can_delete = action_allowed(workspace, connection_id, vm, "destroy");
-            if ui
-                .add_enabled(
-                    can_delete,
-                    egui::Button::new(RichText::new("Delete snapshot…").size(11.0).color(red())),
-                )
-                .clicked()
-            {
-                actions.push(UiAction::Propose(
-                    ActionKind::Destroy,
-                    vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-                ));
-            }
-        });
-        ui.label(
-            RichText::new(
-                "Revert replaces the parent VM's disk state and restores a running power state. Deleting a snapshot frees its disks.",
-            )
-            .size(10.0)
-            .color(dim_fg()),
-        );
-        return;
-    }
-
-    ui.horizontal(|ui| {
-        let start_kind = if vm.power_state == "Suspended" {
-            ActionKind::Resume
-        } else {
-            ActionKind::Start
-        };
-        let can_start = action_allowed(workspace, connection_id, vm, start_kind.operation());
-        let start_label = if vm.power_state == "Suspended" {
-            "Resume"
-        } else {
-            "Start"
-        };
-        let start_button = if can_start {
-            widgets::primary_button(start_label)
-        } else {
-            egui::Button::new(RichText::new(start_label).size(11.5))
-        };
-        if ui.add_enabled(can_start, start_button).clicked() {
-            actions.push(UiAction::Propose(
-                start_kind,
-                vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-            ));
-        }
-        let host_operation = if vm.power_state == "Suspended" {
-            "resume_on"
-        } else {
-            "start_on"
-        };
-        ui.menu_button(
-            RichText::new(if vm.power_state == "Suspended" {
-                "Resume on…"
-            } else {
-                "Start on…"
-            })
-            .size(11.0)
-            .color(muted_fg()),
-            |ui| {
-                let hosts = find_connection(workspace, connection_id)
-                    .and_then(connection_inventory)
-                    .map(|inventory| inventory.hosts.as_slice())
-                    .unwrap_or_default();
-                if hosts.is_empty() {
-                    ui.label(
-                        RichText::new("No hosts available")
-                            .size(10.0)
-                            .color(dim_fg()),
-                    );
-                }
-                for host in hosts {
-                    let allowed = action_allowed(workspace, connection_id, vm, host_operation)
-                        && host.enabled;
-                    if ui
-                        .add_enabled(
-                            allowed,
-                            egui::Button::new(RichText::new(&host.name).size(11.0).color(fg()))
-                                .frame(false),
-                        )
-                        .on_hover_text(&host.address)
-                        .clicked()
-                    {
-                        actions.push(UiAction::ProposeOnHost(
-                            start_kind,
-                            vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-                            host.reference.clone(),
-                            host.name.clone(),
-                        ));
-                        ui.close();
-                    }
-                    if vm.power_state == "Halted"
-                        && ui
-                            .add_enabled(
-                                allowed,
-                                egui::Button::new(
-                                    RichText::new(format!("{} (paused)", host.name)).size(11.0),
-                                )
-                                .frame(false),
-                            )
-                            .clicked()
-                    {
-                        actions.push(UiAction::ProposeOnHost(
-                            ActionKind::StartPaused,
-                            vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-                            host.reference.clone(),
-                            host.name.clone(),
-                        ));
-                        ui.close();
-                    }
-                }
-            },
-        );
-        let can_shutdown = action_allowed(
-            workspace,
-            connection_id,
-            vm,
-            ActionKind::Shutdown.operation(),
-        );
-        if ui
-            .add_enabled(
-                can_shutdown,
-                egui::Button::new(RichText::new("Shut down").size(11.5)),
-            )
-            .clicked()
-        {
-            actions.push(UiAction::Propose(
-                ActionKind::Shutdown,
-                vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-            ));
-        }
-        ui.menu_button(
-            RichText::new("More ...").size(11.0).color(muted_fg()),
-            |ui| {
-                if read_only {
-                    ui.label(
-                        RichText::new("Read-only connection")
-                            .size(10.0)
-                            .color(amber()),
-                    );
-                    ui.separator();
-                }
-                for kind in ActionKind::MENU.into_iter().filter(|kind| {
-                    matches!(
-                        kind,
-                        ActionKind::StartPaused
-                            | ActionKind::Checkpoint
-                            | ActionKind::SnapshotWithQuiesce
-                            | ActionKind::Clone
-                    )
-                }) {
-                    let allowed = action_allowed(workspace, connection_id, vm, kind.operation());
-                    let color = if kind.destructive() { red() } else { fg() };
-                    if ui
-                        .add_enabled(
-                            allowed,
-                            egui::Button::new(RichText::new(kind.label()).size(11.0).color(color))
-                                .frame(false),
-                        )
-                        .clicked()
-                    {
-                        actions.push(UiAction::Propose(
-                            kind,
-                            vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-                        ));
-                        ui.close();
-                    }
-                }
-            },
-        );
-        let can_snapshot = action_allowed(
-            workspace,
-            connection_id,
-            vm,
-            ActionKind::Snapshot.operation(),
-        );
-        if ui
-            .add_enabled(
-                can_snapshot,
-                egui::Button::new(RichText::new("Take snapshot").size(11.0)),
-            )
-            .clicked()
-        {
-            actions.push(UiAction::Propose(
-                ActionKind::Snapshot,
-                vec![(connection_id.to_owned(), vm_uuid.to_owned())],
-            ));
-        }
-        let can_edit = !read_only && !running_task(workspace, connection_id, vm_uuid);
-        if ui
-            .add_enabled(
-                can_edit,
-                egui::Button::new(RichText::new("Resources…").size(11.0)),
-            )
-            .on_hover_text("Edit vCPUs, memory and boot settings")
-            .clicked()
-        {
-            actions.push(UiAction::OpenVmResources);
-        }
-        if running_task(workspace, connection_id, vm_uuid) {
-            ui.label(
-                RichText::new("A task is active for this object.")
-                    .size(10.0)
-                    .color(amber()),
-            );
-        }
-    });
-}
-
-#[allow(clippy::too_many_arguments)]
 fn general(
     ui: &mut Ui,
     connection: &xen_core::workspace::ConnectionView,
@@ -587,198 +171,164 @@ fn general(
     read_only: bool,
     actions: &mut Vec<UiAction>,
 ) {
-    if !is_template && !is_snapshot {
-        ui.add_space(8.0);
-        theme::card_frame().show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        widgets::section_title(ui, "Quick actions", None);
-        ui.add_space(4.0);
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .add(widgets::primary_button("VNC console"))
-                .on_hover_text("Open the VNC console; it connects automatically when the VM is running")
-                .clicked()
-            {
-                actions.push(UiAction::SetVmTab(VmTab::Console));
+    use super::object_page::value_row as row;
+    let mut expand = None;
+    ui.horizontal(|ui| {
+        if ui
+            .add_enabled(!read_only && !is_snapshot, egui::Button::new("Properties"))
+            .clicked()
+        {
+            actions.push(UiAction::OpenProperties {
+                connection_id: connection_id(connection).to_owned(),
+                target: xen_core::properties::ObjectTarget {
+                    kind: xen_core::properties::ObjectKind::Vm,
+                    uuid: vm.uuid.clone(),
+                },
+            });
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if ui.button("Collapse all").clicked() {
+                expand = Some(false);
             }
-            if ui
-                .add(egui::Button::new(RichText::new("Disks").size(11.0)))
-                .on_hover_text("Add, resize, move, plug or remove virtual disks")
-                .clicked()
-            {
-                actions.push(UiAction::SetVmTab(VmTab::Storage));
-            }
-            if ui
-                .add(egui::Button::new(RichText::new("Network").size(11.0)))
-                .on_hover_text("Add, edit, plug or remove virtual interfaces")
-                .clicked()
-            {
-                actions.push(UiAction::SetVmTab(VmTab::Network));
-            }
-            if ui
-                .add(egui::Button::new(RichText::new("Snapshots").size(11.0)))
-                .clicked()
-            {
-                actions.push(UiAction::SetVmTab(VmTab::Snapshots));
-            }
-            if ui
-                .add_enabled(
-                    !read_only,
-                    egui::Button::new(RichText::new("Resources…").size(11.0)),
-                )
-                .on_hover_text("Edit vCPUs, memory and boot settings")
-                .clicked()
-            {
-                actions.push(UiAction::OpenVmResources);
+            if ui.button("Expand all").clicked() {
+                expand = Some(true);
             }
         });
-        ui.label(
-            RichText::new(
-                "Edit resources to change memory or add supported CPUs while running; other changes require shutdown.",
-            )
-            .size(9.0)
-            .color(dim_fg()),
+    });
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let section = |ui: &mut Ui, name: &str, body: &mut dyn FnMut(&mut Ui)| {
+        egui::CollapsingHeader::new(name)
+            .id_salt(("vm-general", name))
+            .default_open(true)
+            .open(expand)
+            .show(ui, body);
+    };
+    section(ui, "General", &mut |ui| {
+        row(ui, "Name", &details.name);
+        row(ui, "Description", &details.description);
+        row(ui, "Tags", &details.tags.join(", "));
+        if let Some(metadata) =
+            connection_inventory(connection).and_then(|inv| inv.navigation.get(&vm.uuid))
+        {
+            row(ui, "Folder", &metadata.folder);
+        }
+        if !details.os_version.is_empty() {
+            row(ui, "Operating system", &details.os_version);
+        }
+        row(
+            ui,
+            "Virtualization mode",
+            if details.hvm_boot_policy.is_empty() {
+                "Paravirtualization (PV)"
+            } else {
+                "Hardware-assisted virtualization (HVM)"
+            },
         );
+        if !details.pv_drivers_version.is_empty() {
+            row(ui, "Virtualization state", &details.pv_drivers_version);
+        }
+        row(ui, "UUID", &details.uuid);
     });
-        ui.add_space(8.0);
+    section(ui, "Boot Options", &mut |ui| {
+        row(
+            ui,
+            "Auto-boot",
+            if details.auto_poweron { "Yes" } else { "No" },
+        );
+        if let Some(order) = details.hvm_boot_params.get("order") {
+            row(ui, "Boot order", order);
+        }
+        if details.hvm_boot_policy.is_empty() {
+            row(ui, "OS boot parameters", &details.pv_args);
+        }
+    });
+    section(ui, "CPUs", &mut |ui| {
+        row(ui, "vCPUs", &details.vcpus_max.to_string());
+        if !details.cores_per_socket.is_empty() {
+            row(
+                ui,
+                "Topology",
+                &format!("{} cores per socket", details.cores_per_socket),
+            );
+        }
+        if !details.cpu_weight.is_empty() {
+            row(ui, "Priority", &details.cpu_weight);
+        }
+        if ui
+            .add_enabled(
+                !read_only && !is_template && !is_snapshot,
+                egui::Button::new("Edit…"),
+            )
+            .clicked()
+        {
+            actions.push(UiAction::OpenVmResources);
+        }
+    });
+    // Read caching is omitted: the existing model has no caching status.
+    if !is_template && !is_snapshot {
+        section(ui, "High Availability", &mut |ui| {
+            row(ui, "Restart priority", &details.ha_restart_priority);
+            if ui
+                .add_enabled(!read_only, egui::Button::new("Edit…"))
+                .clicked()
+            {
+                actions.push(UiAction::OpenHaEdit);
+            }
+        });
     }
-    ui.columns(2, |columns| {
-        theme::card_frame().show(&mut columns[0], |ui| {
-            ui.set_width(ui.available_width());
-            widgets::section_title(
-                ui,
-                if is_template {
-                    "Template"
-                } else if is_snapshot {
-                    "Snapshot"
-                } else {
-                    "Configuration"
-                },
-                None,
-            );
-            ui.add_space(4.0);
-            widgets::kv(ui, "Connection", &connection_name(connection), false);
-            widgets::kv(
-                ui,
-                "Resident host",
-                if details.resident_on.is_empty() {
-                    &vm.host_name
-                } else {
-                    &details.resident_on
-                },
-                false,
-            );
-            widgets::kv(ui, "Affinity", &details.affinity, false);
-            widgets::kv(ui, "Power state", &details.power_state, false);
-            widgets::kv(
-                ui,
-                "vCPUs",
-                &format!(
-                    "{} / {} at startup",
-                    details.vcpus_max, details.vcpus_at_startup
-                ),
-                false,
-            );
-            widgets::kv(
-                ui,
-                "Static memory",
-                &format!(
-                    "{} max / {} min",
-                    format::bytes(details.memory_static_max),
-                    format::bytes(details.memory_static_min)
-                ),
-                false,
-            );
-            widgets::kv(
-                ui,
-                "Dynamic memory",
-                &format!(
-                    "{} max / {} target",
-                    format::bytes(details.memory_dynamic_max),
-                    format::bytes(details.memory_target)
-                ),
-                false,
-            );
-            widgets::kv(
-                ui,
-                "HA restart priority",
-                if details.ha_restart_priority.is_empty() {
-                    "Not set"
-                } else {
-                    &details.ha_restart_priority
-                },
-                false,
-            );
-            widgets::kv(
-                ui,
-                "HA always run",
-                if details.ha_always_run { "Yes" } else { "No" },
-                false,
-            );
-            widgets::kv(
-                ui,
-                "OS version",
-                if details.os_version.is_empty() {
-                    "Not reported"
-                } else {
-                    &details.os_version
-                },
-                false,
-            );
-            widgets::kv(
-                ui,
-                "PV drivers",
-                if details.pv_drivers_version.is_empty() {
-                    "Not reported"
-                } else {
-                    &details.pv_drivers_version
-                },
-                false,
-            );
-            ui.add_space(2.0);
-            widgets::kv(ui, "UUID", &details.uuid, true);
-        });
-
-        theme::card_frame().show(&mut columns[1], |ui| {
-            ui.set_width(ui.available_width());
-            widgets::section_title(ui, "Description", None);
-            ui.add_space(4.0);
-            ui.label(
-                RichText::new(if details.description.is_empty() {
-                    "No description"
-                } else {
-                    &details.description
-                })
-                .size(11.5)
-                .color(if details.description.is_empty() {
-                    dim_fg()
-                } else {
-                    fg()
-                }),
-            );
-            if !details.platform.is_empty() {
-                ui.add_space(8.0);
-                widgets::section_title(ui, "Platform", None);
-                ui.add_space(4.0);
-                for field in &details.platform {
-                    widgets::kv(ui, &field.label, &field.value, false);
-                }
-            }
-            if !details.other_config.is_empty() {
-                ui.add_space(8.0);
-                widgets::section_title(ui, "Other config", None);
-                ui.add_space(4.0);
-                for field in &details.other_config {
-                    widgets::kv(ui, &field.label, &field.value, false);
-                }
-            }
-        });
+    section(ui, "Memory", &mut |ui| {
+        row(ui, "Memory", &format::bytes(details.memory_dynamic_max));
     });
+    if !is_template && !is_snapshot {
+        section(ui, "Home Server", &mut |ui| {
+            row(ui, "Home server", &details.affinity);
+        });
+    }
+}
+
+fn memory(ui: &mut Ui, details: &VmDetails, editable: bool, actions: &mut Vec<UiAction>) {
+    ui.horizontal(|ui| {
+        ui.label("Memory");
+        if ui
+            .add_enabled(editable, egui::Button::new("Edit…"))
+            .on_disabled_hover_text("Not implemented yet for templates or snapshots")
+            .clicked()
+        {
+            actions.push(UiAction::OpenVmResources);
+        }
+    });
+    // memory_target is allocation, not observed guest memory use.
+    widgets::resource_bar(
+        ui,
+        details.memory_target,
+        details.memory_static_max,
+        accent(),
+        24.0,
+    );
+    for (label, value) in [
+        ("Allocated", details.memory_target),
+        ("Dynamic minimum", details.memory_dynamic_min),
+        ("Dynamic maximum", details.memory_dynamic_max),
+        ("Static maximum", details.memory_static_max),
+    ] {
+        super::object_page::value_row(ui, label, &format::bytes(value));
+    }
 }
 
 fn performance(ui: &mut Ui, state: &mut UiState, actions: &mut Vec<UiAction>) {
     theme::card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
+        ui.menu_button("Actions ▾", |ui| {
+            for label in [
+                "New Graph…",
+                "Edit Graph…",
+                "Delete Graph",
+                "Restore Default Graphs",
+            ] {
+                ui.add_enabled(false, egui::Button::new(label))
+                    .on_disabled_hover_text("Not implemented yet");
+            }
+        });
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.label(RichText::new("VM performance").size(15.0).strong());
@@ -2065,8 +1615,10 @@ fn console_keysym(key: egui::Key) -> Option<u32> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn storage(
     ui: &mut Ui,
+    connection_id: &str,
     read_only: bool,
     is_template: bool,
     is_snapshot: bool,
@@ -2074,306 +1626,187 @@ fn storage(
     details: &VmDetails,
     actions: &mut Vec<UiAction>,
 ) {
-    let disks = &details.disks;
-    theme::card_frame().show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        let editable = !read_only && !is_template && !is_snapshot;
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Virtual disks").size(15.0).strong());
-            widgets::badge(ui, disks.len().to_string(), muted_fg());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui
-                    .add_enabled(editable && halted, widgets::primary_button("Attach disk"))
-                    .on_hover_text(if halted {
-                        "Attach an existing unattached VDI"
-                    } else {
-                        "Shut down the VM to attach a disk"
-                    })
-                    .clicked()
-                {
-                    actions.push(UiAction::OpenAttachVdi);
-                }
-                if ui
-                    .add_enabled(editable && halted, widgets::primary_button("Add disk"))
-                    .on_hover_text(if halted {
-                        "Create a new virtual disk"
-                    } else {
-                        "Shut down the VM to add a disk"
-                    })
-                    .clicked()
-                {
-                    actions.push(UiAction::OpenAddDisk);
-                }
-                if editable && !halted {
-                    ui.label(
-                        RichText::new("Shut down to edit disks")
-                            .size(9.0)
-                            .color(dim_fg()),
-                    );
+    let disks: Vec<_> = details.disks.iter().filter(|disk| !disk.is_cd).collect();
+    let editable = !read_only && !is_template && !is_snapshot;
+    let selection_id = ui.scope_id().with(("disk-selection", &details.uuid));
+    let mut selected = ui
+        .ctx()
+        .data_mut(|data| data.get_temp::<String>(selection_id))
+        .unwrap_or_default();
+    egui::ScrollArea::horizontal()
+        .id_salt("disk-scroll")
+        .show(ui, |ui| {
+            TableBuilder::new(ui)
+                .id_salt("vm-disks")
+                .striped(true)
+                .sense(Sense::click())
+                .cell_layout(Layout::left_to_right(Align::Center))
+                .columns(Column::initial(100.0).at_least(70.0).clip(true), 9)
+                .header(24.0, |mut header| {
+                    for title in [
+                        "Position",
+                        "Name",
+                        "Description",
+                        "SR",
+                        "SR Volume / Size",
+                        "Read Only",
+                        "Priority",
+                        "Active",
+                        "Device Path",
+                    ] {
+                        header.col(|ui| {
+                            ui.label(RichText::new(title).size(11.0));
+                        });
+                    }
+                })
+                .body(|body| {
+                    body.rows(24.0, disks.len(), |mut row| {
+                        let disk = disks[row.index()];
+                        row.set_selected(selected == disk.vbd_uuid);
+                        for value in [
+                            disk.device.clone(),
+                            disk.vdi_name.clone(),
+                            String::new(),
+                            disk.sr_name.clone(),
+                            format::bytes(disk.virtual_size),
+                            if disk.mode == "RO" { "Yes" } else { "No" }.into(),
+                            String::new(),
+                            if disk.attached { "Yes" } else { "No" }.into(),
+                            String::new(),
+                        ] {
+                            row.col(|ui| {
+                                ui.label(RichText::new(value).size(11.0));
+                            });
+                        }
+                        if row.response().clicked() {
+                            selected = disk.vbd_uuid.clone();
+                        }
+                    });
+                });
+        });
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(selection_id, selected.clone()));
+    let disk = disks.iter().copied().find(|disk| disk.vbd_uuid == selected);
+    ui.horizontal_wrapped(|ui| {
+        if ui
+            .add_enabled(editable && halted, egui::Button::new("Add…"))
+            .clicked()
+        {
+            actions.push(UiAction::OpenAddDisk);
+        }
+        if ui
+            .add_enabled(editable && halted, egui::Button::new("Attach Disk…"))
+            .clicked()
+        {
+            actions.push(UiAction::OpenAttachVdi);
+        }
+        let active = disk.is_some_and(|disk| disk.attached);
+        if ui
+            .add_enabled(
+                editable && !halted && disk.is_some(),
+                egui::Button::new(if active { "Deactivate" } else { "Activate" }),
+            )
+            .clicked()
+        {
+            let disk = disk.unwrap();
+            actions.push(UiAction::SetVbdPlugged {
+                vbd_uuid: disk.vbd_uuid.clone(),
+                plugged: !active,
+            });
+        }
+        if ui
+            .add_enabled(editable && disk.is_some(), egui::Button::new("Move…"))
+            .clicked()
+        {
+            let disk = disk.unwrap();
+            actions.push(UiAction::OpenMoveDisk {
+                vbd_uuid: disk.vbd_uuid.clone(),
+                name: disk.vdi_name.clone(),
+                size: disk.virtual_size,
+                source_sr_uuid: disk.sr_uuid.clone(),
+            });
+        }
+        for (label, delete) in [("Detach", false), ("Delete", true)] {
+            if ui
+                .add_enabled(
+                    editable && halted && disk.is_some_and(|disk| !delete || disk.owner),
+                    egui::Button::new(label),
+                )
+                .clicked()
+            {
+                let disk = disk.unwrap();
+                actions.push(UiAction::PromptRemoveDisk {
+                    vbd_uuid: disk.vbd_uuid.clone(),
+                    name: disk.vdi_name.clone(),
+                    owner: delete && disk.owner,
+                });
+            }
+        }
+        if ui
+            .add_enabled(editable && disk.is_some(), egui::Button::new("Properties"))
+            .clicked()
+        {
+            actions.push(UiAction::OpenProperties {
+                connection_id: connection_id.to_owned(),
+                target: xen_core::properties::ObjectTarget {
+                    kind: xen_core::properties::ObjectKind::Disk,
+                    uuid: disk.unwrap().vdi_uuid.clone(),
+                },
+            });
+        }
+        ui.add_enabled_ui(disk.is_some(), |ui| {
+            ui.menu_button("More ▾", |ui| {
+                if let Some(disk) = disk {
+                    super::object_page::value_row(ui, "Name", &disk.vdi_name);
+                    super::object_page::value_row(ui, "UUID", &disk.vdi_uuid);
+                    let resize = editable
+                        && !disk.read_only
+                        && disk.mode == "RW"
+                        && disk
+                            .allowed_operations
+                            .iter()
+                            .any(|op| op == "resize" || op == "resize_online");
+                    if ui
+                        .add_enabled(resize, egui::Button::new("Resize…"))
+                        .clicked()
+                    {
+                        actions.push(UiAction::OpenDiskResize {
+                            vdi_uuid: disk.vdi_uuid.clone(),
+                            name: disk.vdi_name.clone(),
+                            current_gib: disk.virtual_size.div_ceil(1024 * 1024 * 1024),
+                        });
+                        ui.close();
+                    }
+                    if ui
+                        .add_enabled(
+                            editable && halted,
+                            egui::Button::new(if disk.mode == "RO" {
+                                "Make read-write"
+                            } else {
+                                "Make read-only"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::SetVbdMode {
+                            vbd_uuid: disk.vbd_uuid.clone(),
+                            mode: if disk.mode == "RO" { "RW" } else { "RO" }.into(),
+                        });
+                        ui.close();
+                    }
+                    let mut bootable = disk.bootable;
+                    if ui
+                        .add_enabled(editable, egui::Checkbox::new(&mut bootable, "Bootable"))
+                        .changed()
+                    {
+                        actions.push(UiAction::SetVbdBootable {
+                            vbd_uuid: disk.vbd_uuid.clone(),
+                            bootable,
+                        });
+                    }
                 }
             });
         });
-        ui.add_space(6.0);
-        if disks.is_empty() {
-            ui.label(
-                RichText::new("No virtual disks reported.")
-                    .size(11.0)
-                    .color(dim_fg()),
-            );
-            return;
-        }
-        TableBuilder::new(ui)
-            .id_salt("vm-disks")
-            .striped(true)
-            .cell_layout(Layout::left_to_right(Align::Center))
-            .column(Column::exact(70.0))
-            .column(Column::remainder().at_least(160.0).clip(true))
-            .column(Column::initial(120.0).clip(true))
-            .column(Column::exact(80.0))
-            .column(Column::exact(55.0))
-            .column(Column::exact(65.0))
-            .column(Column::exact(65.0))
-            .column(Column::exact(150.0))
-            .header(28.0, |mut header| {
-                for title in [
-                    "Device", "VDI", "SR", "Size", "Mode", "Attached", "Bootable", "Actions",
-                ] {
-                    header.col(|ui| {
-                        ui.label(RichText::new(title).size(10.0).color(muted_fg()));
-                    });
-                }
-            })
-            .body(|body| {
-                body.rows(30.0, disks.len(), |mut row| {
-                    let disk = &disks[row.index()];
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if disk.device.is_empty() {
-                                "—"
-                            } else {
-                                &disk.device
-                            })
-                            .monospace()
-                            .size(10.5),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if disk.vdi_name.is_empty() {
-                                if disk.empty {
-                                    "Empty drive"
-                                } else {
-                                    "Unavailable"
-                                }
-                            } else {
-                                &disk.vdi_name
-                            })
-                            .size(11.0),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(RichText::new(&disk.sr_name).size(10.5).color(muted_fg()));
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(format::bytes(disk.virtual_size))
-                                .monospace()
-                                .size(10.5),
-                        );
-                    });
-                    row.col(|ui| {
-                        let (label, color) = match disk.mode.as_str() {
-                            "RW" => ("RW", green()),
-                            "RO" => ("RO", amber()),
-                            _ => ("—", dim_fg()),
-                        };
-                        ui.label(RichText::new(label).monospace().size(10.5).color(color));
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if disk.attached { "Yes" } else { "No" })
-                                .size(10.5)
-                                .color(if disk.attached { green() } else { dim_fg() }),
-                        );
-                    });
-                    row.col(|ui| {
-                        if editable {
-                            let mut bootable = disk.bootable;
-                            if ui
-                                .checkbox(&mut bootable, "")
-                                .on_hover_text("Bootable flag (takes effect on next start)")
-                                .changed()
-                            {
-                                actions.push(UiAction::SetVbdBootable {
-                                    vbd_uuid: disk.vbd_uuid.clone(),
-                                    bootable,
-                                });
-                            }
-                        } else {
-                            ui.label(
-                                RichText::new(if disk.bootable { "Yes" } else { "No" })
-                                    .size(10.5)
-                                    .color(muted_fg()),
-                            );
-                        }
-                    });
-                    row.col(|ui| {
-                        if disk.is_cd {
-                            ui.label(RichText::new("CD media below").size(9.0).color(dim_fg()));
-                            return;
-                        }
-                        if !editable {
-                            ui.label(RichText::new("—").size(10.0).color(dim_fg()));
-                            return;
-                        }
-                        let gib = disk.virtual_size.div_ceil(1024 * 1024 * 1024);
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 4.0;
-                            if halted {
-                                ui.menu_button(RichText::new("Manage…").size(9.5), |ui| {
-                                    let target = if disk.mode == "RO" { "RW" } else { "RO" };
-                                    if ui
-                                        .button(
-                                            RichText::new(if target == "RW" {
-                                                "Make read-write"
-                                            } else {
-                                                "Make read-only"
-                                            })
-                                            .size(10.5),
-                                        )
-                                        .clicked()
-                                    {
-                                        actions.push(UiAction::SetVbdMode {
-                                            vbd_uuid: disk.vbd_uuid.clone(),
-                                            mode: target.into(),
-                                        });
-                                        ui.close();
-                                    }
-                                    if ui
-                                        .button(RichText::new("Move to another SR…").size(10.5))
-                                        .clicked()
-                                    {
-                                        actions.push(UiAction::OpenMoveDisk {
-                                            vbd_uuid: disk.vbd_uuid.clone(),
-                                            name: if disk.vdi_name.is_empty() {
-                                                format!("Disk {}", disk.device)
-                                            } else {
-                                                disk.vdi_name.clone()
-                                            },
-                                            size: disk.virtual_size,
-                                            source_sr_uuid: disk.sr_uuid.clone(),
-                                        });
-                                        ui.close();
-                                    }
-                                    if ui
-                                        .add_enabled(
-                                            !disk.read_only
-                                                && disk.mode == "RW"
-                                                && disk.allowed_operations.iter().any(|op| {
-                                                    op == "resize" || op == "resize_online"
-                                                }),
-                                            egui::Button::new(RichText::new("Resize…").size(10.5)),
-                                        )
-                                        .clicked()
-                                    {
-                                        actions.push(UiAction::OpenDiskResize {
-                                            vdi_uuid: disk.vdi_uuid.clone(),
-                                            name: if disk.vdi_name.is_empty() {
-                                                format!("Disk {}", disk.device)
-                                            } else {
-                                                disk.vdi_name.clone()
-                                            },
-                                            current_gib: gib,
-                                        });
-                                        ui.close();
-                                    }
-                                    ui.separator();
-                                    if ui
-                                        .button(
-                                            RichText::new("Remove disk…").size(10.5).color(red()),
-                                        )
-                                        .clicked()
-                                    {
-                                        actions.push(UiAction::PromptRemoveDisk {
-                                            vbd_uuid: disk.vbd_uuid.clone(),
-                                            name: if disk.vdi_name.is_empty() {
-                                                format!("Disk {}", disk.device)
-                                            } else {
-                                                disk.vdi_name.clone()
-                                            },
-                                            owner: disk.owner,
-                                        });
-                                        ui.close();
-                                    }
-                                });
-                            } else {
-                                ui.menu_button(RichText::new("Manage…").size(9.5), |ui| {
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                RichText::new(if disk.attached {
-                                                    "Unplug"
-                                                } else {
-                                                    "Plug"
-                                                })
-                                                .size(9.5),
-                                            )
-                                            .small(),
-                                        )
-                                        .on_hover_text(
-                                            "Hot-plug or unplug this disk from the running VM",
-                                        )
-                                        .clicked()
-                                    {
-                                        actions.push(UiAction::SetVbdPlugged {
-                                            vbd_uuid: disk.vbd_uuid.clone(),
-                                            plugged: !disk.attached,
-                                        });
-                                    }
-                                    if ui
-                                        .add_enabled(
-                                            details.power_state == "Running"
-                                                && !disk.read_only
-                                                && disk.mode == "RW"
-                                                && disk.allowed_operations.iter().any(|op| {
-                                                    op == "resize" || op == "resize_online"
-                                                }),
-                                            egui::Button::new(RichText::new("Resize…").size(9.5))
-                                                .small(),
-                                        )
-                                        .clicked()
-                                    {
-                                        actions.push(UiAction::OpenDiskResize {
-                                            vdi_uuid: disk.vdi_uuid.clone(),
-                                            name: disk.vdi_name.clone(),
-                                            current_gib: gib,
-                                        });
-                                    }
-                                    if ui
-                                        .add(
-                                            egui::Button::new(RichText::new("Move").size(9.5))
-                                                .small(),
-                                        )
-                                        .on_hover_text("Move this disk to another SR")
-                                        .clicked()
-                                    {
-                                        actions.push(UiAction::OpenMoveDisk {
-                                            vbd_uuid: disk.vbd_uuid.clone(),
-                                            name: if disk.vdi_name.is_empty() {
-                                                format!("Disk {}", disk.device)
-                                            } else {
-                                                disk.vdi_name.clone()
-                                            },
-                                            size: disk.virtual_size,
-                                            source_sr_uuid: disk.sr_uuid.clone(),
-                                        });
-                                    }
-                                });
-                            }
-                        });
-                    });
-                });
-            });
     });
 
     ui.add_space(8.0);
@@ -2482,256 +1915,102 @@ fn storage(
 }
 
 fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mut Vec<UiAction>) {
-    theme::card_frame().show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new("Virtual network interfaces")
-                    .size(15.0)
-                    .strong(),
-            );
-            widgets::badge(ui, interfaces.len().to_string(), muted_fg());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui
-                    .add_enabled(editable, widgets::primary_button("Add interface"))
-                    .clicked()
-                {
-                    actions.push(UiAction::OpenVifDialog(None));
-                }
-            });
-        });
-        ui.add_space(6.0);
-        if interfaces.is_empty() {
-            ui.label(
-                RichText::new("No virtual interfaces reported.")
-                    .size(11.0)
-                    .color(dim_fg()),
-            );
-            return;
-        }
-        TableBuilder::new(ui)
-            .id_salt("vm-vifs")
-            .striped(true)
-            .cell_layout(Layout::left_to_right(Align::Center))
-            .column(Column::exact(60.0))
-            .column(Column::remainder().at_least(130.0))
-            .column(Column::initial(120.0))
-            .column(Column::initial(110.0))
-            .column(Column::initial(110.0))
-            .column(Column::exact(70.0))
-            .column(Column::exact(140.0))
-            .header(28.0, |mut header| {
-                for title in [
-                    "Device", "Network", "MAC", "IPv4", "IPv6", "Attached", "Actions",
-                ] {
-                    header.col(|ui| {
-                        ui.label(RichText::new(title).size(10.0).color(muted_fg()));
-                    });
-                }
-            })
-            .body(|body| {
-                body.rows(32.0, interfaces.len(), |mut row| {
-                    let interface = &interfaces[row.index()];
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(format!("eth{}", interface.device))
-                                .monospace()
-                                .size(10.5),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if interface.network.is_empty() {
-                                &interface.bridge
-                            } else {
-                                &interface.network
-                            })
-                            .size(11.0),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(&interface.mac)
-                                    .monospace()
-                                    .size(9.0)
-                                    .color(muted_fg()),
-                            )
-                            .truncate(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(interface.ipv4.join(", "))
-                                    .size(9.0)
-                                    .color(muted_fg()),
-                            )
-                            .truncate(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(interface.ipv6.join(", "))
-                                    .size(9.0)
-                                    .color(dim_fg()),
-                            )
-                            .truncate(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if interface.attached { "Yes" } else { "No" })
-                                .size(10.5)
-                                .color(if interface.attached {
-                                    green()
-                                } else {
-                                    dim_fg()
-                                }),
-                        );
-                    });
-                    row.col(|ui| {
-                        if !editable {
-                            ui.label(RichText::new("—").size(10.0).color(dim_fg()));
-                            return;
-                        }
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 4.0;
-                            if ui
-                                .add(egui::Button::new(RichText::new("Edit").size(9.5)).small())
-                                .clicked()
-                            {
-                                actions.push(UiAction::OpenVifDialog(Some(interface.uuid.clone())));
-                            }
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new(if interface.attached {
-                                            "Unplug"
-                                        } else {
-                                            "Plug"
-                                        })
-                                        .size(9.5),
-                                    )
-                                    .small(),
-                                )
-                                .clicked()
-                            {
-                                actions.push(UiAction::SetVifPlugged {
-                                    vif_uuid: interface.uuid.clone(),
-                                    plugged: !interface.attached,
-                                });
-                            }
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new("Remove").size(9.5).color(red()),
-                                    )
-                                    .small(),
-                                )
-                                .clicked()
-                            {
-                                actions.push(UiAction::PromptRemoveVif {
-                                    vif_uuid: interface.uuid.clone(),
-                                    mac: interface.mac.clone(),
-                                });
-                            }
-                        });
-                    });
+    let selection_id = ui.scope_id().with("vif-selection");
+    let mut selected = ui
+        .ctx()
+        .data_mut(|data| data.get_temp::<String>(selection_id))
+        .unwrap_or_default();
+    TableBuilder::new(ui)
+        .id_salt("vm-vifs")
+        .striped(true)
+        .sense(Sense::click())
+        .cell_layout(Layout::left_to_right(Align::Center))
+        .column(Column::exact(60.0))
+        .column(Column::initial(140.0))
+        .column(Column::exact(65.0))
+        .column(Column::remainder())
+        .column(Column::initial(160.0))
+        .column(Column::exact(65.0))
+        .header(24.0, |mut header| {
+            for title in ["Device", "MAC", "Limit", "Network", "IP Address", "Active"] {
+                header.col(|ui| {
+                    ui.label(RichText::new(title).size(11.0));
                 });
-            });
-    });
-}
-
-fn ha(
-    ui: &mut Ui,
-    details: &VmDetails,
-    editable: bool,
-    running: bool,
-    actions: &mut Vec<UiAction>,
-) {
-    theme::card_frame().show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("High availability").size(15.0).strong());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui
-                    .add_enabled(editable, widgets::primary_button("Edit HA settings"))
-                    .on_hover_text(if running {
-                        "Some changes take effect on the next start"
-                    } else {
-                        "Change restart priority, always-run, delays and affinity"
-                    })
-                    .clicked()
-                {
-                    actions.push(UiAction::OpenHaEdit);
+            }
+        })
+        .body(|body| {
+            body.rows(24.0, interfaces.len(), |mut row| {
+                let interface = &interfaces[row.index()];
+                row.set_selected(selected == interface.uuid);
+                for value in [
+                    interface.device.clone(),
+                    interface.mac.clone(),
+                    String::new(),
+                    interface.network.clone(),
+                    interface
+                        .ipv4
+                        .iter()
+                        .chain(&interface.ipv6)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    if interface.attached { "Yes" } else { "No" }.into(),
+                ] {
+                    row.col(|ui| {
+                        ui.label(RichText::new(value).size(11.0));
+                    });
+                }
+                if row.response().clicked() {
+                    selected = interface.uuid.clone();
                 }
             });
         });
-        ui.label(
-            RichText::new("HA failover tolerance and the HA plan are configured at pool level.")
-                .size(10.0)
-                .color(dim_fg()),
-        );
-        ui.add_space(6.0);
-        widgets::kv(
-            ui,
-            "Restart priority",
-            if details.ha_restart_priority.is_empty() {
-                "Not set"
-            } else {
-                &details.ha_restart_priority
-            },
-            false,
-        );
-        widgets::kv(
-            ui,
-            "Always run",
-            if details.ha_always_run { "Yes" } else { "No" },
-            false,
-        );
-        widgets::kv(ui, "Resident host", &details.resident_on, false);
-        widgets::kv(ui, "Affinity", &details.affinity, false);
-        widgets::kv(
-            ui,
-            "Start delay",
-            &format!("{} seconds", details.start_delay),
-            false,
-        );
-        widgets::kv(
-            ui,
-            "Shutdown delay",
-            &format!("{} seconds", details.shutdown_delay),
-            false,
-        );
-        ui.add_space(4.0);
-        widgets::kv(
-            ui,
-            "Static memory",
-            &format!(
-                "{} max / {} min",
-                format::bytes(details.memory_static_max),
-                format::bytes(details.memory_static_min)
-            ),
-            false,
-        );
-        widgets::kv(
-            ui,
-            "Dynamic memory",
-            &format!(
-                "{} max / {} min",
-                format::bytes(details.memory_dynamic_max),
-                format::bytes(details.memory_dynamic_min)
-            ),
-            false,
-        );
-        widgets::kv(
-            ui,
-            "Memory target",
-            &format::bytes(details.memory_target),
-            false,
-        );
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(selection_id, selected.clone()));
+    let interface = interfaces
+        .iter()
+        .find(|interface| interface.uuid == selected);
+    ui.horizontal(|ui| {
+        if ui
+            .add_enabled(editable, egui::Button::new("Add Interface…"))
+            .clicked()
+        {
+            actions.push(UiAction::OpenVifDialog(None));
+        }
+        if ui
+            .add_enabled(
+                editable && interface.is_some(),
+                egui::Button::new("Properties"),
+            )
+            .clicked()
+        {
+            actions.push(UiAction::OpenVifDialog(Some(
+                interface.unwrap().uuid.clone(),
+            )));
+        }
+        if ui
+            .add_enabled(editable && interface.is_some(), egui::Button::new("Remove"))
+            .clicked()
+        {
+            let interface = interface.unwrap();
+            actions.push(UiAction::PromptRemoveVif {
+                vif_uuid: interface.uuid.clone(),
+                mac: interface.mac.clone(),
+            });
+        }
+        let active = interface.is_some_and(|interface| interface.attached);
+        if ui
+            .add_enabled(
+                editable && interface.is_some(),
+                egui::Button::new(if active { "Deactivate" } else { "Activate" }),
+            )
+            .clicked()
+        {
+            actions.push(UiAction::SetVifPlugged {
+                vif_uuid: interface.unwrap().uuid.clone(),
+                plugged: !active,
+            });
+        }
     });
 }
 
@@ -2754,61 +2033,132 @@ fn snapshots(
             .iter()
             .filter(|snapshot| snapshot.snapshot_of == vm.reference)
             .collect();
-        let available: std::collections::HashSet<&str> =
-            snapshots.iter().map(|snapshot| snapshot.uuid.as_str()).collect();
+        let available: std::collections::HashSet<&str> = snapshots
+            .iter()
+            .map(|snapshot| snapshot.uuid.as_str())
+            .collect();
         state
             .snapshot_selection
             .retain(|uuid| available.contains(uuid.as_str()));
 
+        let selected: Vec<_> = snapshots
+            .iter()
+            .copied()
+            .filter(|snapshot| state.snapshot_selection.contains(&snapshot.uuid))
+            .collect();
+        let single = (selected.len() == 1).then(|| selected[0]);
         ui.horizontal(|ui| {
-            widgets::section_title(ui, "Disk snapshots", None);
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let selected = state.snapshot_selection.len();
-                if ui
-                    .add_enabled(
-                        !read_only && selected > 0,
-                        egui::Button::new(
-                            RichText::new(if selected > 0 {
-                                format!("Delete selected ({selected})")
-                            } else {
-                                "Delete selected".into()
-                            })
-                            .size(10.5)
-                            .color(if selected > 0 { red() } else { dim_fg() }),
-                        ),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::PromptDeleteSnapshots);
-                }
-                let all_selected = !snapshots.is_empty()
-                    && snapshots
-                        .iter()
-                        .all(|snapshot| state.snapshot_selection.contains(&snapshot.uuid));
-                let mut select_all = all_selected;
-                if ui
-                    .add_enabled(
-                        !snapshots.is_empty(),
-                        egui::Checkbox::new(&mut select_all, RichText::new("Select all").size(9.5)),
-                    )
-                    .changed()
-                {
-                    if select_all {
-                        for snapshot in &snapshots {
-                            state.snapshot_selection.insert(snapshot.uuid.clone());
+            if ui
+                .add_enabled(
+                    !read_only
+                        && action_allowed(workspace, connection_id(connection), vm, "snapshot"),
+                    egui::Button::new("Take Snapshot…"),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Snapshot,
+                    vec![(connection_id(connection).to_owned(), vm.uuid.clone())],
+                ));
+            }
+            if ui
+                .add_enabled(
+                    single.is_some_and(|snapshot| {
+                        action_allowed(workspace, connection_id(connection), snapshot, "revert")
+                    }),
+                    egui::Button::new("Revert To…"),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::Propose(
+                    ActionKind::Revert,
+                    vec![(
+                        connection_id(connection).to_owned(),
+                        single.unwrap().uuid.clone(),
+                    )],
+                ));
+            }
+            ui.add_enabled_ui(single.is_some(), |ui| {
+                ui.menu_button("Actions ▾", |ui| {
+                    if let Some(snapshot) = single {
+                        for (label, kind) in [
+                            ("New VM from Snapshot…", ActionKind::SnapshotToVm),
+                            (
+                                "New Template from Snapshot…",
+                                ActionKind::SnapshotToTemplate,
+                            ),
+                        ] {
+                            if ui
+                                .add_enabled(
+                                    action_allowed(
+                                        workspace,
+                                        connection_id(connection),
+                                        snapshot,
+                                        "clone",
+                                    ),
+                                    egui::Button::new(label),
+                                )
+                                .clicked()
+                            {
+                                actions.push(UiAction::Propose(
+                                    kind,
+                                    vec![(
+                                        connection_id(connection).to_owned(),
+                                        snapshot.uuid.clone(),
+                                    )],
+                                ));
+                                ui.close();
+                            }
                         }
-                    } else {
-                        for snapshot in &snapshots {
-                            state.snapshot_selection.remove(&snapshot.uuid);
+                        if ui
+                            .add_enabled(
+                                action_allowed(
+                                    workspace,
+                                    connection_id(connection),
+                                    snapshot,
+                                    "export",
+                                ),
+                                egui::Button::new("Export Snapshot as Template…"),
+                            )
+                            .clicked()
+                        {
+                            actions.push(UiAction::OpenXvaExport {
+                                connection_id: connection_id(connection).to_owned(),
+                                vm_uuid: snapshot.uuid.clone(),
+                            });
+                            ui.close();
+                        }
+                        if ui.button("Properties").clicked() {
+                            actions.push(UiAction::OpenProperties {
+                                connection_id: connection_id(connection).to_owned(),
+                                target: xen_core::properties::ObjectTarget {
+                                    kind: xen_core::properties::ObjectKind::Vm,
+                                    uuid: snapshot.uuid.clone(),
+                                },
+                            });
+                            ui.close();
                         }
                     }
-                }
-                ui.label(
-                    RichText::new(format!("{} snapshots", snapshots.len()))
-                        .size(9.5)
-                        .color(dim_fg()),
-                );
+                });
             });
+            if ui
+                .add_enabled(
+                    !read_only
+                        && !selected.is_empty()
+                        && selected.iter().all(|snapshot| {
+                            action_allowed(
+                                workspace,
+                                connection_id(connection),
+                                snapshot,
+                                "destroy",
+                            )
+                        }),
+                    egui::Button::new("Delete"),
+                )
+                .clicked()
+            {
+                actions.push(UiAction::PromptDeleteSnapshots);
+            }
         });
         ui.add_space(4.0);
         if snapshots.is_empty() {
@@ -2822,10 +2172,7 @@ fn snapshots(
             ui.horizontal(|ui| {
                 let mut checked = state.snapshot_selection.contains(&snapshot.uuid);
                 if ui
-                    .add_enabled(
-                        !read_only,
-                        egui::Checkbox::without_text(&mut checked),
-                    )
+                    .add_enabled(!read_only, egui::Checkbox::without_text(&mut checked))
                     .changed()
                 {
                     if checked {
@@ -2862,70 +2209,9 @@ fn snapshots(
                         .color(dim_fg()),
                     );
                 });
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.menu_button("Create…", |ui| {
-                        for kind in [ActionKind::SnapshotToVm, ActionKind::SnapshotToTemplate] {
-                            if ui.add_enabled(action_allowed(workspace, connection_id(connection), snapshot, "clone"), egui::Button::new(kind.label())).clicked() {
-                                actions.push(UiAction::Propose(kind, vec![(connection_id(connection).to_owned(), snapshot.uuid.clone())]));
-                                ui.close();
-                            }
-                        }
-                    });
-                    if ui
-                        .add_enabled(
-                            !read_only,
-                            egui::Button::new(RichText::new("Delete").size(10.0).color(red())),
-                        )
-                        .clicked()
-                    {
-                        state.snapshot_selection.clear();
-                        state.snapshot_selection.insert(snapshot.uuid.clone());
-                        actions.push(UiAction::PromptDeleteSnapshots);
-                    }
-                    let allowed = action_allowed(
-                        workspace,
-                        connection_id(connection),
-                        snapshot,
-                        ActionKind::Revert.operation(),
-                    );
-                    if ui
-                        .add_enabled(
-                            allowed,
-                            egui::Button::new(RichText::new("Revert").size(10.0)),
-                        )
-                        .clicked()
-                    {
-                        actions.push(UiAction::Propose(
-                            ActionKind::Revert,
-                            vec![(connection_id(connection).to_owned(), snapshot.uuid.clone())],
-                        ));
-                    }
-                });
             });
             ui.add_space(3.0);
         }
-        ui.add_space(4.0);
-        let can_snapshot = action_allowed(workspace, connection_id(connection), vm, "snapshot");
-        if ui
-            .add_enabled(
-                can_snapshot && !read_only,
-                egui::Button::new(RichText::new("Take snapshot").size(11.0)),
-            )
-            .clicked()
-        {
-            actions.push(UiAction::Propose(
-                ActionKind::Snapshot,
-                vec![(connection_id(connection).to_owned(), vm.uuid.clone())],
-            ));
-        }
-        ui.add_space(2.0);
-        ui.label(
-            RichText::new(
-                "Reverting replaces disk state. If the snapshot was running, the VM is started again.",
-            )
-            .size(9.5)
-            .color(dim_fg()),
-        );
     });
 }
 

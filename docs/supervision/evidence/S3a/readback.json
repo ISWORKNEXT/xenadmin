@@ -1,0 +1,37 @@
+{
+  "disk_add": {
+    "via": "Storage > Add\u2026",
+    "uuid": "f93d476c-c331-4071-90f6-10ddb46e5fa9",
+    "bytes": 1073741824,
+    "readback_confirmed": true
+  },
+  "disk_rejection": "0 GiB rejected by existing dialog",
+  "snapshot": {
+    "uuid": "f7d75d82-56b3-ee82-d998-389a81be17c7",
+    "source_vm_uuid": "92903336-ce93-d69d-4578-49aedb93e62d",
+    "created_via_tab": true,
+    "deleted_via_tab": true,
+    "readback_confirmed": true
+  },
+  "cleanup": {
+    "vm_uuids": [
+      "92903336-ce93-d69d-4578-49aedb93e62d",
+      "9cb841fd-5664-3950-cb24-e83a1f98e7b5"
+    ],
+    "disks": [
+      {
+        "uuid": "88329f6e-b27c-41a1-b5c9-140e264e0c45",
+        "name": "zz-parity-S3a-disk",
+        "bytes": 1073741824
+      },
+      {
+        "uuid": "f93d476c-c331-4071-90f6-10ddb46e5fa9",
+        "name": "zz-parity-S3a-disk",
+        "bytes": 1073741824
+      }
+    ],
+    "remaining_prefixed_vms": [],
+    "remaining_prefixed_disks": [],
+    "xenapi_responding": true
+  }
+}

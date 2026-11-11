@@ -1,0 +1,42 @@
+[
+  {
+    "route": "01-vm-general",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "reviewed; expected tab and compact page visible"
+  },
+  {
+    "route": "02-vm-storage",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "reviewed; expected tab and compact page visible"
+  },
+  {
+    "route": "03-vm-networking",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "reviewed; expected tab and compact page visible"
+  },
+  {
+    "route": "04-vm-snapshots",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "reviewed; expected tab and compact page visible"
+  },
+  {
+    "route": "05-template-general",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "reviewed; expected tab and compact page visible"
+  }
+]

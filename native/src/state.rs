@@ -202,7 +202,7 @@ pub enum VmTab {
     Performance,
     Storage,
     Network,
-    Ha,
+    Memory,
     Snapshots,
     Console,
 }
@@ -210,12 +210,12 @@ pub enum VmTab {
 impl VmTab {
     pub const ALL: [VmTab; 7] = [
         VmTab::General,
-        VmTab::Performance,
+        VmTab::Memory,
         VmTab::Storage,
         VmTab::Network,
-        VmTab::Ha,
-        VmTab::Snapshots,
         VmTab::Console,
+        VmTab::Performance,
+        VmTab::Snapshots,
     ];
 
     pub fn label(self) -> &'static str {
@@ -223,8 +223,8 @@ impl VmTab {
             VmTab::General => "General",
             VmTab::Performance => "Performance",
             VmTab::Storage => "Storage",
-            VmTab::Network => "Network",
-            VmTab::Ha => "HA",
+            VmTab::Network => "Networking",
+            VmTab::Memory => "Memory",
             VmTab::Snapshots => "Snapshots",
             VmTab::Console => "Console",
         }
@@ -236,7 +236,7 @@ impl VmTab {
             "performance" | "perf" => Some(VmTab::Performance),
             "storage" | "disks" => Some(VmTab::Storage),
             "network" | "networking" => Some(VmTab::Network),
-            "ha" => Some(VmTab::Ha),
+            "memory" => Some(VmTab::Memory),
             "snapshots" | "snapshot" => Some(VmTab::Snapshots),
             "console" | "vnc" => Some(VmTab::Console),
             _ => None,
@@ -1398,6 +1398,7 @@ pub struct UiState {
     pub tree_query: String,
     pub tree_expanded: HashSet<String>,
     pub vm_subtab: VmTab,
+    pub vm_last_tabs: [VmTab; 3],
     pub vm_state: LoadState<VmDetails>,
     pub vm_seq: u64,
     pub vm_perf_state: LoadState<HostPerformance>,
@@ -1530,6 +1531,7 @@ impl Default for UiState {
             tree_query: String::new(),
             tree_expanded: HashSet::new(),
             vm_subtab: VmTab::General,
+            vm_last_tabs: [VmTab::General; 3],
             vm_state: LoadState::Idle,
             vm_seq: 0,
             vm_perf_state: LoadState::Idle,

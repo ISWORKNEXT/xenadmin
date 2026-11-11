@@ -40,7 +40,17 @@ Workers (codex, opencode) execute one unit brief at a time.
   scenarios unless upstream implements that behavior.
 - Host credentials come from env `XEN_DEV_HOST`, `XEN_DEV_USER`,
   `XEN_DEV_PASSWORD`. Never write them to a file, log, or commit.
-  Never reboot or shut down the host. Never touch pre-existing VMs/SRs.
+- The dev host `192.168.8.170` is a full-freedom lab (owner's decision,
+  2026-11-12). When the unit's function needs it you may reboot the host,
+  restart the toolstack, enter/exit maintenance mode, create and destroy
+  SRs and networks, and start/stop/modify pre-existing VMs. Two working
+  rules keep the lab usable for later units:
+  - Do not power the host off (nobody can power it back on remotely);
+    test Shut Down by code path only and say so in the report.
+  - Do not destroy pre-existing VMs, templates or their disks. Test
+    destructive functions on `zz-parity-<unit>-*` objects you created.
+  Wait for the host to come back and confirm XenAPI answers before you
+  continue or report.
 - Do not commit. Leave changes in the working tree and end with the report.
 - If blocked for more than ~20 minutes on one obstacle, stop and report
   `BLOCKED` with what you tried.

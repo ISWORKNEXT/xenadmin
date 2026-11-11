@@ -20,6 +20,19 @@ Start Options, Alerts, Home Server, GPU, Advanced), Copy/Move VM wizards,
 snapshot tree view and "Save/Export snapshot", install tools, vApp and
 snapshot-schedule assignment, Delete VM dialog with disk/snapshot choice.
 
+Owner extension (not in upstream): **Guest setup via `vm-data`**. The
+templates on the dev host (CentOS 6.10 / CentOS 7.9 / Debian 11 "Legacy" and
+others) are built by the owner's seller/game-host projects and configure
+themselves from `VM.xenstore_data` keys. The New VM wizard gets an optional
+"Guest setup" page (IP family, IPv4/gateway/prefix, IPv6 set, username,
+initial password, SSH keys) shown for installed-OS templates, written and
+read back before first start; the VM General tab shows the `vm-data` keys
+(password masked) with an editor in Properties. Contract:
+`/home/tinnerkun/Desktop/seller/agent/docs/vm-data.md`,
+`/home/tinnerkun/Desktop/game-host/docs/LEGACY-LINUX-TEMPLATES.md`,
+`/home/tinnerkun/Desktop/game-host/testing/legacy-template-qualify.py`.
+These templates must never be modified or deleted by a worker.
+
 ## M3 — Storage
 New Storage wizard for every SR type (NFS, iSCSI, HBA, SMB/CIFS, ISO, local),
 virtual disk New/Attach/Move/Properties, Repair, Reclaim, Reattach.

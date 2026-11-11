@@ -1,0 +1,34 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "01-vm-general",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        488,
+        165
+      ],
+      "wait": 1,
+      "snap": "02-vm-storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L",
+      "wait": 1,
+      "snap": "02-vm-storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

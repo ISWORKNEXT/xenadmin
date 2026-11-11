@@ -1,0 +1,391 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        395,
+        248
+      ],
+      "wait": 1,
+      "snap": "disk-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        565,
+        505
+      ],
+      "key": "Control_L+a",
+      "text": "0",
+      "wait": 0.5
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        980,
+        629
+      ],
+      "wait": 1,
+      "snap": "disk-rejection"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        552,
+        491
+      ],
+      "key": "Control_L+a",
+      "text": "1",
+      "wait": 0.5
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        566,
+        559
+      ],
+      "text": "zz-parity-S3a-disk",
+      "wait": 0.5
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        980,
+        642
+      ],
+      "wait": 3,
+      "snap": "02-vm-storage",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "92903336-ce93-d69d-4578-49aedb93e62d",
+        "name_label": "zz-parity-S3a-vm",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        548,
+        165
+      ],
+      "wait": 1,
+      "snap": "03-vm-networking"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        743,
+        165
+      ],
+      "wait": 1,
+      "snap": "snapshot-empty"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        431,
+        208
+      ],
+      "wait": 1,
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        738,
+        166
+      ],
+      "wait": 2,
+      "snap": "snapshot-empty"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "F5",
+      "wait": 3,
+      "snap": "snapshot-empty"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "F5",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "F5",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        450,
+        225
+      ],
+      "wait": 1,
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        450,
+        225
+      ],
+      "wait": 1,
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        450,
+        225
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1100,
+        425
+      ],
+      "wait": 1,
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        450,
+        225
+      ],
+      "wait": 2,
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Tab",
+      "wait": 1,
+      "snap": "focus"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        15
+      ],
+      "wait": 1,
+      "snap": "menu-test"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+Tab",
+      "wait": 1,
+      "snap": "focus"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "space",
+      "wait": 1,
+      "snap": "snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        610,
+        519
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-S3a-snapshot",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        956,
+        575
+      ],
+      "wait": 3,
+      "readback": true,
+      "snap": "04-vm-snapshots"
+    },
+    "readback": [
+      {
+        "uuid": "92903336-ce93-d69d-4578-49aedb93e62d",
+        "name_label": "zz-parity-S3a-vm",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "f7d75d82-56b3-ee82-d998-389a81be17c7",
+        "name_label": "zz-parity-S3a-snapshot",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": true,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        157,
+        567
+      ],
+      "wait": 2,
+      "snap": "04-vm-snapshots"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        399,
+        268
+      ],
+      "wait": 1,
+      "snap": "04-vm-snapshots"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        765,
+        225
+      ],
+      "wait": 1,
+      "snap": "delete-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "04-vm-snapshots"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        939,
+        647
+      ],
+      "wait": 3,
+      "readback": true,
+      "snap": "snapshot-deleted"
+    },
+    "readback": [
+      {
+        "uuid": "9cb841fd-5664-3950-cb24-e83a1f98e7b5",
+        "name_label": "zz-parity-S3a-template",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "92903336-ce93-d69d-4578-49aedb93e62d",
+        "name_label": "zz-parity-S3a-vm",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

@@ -62,6 +62,10 @@ pub fn selection(state: &UiState) -> &ObjectKey {
 pub fn vm_kind(command: &str) -> Option<ActionKind> {
     Some(match command {
         "StartVMCommand" => ActionKind::Start,
+        "StartPausedVMCommand" => ActionKind::StartPaused,
+        "CheckpointVMCommand" => ActionKind::Checkpoint,
+        "QuiescedSnapshotVMCommand" => ActionKind::SnapshotWithQuiesce,
+        "CloneVMCommand" => ActionKind::Clone,
         "ShutDownVMCommand" => ActionKind::Shutdown,
         "RebootVMCommand" => ActionKind::Reboot,
         "ResumeVMCommand" => ActionKind::Resume,
@@ -735,8 +739,17 @@ pub fn menus(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
                 MenuItem::item("Assign to vApp", "AssigntovApp"),
                 MenuItem::separator(),
                 MenuItem::item("Copy VM", "CopyVMCommand"),
+                MenuItem::item("Clone VM…", "CloneVMCommand"),
                 MenuItem::item("Move VM", "MoveVMCommand"),
-                MenuItem::item("Take a Snapshot", "TakeSnapshotCommand"),
+                MenuItem::submenu(
+                    "Take a Snapshot",
+                    "Snapshots",
+                    vec![
+                        MenuItem::item("Take Snapshot…", "TakeSnapshotCommand"),
+                        MenuItem::item("Snapshot with memory…", "CheckpointVMCommand"),
+                        MenuItem::item("Quiesced snapshot…", "QuiescedSnapshotVMCommand"),
+                    ],
+                ),
                 MenuItem::item("Convert to Template", "ConvertVMToTemplateCommand"),
                 MenuItem::item("Export...", "ExportCommand"),
                 MenuItem::separator(),
@@ -852,6 +865,7 @@ fn expand_dynamic(items: &mut [MenuItem], state: &UiState, workspace: &Workspace
                         },
                     ),
                     MenuItem::item("Reboot", "RebootVMCommand"),
+                    MenuItem::item("Start Paused", "StartPausedVMCommand"),
                     MenuItem::item("Start in Recovery Mode", "VMRecoveryModeCommand"),
                     MenuItem::separator(),
                     MenuItem::item("Force Shut Down", "ForceVMShutDownCommand"),
@@ -876,10 +890,19 @@ fn expand_dynamic(items: &mut [MenuItem], state: &UiState, workspace: &Workspace
                     item.children = inventory
                         .hosts
                         .iter()
-                        .map(|host| {
+                        .flat_map(|host| {
                             let mut entry = MenuItem::item(host.name.clone(), command);
                             entry.host_ref = Some(host.reference.clone());
-                            entry
+                            let mut entries = vec![entry];
+                            if command == "StartVMOnHostCommand" {
+                                let mut paused = MenuItem::item(
+                                    format!("{} (paused)", host.name),
+                                    "StartPausedVMOnHostCommand",
+                                );
+                                paused.host_ref = Some(host.reference.clone());
+                                entries.push(paused);
+                            }
+                            entries
                         })
                         .collect();
                 }
@@ -908,7 +931,7 @@ fn expand_dynamic(items: &mut [MenuItem], state: &UiState, workspace: &Workspace
 pub fn resolve_item(item: &MenuItem, state: &UiState, workspace: &WorkspaceView) -> Resolution {
     if matches!(
         item.command,
-        "StartVMOnHostCommand" | "ResumeVMOnHostCommand"
+        "StartVMOnHostCommand" | "StartPausedVMOnHostCommand" | "ResumeVMOnHostCommand"
     ) {
         let ObjectKey::Vm {
             connection_id,
@@ -919,15 +942,15 @@ pub fn resolve_item(item: &MenuItem, state: &UiState, workspace: &WorkspaceView)
         };
         let (connection, vm) =
             find_vm(workspace, connection_id, vm_uuid).ok_or("The selected VM is unavailable.")?;
-        let kind = if item.command == "StartVMOnHostCommand" {
-            ActionKind::Start
-        } else {
-            ActionKind::Resume
+        let kind = match item.command {
+            "StartVMOnHostCommand" => ActionKind::Start,
+            "StartPausedVMOnHostCommand" => ActionKind::StartPaused,
+            _ => ActionKind::Resume,
         };
-        let operation = if item.command == "StartVMOnHostCommand" {
-            "start_on"
-        } else {
+        let operation = if item.command == "ResumeVMOnHostCommand" {
             "resume_on"
+        } else {
+            "start_on"
         };
         if !action_allowed(workspace, connection_id, vm, operation) {
             return Err("The VM state does not allow this operation.");

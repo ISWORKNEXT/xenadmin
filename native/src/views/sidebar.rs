@@ -14,7 +14,7 @@ use std::{cmp::Ordering, collections::BTreeMap};
 use xen_core::{workspace::WorkspaceView, xapi::NavigationMetadata};
 
 const TREE_WIDTH: f32 = 310.0;
-const ROW_HEIGHT: f32 = 28.0;
+const ROW_HEIGHT: f32 = 24.0;
 
 #[derive(Clone, Copy)]
 pub(super) enum TreeIcon {
@@ -23,6 +23,8 @@ pub(super) enum TreeIcon {
     Host,
     Vm,
     Template,
+    Snapshot,
+    Disk,
     Storage,
     Network,
     Running,
@@ -205,7 +207,7 @@ fn objects(workspace: &WorkspaceView, state: &UiState) -> Vec<(String, Vec<Node>
                         connection_id: id.clone(),
                         vm_uuid: vm.uuid.clone(),
                     },
-                    TreeIcon::Template,
+                    TreeIcon::Snapshot,
                     5,
                 ),
                 _ => (
@@ -359,6 +361,16 @@ fn build_tree(workspace: &WorkspaceView, state: &UiState) -> Node {
             (7, "Networks"),
         ] {
             let mut group = Node::group(name);
+            group.icon = match rank {
+                0 => TreeIcon::Pool,
+                1 => TreeIcon::Host,
+                2 => TreeIcon::Vm,
+                4 => TreeIcon::Template,
+                5 => TreeIcon::Snapshot,
+                6 => TreeIcon::Storage,
+                8 => TreeIcon::Disk,
+                _ => TreeIcon::Network,
+            };
             group.rank = root.children.len() as u8;
             group.children = connections
                 .iter()
@@ -450,6 +462,7 @@ pub fn show(
                 state.focus_search = false;
             }
             ui.add_space(4.0);
+            ui.spacing_mut().item_spacing.y = 0.0;
             let tree = build_tree(workspace, state);
             let height = (ui.available_height() - 192.0).max(80.0);
             egui::ScrollArea::vertical()
@@ -475,13 +488,14 @@ pub fn show(
                     }
                 });
             ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                ui.spacing_mut().item_spacing.y = 4.0;
                 ui.separator();
                 for (mode, label) in [
-                    (NavigationMode::Infrastructure, "Infrastructure"),
-                    (NavigationMode::Objects, "Objects"),
+                    (NavigationMode::Infrastructure, "▣  Infrastructure"),
+                    (NavigationMode::Objects, "▦  Objects"),
                 ] {
                     if ui
-                        .selectable_label(state.navigation_mode == mode, label)
+                        .add(nav_button(ui, label, state.navigation_mode == mode))
                         .clicked()
                     {
                         state.navigation_mode = mode;
@@ -494,59 +508,54 @@ pub fn show(
                         | NavigationMode::CustomFields
                         | NavigationMode::Vapps
                 );
-                ui.menu_button(
-                    if org {
-                        "● Organization Views ▾"
-                    } else {
-                        "Organization Views ▾"
-                    },
-                    |ui| {
-                        for (mode, label) in [
-                            (NavigationMode::Tags, "Objects by Tag"),
-                            (NavigationMode::Folders, "Objects by Folder"),
-                            (NavigationMode::CustomFields, "Objects by Custom Field"),
-                            (NavigationMode::Vapps, "vApps"),
-                        ] {
-                            if ui
-                                .selectable_label(state.navigation_mode == mode, label)
-                                .clicked()
-                            {
-                                state.navigation_mode = mode;
-                                ui.close();
-                            }
+                egui::containers::menu::MenuButton::from_button(nav_button(
+                    ui,
+                    "▤  Organization Views ▾",
+                    org,
+                ))
+                .ui(ui, |ui| {
+                    for (mode, label) in [
+                        (NavigationMode::Tags, "Objects by Tag"),
+                        (NavigationMode::Folders, "Objects by Folder"),
+                        (NavigationMode::CustomFields, "Objects by Custom Field"),
+                        (NavigationMode::Vapps, "vApps"),
+                    ] {
+                        if ui
+                            .selectable_label(state.navigation_mode == mode, label)
+                            .clicked()
+                        {
+                            state.navigation_mode = mode;
+                            ui.close();
                         }
-                    },
-                );
-                ui.menu_button(
-                    if state.navigation_mode == NavigationMode::SavedSearches {
-                        "● Saved Searches ▾"
-                    } else {
-                        "Saved Searches ▾"
-                    },
-                    |ui| {
-                        let mut searches: Vec<_> =
-                            state.saved_searches.iter().enumerate().collect();
-                        searches.sort_by(|(_, a), (_, b)| natural_cmp(&a.name, &b.name));
-                        if searches.is_empty() {
-                            ui.label("No saved searches.");
+                    }
+                });
+                egui::containers::menu::MenuButton::from_button(nav_button(
+                    ui,
+                    "⌕  Saved Searches ▾",
+                    state.navigation_mode == NavigationMode::SavedSearches,
+                ))
+                .ui(ui, |ui| {
+                    let mut searches: Vec<_> = state.saved_searches.iter().enumerate().collect();
+                    searches.sort_by(|(_, a), (_, b)| natural_cmp(&a.name, &b.name));
+                    if searches.is_empty() {
+                        ui.label("No saved searches.");
+                    }
+                    for (index, saved) in searches {
+                        if ui.button(&saved.name).clicked() {
+                            state.navigation_mode = NavigationMode::SavedSearches;
+                            actions.push(UiAction::OpenObject {
+                                key: ObjectKey::List {
+                                    connection_id: None,
+                                    kind: ListKind::Vms,
+                                    host_ref: None,
+                                },
+                                title: saved.name.clone(),
+                            });
+                            actions.push(UiAction::ApplySavedSearch(index));
+                            ui.close();
                         }
-                        for (index, saved) in searches {
-                            if ui.button(&saved.name).clicked() {
-                                state.navigation_mode = NavigationMode::SavedSearches;
-                                actions.push(UiAction::OpenObject {
-                                    key: ObjectKey::List {
-                                        connection_id: None,
-                                        kind: ListKind::Vms,
-                                        host_ref: None,
-                                    },
-                                    title: saved.name.clone(),
-                                });
-                                actions.push(UiAction::ApplySavedSearch(index));
-                                ui.close();
-                            }
-                        }
-                    },
-                );
+                    }
+                });
                 let failed = workspace
                     .tasks
                     .iter()
@@ -558,10 +567,11 @@ pub fn show(
                     "Notifications".into()
                 };
                 if ui
-                    .selectable_label(
+                    .add(nav_button(
+                        ui,
+                        &format!("!  {label}"),
                         state.navigation_mode == NavigationMode::Notifications,
-                        label,
-                    )
+                    ))
                     .clicked()
                 {
                     state.navigation_mode = NavigationMode::Notifications;
@@ -852,6 +862,19 @@ pub(super) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, co
                 egui::StrokeKind::Inside,
             );
         }
+        TreeIcon::Snapshot => {
+            painter.rect_stroke(
+                rect.shrink(1.0),
+                CornerRadius::same(2),
+                stroke,
+                egui::StrokeKind::Inside,
+            );
+            painter.circle_stroke(center, 3.0, stroke);
+        }
+        TreeIcon::Disk => {
+            painter.circle_stroke(center, 6.0, stroke);
+            painter.circle_stroke(center, 2.0, stroke);
+        }
         TreeIcon::Storage
         | TreeIcon::DefaultStorage
         | TreeIcon::DetachedStorage
@@ -925,6 +948,13 @@ pub(super) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, co
             color,
         );
     }
+}
+
+fn nav_button(ui: &Ui, label: &str, selected: bool) -> egui::Button<'static> {
+    egui::Button::new("")
+        .left_text(label.to_owned())
+        .min_size(vec2(ui.available_width(), 26.0))
+        .selected(selected)
 }
 
 #[cfg(test)]

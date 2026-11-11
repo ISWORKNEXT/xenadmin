@@ -23,3 +23,5 @@ pub mod pool_options;
 
 pub mod menubar;
 pub mod shell;
+
+pub mod object_page;

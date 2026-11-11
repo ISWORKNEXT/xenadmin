@@ -324,7 +324,11 @@ impl App {
                     LoadState::Ready(details) if &details.uuid == vm_uuid
                 );
                 if !same {
-                    self.state.vm_subtab = crate::state::VmTab::General;
+                    self.state.vm_subtab = self.state.vm_last_tabs[match key {
+                        ObjectKey::Template { .. } => 1,
+                        ObjectKey::Snapshot { .. } => 2,
+                        _ => 0,
+                    }];
                     self.state.vm_perf_state = LoadState::Idle;
                 }
                 self.state.vm_seq += 1;
