@@ -23,11 +23,7 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
-    let Some(key) = state
-        .object_tabs
-        .get(state.active_tab)
-        .map(|tab| tab.key.clone())
-    else {
+    let Some(key) = state.selection.as_ref().map(|tab| tab.key.clone()) else {
         return;
     };
     let (connection_id, vm_uuid, kind, is_template, is_snapshot) = match key {

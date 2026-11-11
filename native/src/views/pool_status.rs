@@ -16,10 +16,8 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
-    let Some(ObjectKey::PoolStatus { connection_id }) = state
-        .object_tabs
-        .get(state.active_tab)
-        .map(|tab| tab.key.clone())
+    let Some(ObjectKey::PoolStatus { connection_id }) =
+        state.selection.as_ref().map(|tab| tab.key.clone())
     else {
         return;
     };

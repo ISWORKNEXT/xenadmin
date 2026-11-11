@@ -4,10 +4,10 @@ File	Import Search...	ImportSearchCommand	disabled-not-implemented
 File	Import Server List...	ImportServerList	disabled-not-implemented	
 File	Export Server List...	ExportServerList	disabled-not-implemented	
 File	Exit	Exit	wired	ViewportCommand::Close
-View	Custom Templates	CustomTemplates	disabled-not-implemented	
-View	Xen Desktop Templates	XenDesktopTemplates	disabled-not-implemented	
-View	Local Storage	LocalStorage	disabled-not-implemented	
-View	Hidden Objects	HiddenObjects	disabled-not-implemented	
+View	Custom Templates	CustomTemplates	wired	tree_preferences.custom_templates
+View	Xen Desktop Templates	XenDesktopTemplates	wired	tree_preferences.default_templates
+View	Local Storage	LocalStorage	wired	tree_preferences.local_storage
+View	Hidden Objects	HiddenObjects	wired	tree_preferences.hidden_objects
 View	Toolbar	Toolbar	wired	toolbar_visible
 View	Theme		wired	submenu
 View > Theme	Light / Dark	Theme	wired	theme::toggle

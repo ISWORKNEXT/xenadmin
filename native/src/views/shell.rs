@@ -15,8 +15,12 @@ pub fn menubar(
     actions: &mut Vec<UiAction>,
 ) {
     egui::Panel::top("menu-bar")
-        .frame(Frame::NONE.fill(theme::panel()))
+        .frame(Frame::NONE.fill(theme::panel()).inner_margin(egui::Margin {
+            left: 8,
+            ..Default::default()
+        }))
         .show(ui, |ui| {
+            ui.style_mut().override_font_id = Some(egui::FontId::proportional(11.0));
             egui::MenuBar::new().ui(ui, |ui| {
                 for menu in model::menus(state, workspace) {
                     ui.menu_button(&menu.label, |ui| {
@@ -53,12 +57,24 @@ fn render_items(
             }
         } else {
             let resolution = model::resolve_item(item, state, workspace);
-            let label = if item.command == "Toolbar" {
+            let checked = match item.command {
+                "CustomTemplates" => Some(state.tree_preferences.custom_templates),
+                "XenDesktopTemplates" => Some(state.tree_preferences.default_templates),
+                "LocalStorage" => Some(state.tree_preferences.local_storage),
+                "HiddenObjects" => Some(state.tree_preferences.hidden_objects),
+                _ => None,
+            };
+            let label = if let Some(checked) = checked {
+                format!("{} {}", if checked { "✓" } else { "  " }, item.label)
+            } else if item.command == "Toolbar" {
                 format!("{} Toolbar", if state.toolbar_visible { "✓" } else { "  " })
             } else {
                 item.label.clone()
             };
-            let response = ui.add_enabled(resolution.is_ok(), Button::new(label));
+            let response = ui.add_enabled(
+                resolution.is_ok(),
+                Button::new(RichText::new(label).size(11.0)),
+            );
             match resolution {
                 Ok(action) if response.clicked() => {
                     perform(action, ui.ctx(), state, workspace, actions);
@@ -93,6 +109,20 @@ fn perform(
         CommandAction::Connect => state.connect = Some(ConnectState::empty()),
         CommandAction::Exit => ctx.send_viewport_cmd(ViewportCommand::Close),
         CommandAction::Toolbar => state.toolbar_visible = !state.toolbar_visible,
+        CommandAction::TreeView(command) => {
+            let setting = match command {
+                "CustomTemplates" => &mut state.tree_preferences.custom_templates,
+                "XenDesktopTemplates" => &mut state.tree_preferences.default_templates,
+                "LocalStorage" => &mut state.tree_preferences.local_storage,
+                _ => &mut state.tree_preferences.hidden_objects,
+            };
+            *setting = !*setting;
+            config::save_ui_preferences(&config::UiPreferences {
+                light: theme::is_light(),
+                zoom: ctx.zoom_factor(),
+                tree: state.tree_preferences.clone(),
+            });
+        }
         CommandAction::Theme => {
             theme::toggle();
             theme::apply(ctx);
@@ -124,6 +154,7 @@ fn save_preferences(ctx: &egui::Context) {
     config::save_ui_preferences(&config::UiPreferences {
         light: theme::is_light(),
         zoom: ctx.zoom_factor(),
+        tree: config::load_ui_preferences().tree,
     });
 }
 
@@ -187,7 +218,7 @@ pub fn toolbar(
                         ("Reboot", reboot, true),
                         ("Resume", "ResumeVMCommand", resume),
                         ("Suspend", "SuspendVMCommand", !resume),
-                        ("Pause", "PauseVMCommand", !unpause),
+                        ("Pause", "PauseVMCommand", matches!(model::selection(state), crate::state::ObjectKey::Vm { connection_id, vm_uuid } if crate::state::find_vm(workspace,connection_id,vm_uuid).is_some_and(|(_, vm)| vm.power_state == "Running"))),
                         ("Unpause", "UnPauseVMCommand", unpause),
                         ("Force Shut Down", "ForceVMShutDownCommand", force_shutdown),
                         ("Force Reboot", "ForceVMRebootCommand", force_reboot),

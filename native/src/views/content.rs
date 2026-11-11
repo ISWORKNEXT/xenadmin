@@ -15,8 +15,8 @@ pub fn show(
     actions: &mut Vec<UiAction>,
 ) {
     let key = state
-        .object_tabs
-        .get(state.active_tab)
+        .selection
+        .as_ref()
         .map(|tab| tab.key.clone())
         .unwrap_or(ObjectKey::Home);
 

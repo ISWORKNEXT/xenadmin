@@ -190,7 +190,7 @@ impl ObjectKey {
 }
 
 #[derive(Clone)]
-pub struct ObjectTab {
+pub struct ObjectSelection {
     pub key: ObjectKey,
     pub title: String,
 }
@@ -1391,11 +1391,12 @@ pub struct UiState {
     pub new_vm_seq: u64,
     pub view: View,
     pub scope: Scope,
-    pub object_tabs: Vec<ObjectTab>,
-    pub active_tab: usize,
+    pub selection: Option<ObjectSelection>,
+    pub navigation_mode: crate::views::sidebar::NavigationMode,
+    pub tree_initialized: HashSet<String>,
+    pub tree_preferences: crate::config::TreePreferences,
     pub tree_query: String,
     pub tree_expanded: HashSet<String>,
-    pub tree_selection: Option<ObjectKey>,
     pub vm_subtab: VmTab,
     pub vm_state: LoadState<VmDetails>,
     pub vm_seq: u64,
@@ -1519,14 +1520,15 @@ impl Default for UiState {
             new_vm_seq: 0,
             view: View::Overview,
             scope: Scope::All,
-            object_tabs: vec![ObjectTab {
+            selection: Some(ObjectSelection {
                 key: ObjectKey::Home,
                 title: "Home".into(),
-            }],
-            active_tab: 0,
+            }),
+            navigation_mode: Default::default(),
+            tree_initialized: HashSet::new(),
+            tree_preferences: crate::config::load_ui_preferences().tree,
             tree_query: String::new(),
             tree_expanded: HashSet::new(),
-            tree_selection: None,
             vm_subtab: VmTab::General,
             vm_state: LoadState::Idle,
             vm_seq: 0,
@@ -1667,8 +1669,6 @@ pub enum UiAction {
         title: String,
     },
     NavigateHistory(bool),
-    ActivateTab(usize),
-    CloseTab(usize),
     ToggleTreeNode(String),
     Connect {
         settings: ConnectionSettings,
@@ -2044,14 +2044,6 @@ pub fn visible_connections<'a>(
             Some(id) => connection_id(connection) == id,
             None => true,
         })
-        .collect()
-}
-
-pub fn connected_connections(workspace: &WorkspaceView) -> Vec<&ConnectionView> {
-    workspace
-        .connections
-        .iter()
-        .filter(|connection| !matches!(connection, ConnectionView::Offline { .. }))
         .collect()
 }
 

@@ -582,7 +582,96 @@ impl RawInventory {
                 .then(right.time.cmp(&left.time))
         });
         alerts.truncate(100);
+        let mut navigation = HashMap::new();
+        for records in [
+            &self.pools,
+            &self.hosts,
+            &self.vms,
+            &self.storage,
+            &self.networks,
+        ] {
+            for r in records.values() {
+                let other = &r["other_config"];
+                let mut home = String::new();
+                if r.get("power_state").is_some() && !boolean(r, "is_a_template") {
+                    if matches!(text(r, "power_state").as_str(), "Running" | "Paused") {
+                        home = text(r, "resident_on");
+                    } else {
+                        let storage_host = r["VBDs"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|vbd| self.vbds.get(vbd.as_str().unwrap_or_default()))
+                            .filter_map(|vbd| self.vdis.get(&text(vbd, "VDI")))
+                            .filter_map(|vdi| self.storage.get(&text(vdi, "SR")))
+                            .filter(|sr| !boolean(sr, "shared"))
+                            .filter_map(|sr| sr["PBDs"].as_array().filter(|pbds| pbds.len() == 1))
+                            .filter_map(|pbds| self.pbds.get(pbds[0].as_str().unwrap_or_default()))
+                            .map(|pbd| text(pbd, "host"))
+                            .find(|host| self.hosts.contains_key(host));
+                        if let Some(host) = storage_host {
+                            home = host;
+                        } else {
+                            let affinity = text(r, "affinity");
+                            if self
+                                .hosts
+                                .get(&affinity)
+                                .and_then(|h| self.host_metrics.get(&text(h, "metrics")))
+                                .is_some_and(|m| boolean(m, "live"))
+                            {
+                                home = affinity;
+                            }
+                        }
+                    }
+                } else if r.get("PBDs").is_some()
+                    && !boolean(r, "shared")
+                    && let Some(pbds) = r["PBDs"].as_array().filter(|p| p.len() == 1)
+                {
+                    home = self
+                        .pbds
+                        .get(pbds[0].as_str().unwrap_or_default())
+                        .map_or_else(String::new, |p| text(p, "host"));
+                }
+                navigation.insert(
+                    text(r, "uuid"),
+                    NavigationMetadata {
+                        home,
+                        hidden: text(other, "HideFromXenCenter").eq_ignore_ascii_case("true"),
+                        default_template: other.get("disks").is_some(),
+                        tools_sr: text(other, "xenserver_tools_sr").eq_ignore_ascii_case("true"),
+                        live: self
+                            .host_metrics
+                            .get(&text(r, "metrics"))
+                            .is_some_and(|m| boolean(m, "live")),
+                        folder: text(other, "folder"),
+                        custom_fields: other
+                            .as_object()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|(k, v)| {
+                                k.strip_prefix("XenCenter.CustomFields.").and_then(|key| {
+                                    v.as_str().map(|value| (key.to_owned(), value.to_owned()))
+                                })
+                            })
+                            .collect(),
+                        tags: r["tags"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(Value::as_str)
+                            .map(str::to_owned)
+                            .collect(),
+                    },
+                );
+            }
+        }
+        let named_pool = self
+            .pools
+            .values()
+            .any(|p| !text(p, "name_label").is_empty());
         Ok(Inventory {
+            navigation,
+            named_pool,
             pool_id,
             templates,
             snapshots,
@@ -677,6 +766,8 @@ fn number(record: &Value, key: &str) -> u64 {
 
 #[derive(Clone, Serialize)]
 pub struct Inventory {
+    pub navigation: HashMap<String, NavigationMetadata>,
+    pub named_pool: bool,
     pub settings: ConnectionSettings,
     pub pool_id: String,
     pub templates: Vec<VirtualMachine>,
@@ -689,6 +780,19 @@ pub struct Inventory {
     pub tasks: Vec<ExternalTask>,
     pub alerts: Vec<PoolAlert>,
     pub health: crate::health::HealthReport,
+}
+
+/// Navigation-only projection of records already fetched by raw_inventory.
+#[derive(Clone, Default, Serialize)]
+pub struct NavigationMetadata {
+    pub home: String,
+    pub hidden: bool,
+    pub default_template: bool,
+    pub tools_sr: bool,
+    pub live: bool,
+    pub folder: String,
+    pub custom_fields: HashMap<String, String>,
+    pub tags: Vec<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -783,6 +887,44 @@ pub struct Network {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn navigation_projects_existing_records_without_new_fetches() {
+        let mut raw = RawInventory::default();
+        raw.hosts.insert(
+            "h".into(),
+            json!({"uuid":"host", "metrics":"hm", "name_label":"server", "enabled":true}),
+        );
+        raw.host_metrics.insert("hm".into(), json!({"live":true}));
+        raw.pools
+            .insert("p".into(), json!({"uuid":"pool", "name_label":""}));
+        raw.pbds.insert("pbd".into(), json!({"host":"h"}));
+        raw.storage.insert(
+            "sr".into(),
+            json!({"uuid":"local", "shared":false,"PBDs":["pbd"]}),
+        );
+        raw.vdis.insert("vdi".into(), json!({"SR":"sr"}));
+        raw.vbds
+            .insert("vbd".into(), json!({"VM":"vm", "VDI":"vdi"}));
+        raw.vms.insert("vm".into(), json!({"uuid":"vm", "power_state":"Halted", "VBDs":["vbd"], "other_config":{"HideFromXenCenter":"true","folder":"/one/two","XenCenter.CustomFields.Owner":"Team"},"tags":["prod"]}));
+        raw.vms.insert(
+            "template".into(),
+            json!({"uuid":"template","is_a_template":true,"other_config":{"disks":"xml"}}),
+        );
+        let settings =
+            serde_json::from_value(json!({"host":"example.test","username":"root"})).unwrap();
+        let inventory = raw.into_inventory(settings).unwrap();
+        assert!(!inventory.named_pool);
+        assert_eq!(inventory.navigation["vm"].home, "h");
+        assert_eq!(inventory.navigation["local"].home, "h");
+        assert!(inventory.navigation["host"].live);
+        assert!(inventory.navigation["vm"].hidden);
+        assert_eq!(inventory.navigation["vm"].custom_fields["Owner"], "Team");
+        assert_eq!(inventory.navigation["vm"].folder, "/one/two");
+        assert_eq!(inventory.navigation["vm"].tags, vec!["prod"]);
+        assert!(inventory.navigation["template"].default_template);
+        assert!(inventory.navigation["template"].home.is_empty());
+    }
 
     #[test]
     fn xenapi_numbers_accept_strings_and_unknown_capacity() {

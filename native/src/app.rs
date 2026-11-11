@@ -8,8 +8,8 @@ use xen_core::workspace::WorkspaceView;
 use crate::console::ConsoleInput;
 use crate::state::{
     ActionKind, ConnectState, ConsoleState, ConsoleStatus, Intent, ListKind, LoadState, ObjectKey,
-    ObjectTab, Scope, Toast, ToastKind, UiAction, UiState, View, connection_id, find_connection,
-    find_vm, visible_connections,
+    ObjectSelection, Scope, Toast, ToastKind, UiAction, UiState, View, connection_id,
+    find_connection, find_vm, visible_connections,
 };
 use crate::theme;
 use crate::views;
@@ -108,7 +108,7 @@ impl App {
         if let Some(view) = startup_view {
             let tab = match view {
                 View::Overview => None,
-                View::Tasks => Some(ObjectTab {
+                View::Tasks => Some(ObjectSelection {
                     key: ObjectKey::Tasks,
                     title: "Activity & tasks".into(),
                 }),
@@ -121,7 +121,7 @@ impl App {
                         View::Networks => ListKind::Networks,
                         View::Overview | View::Tasks => unreachable!(),
                     };
-                    Some(ObjectTab {
+                    Some(ObjectSelection {
                         key: ObjectKey::List {
                             connection_id: None,
                             kind,
@@ -132,8 +132,7 @@ impl App {
                 }
             };
             if let Some(tab) = tab {
-                state.object_tabs.push(tab);
-                state.active_tab = state.object_tabs.len() - 1;
+                state.selection = Some(tab);
             }
         }
         Self {
@@ -231,22 +230,15 @@ impl App {
 
     fn open_object(&mut self, key: ObjectKey, title: Option<String>) {
         let title = title.unwrap_or_else(|| self.object_title(&key));
-        if let Some(index) = self.state.object_tabs.iter().position(|tab| tab.key == key) {
-            self.activate_tab(index);
-            return;
-        }
-        self.state.object_tabs.push(ObjectTab { key, title });
-        let index = self.state.object_tabs.len() - 1;
-        self.activate_tab(index);
+        self.state.selection = Some(ObjectSelection { key, title });
+        self.activate_selection();
     }
 
-    fn activate_tab(&mut self, index: usize) {
-        if self.state.object_tabs.is_empty() {
+    fn activate_selection(&mut self) {
+        let Some(selection) = &self.state.selection else {
             return;
-        }
-        let index = index.min(self.state.object_tabs.len() - 1);
-        self.state.active_tab = index;
-        let key = self.state.object_tabs[index].key.clone();
+        };
+        let key = selection.key.clone();
         if !self.state.navigating_history
             && self.state.selection_history.get(self.state.history_index) != Some(&key)
         {
@@ -255,32 +247,6 @@ impl App {
                 .truncate(self.state.history_index + 1);
             self.state.selection_history.push(key.clone());
             self.state.history_index = self.state.selection_history.len() - 1;
-        }
-        self.state.tree_selection = Some(key.clone());
-        if let Some(connection_id) = key.connection_id() {
-            self.state
-                .tree_expanded
-                .insert(format!("pool:{connection_id}"));
-            let group = match &key {
-                ObjectKey::Host { .. } => Some("Hosts"),
-                ObjectKey::Vm { .. } | ObjectKey::Snapshot { .. } => Some("Vms"),
-                ObjectKey::Template { .. } => Some("Templates"),
-                ObjectKey::Storage { .. } => Some("Storage"),
-                ObjectKey::Network { .. } => Some("Networks"),
-                ObjectKey::List { kind, .. } => Some(match kind {
-                    ListKind::Vms => "Vms",
-                    ListKind::Hosts => "Hosts",
-                    ListKind::Templates => "Templates",
-                    ListKind::Storage => "Storage",
-                    ListKind::Networks => "Networks",
-                }),
-                _ => None,
-            };
-            if let Some(group) = group {
-                self.state
-                    .tree_expanded
-                    .insert(format!("group:{group}:{connection_id}"));
-            }
         }
         self.state.selected.clear();
         self.state.page = 0;
@@ -409,12 +375,13 @@ impl App {
         }
     }
 
-    /// Close object tabs whose object disappeared after a refresh or a delete.
-    /// Offline connections are skipped so stale tabs survive a temporary outage.
-    fn prune_missing_tabs(&mut self) {
-        let mut missing = Vec::new();
-        for (index, tab) in self.state.object_tabs.iter().enumerate().skip(1) {
-            let gone = match &tab.key {
+    /// Clear a selection that disappeared after a refresh or delete.
+    fn prune_missing_selection(&mut self) {
+        let gone = self
+            .state
+            .selection
+            .as_ref()
+            .is_some_and(|selection| match &selection.key {
                 ObjectKey::Vm {
                     connection_id,
                     vm_uuid,
@@ -438,13 +405,9 @@ impl App {
                         !inventory.snapshots.iter().any(|vm| vm.uuid == *vm_uuid)
                     }),
                 _ => false,
-            };
-            if gone {
-                missing.push(index);
-            }
-        }
-        for index in missing.into_iter().rev() {
-            self.close_tab(index);
+            });
+        if gone {
+            self.clear_selection();
         }
         let stale_console = self.state.console.as_ref().and_then(|console| {
             let inventory = find_connection(&self.workspace, &console.connection_id)
@@ -462,19 +425,8 @@ impl App {
         }
     }
 
-    fn close_tab(&mut self, index: usize) {
-        if index == 0 || index >= self.state.object_tabs.len() {
-            return;
-        }
-        let was_active = index == self.state.active_tab;
-        self.state.object_tabs.remove(index);
-        if self.state.active_tab > index {
-            self.state.active_tab -= 1;
-        }
-        if was_active {
-            self.state.active_tab = index.saturating_sub(1);
-            self.activate_tab(self.state.active_tab);
-        }
+    fn clear_selection(&mut self) {
+        self.open_object(ObjectKey::Home, None);
     }
 
     fn open_list_for_view(&mut self, view: View) {
@@ -587,11 +539,8 @@ impl App {
                                     ToastKind::Success,
                                 ));
                                 self.state.sr_vdis_sr = None;
-                                let current = self
-                                    .state
-                                    .object_tabs
-                                    .get(self.state.active_tab)
-                                    .map(|tab| tab.key.clone());
+                                let current =
+                                    self.state.selection.as_ref().map(|tab| tab.key.clone());
                                 if let Some(key) = current
                                     && key.connection_id() == Some(dialog.connection_id.as_str())
                                 {
@@ -614,8 +563,8 @@ impl App {
                 Event::Workspace(workspace) => {
                     let refresh_vm = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| vm_key(&tab.key))
                         .is_some_and(|(connection_id, vm_uuid)| {
                             workspace.tasks.iter().any(|task| {
@@ -632,7 +581,7 @@ impl App {
                     self.workspace = workspace;
                     let titles: Vec<_> = self
                         .state
-                        .object_tabs
+                        .selection
                         .iter()
                         .map(|tab| {
                             matches!(
@@ -647,13 +596,13 @@ impl App {
                             .then(|| self.object_title(&tab.key))
                         })
                         .collect();
-                    for (tab, title) in self.state.object_tabs.iter_mut().zip(titles) {
+                    for (tab, title) in self.state.selection.iter_mut().zip(titles) {
                         if let Some(title) = title {
                             tab.title = title;
                         }
                     }
                     self.state.loaded = true;
-                    self.prune_missing_tabs();
+                    self.prune_missing_selection();
                     if refresh_vm {
                         self.apply(vec![UiAction::ReloadVmDetails]);
                     }
@@ -667,12 +616,25 @@ impl App {
                     {
                         let should_open_pool = self.pending_host.is_none()
                             && self.pending_vm.is_none()
-                            && self.state.active_tab == 0;
+                            && self
+                                .state
+                                .selection
+                                .as_ref()
+                                .is_none_or(|s| s.key == ObjectKey::Home);
                         self.state.scope = Scope::Connection(id.clone());
                         self.state.pending_scope = None;
-                        self.state.tree_expanded.insert(format!("pool:{id}"));
                         if should_open_pool {
-                            self.open_object(ObjectKey::Pool(id), None);
+                            let key = find_connection(&self.workspace, &id)
+                                .and_then(crate::state::connection_inventory)
+                                .filter(|inv| !inv.named_pool && inv.hosts.len() == 1)
+                                .map_or_else(
+                                    || ObjectKey::Pool(id.clone()),
+                                    |inv| ObjectKey::Host {
+                                        connection_id: id.clone(),
+                                        host_uuid: inv.hosts[0].uuid.clone(),
+                                    },
+                                );
+                            self.open_object(key, None);
                         }
                     }
                     if let Some(uuid) = self.pending_host.clone() {
@@ -1067,10 +1029,7 @@ impl App {
                         ));
                         self.state.pool_status_state = LoadState::Idle;
                         if matches!(
-                            self.state
-                                .object_tabs
-                                .get(self.state.active_tab)
-                                .map(|tab| &tab.key),
+                            self.state.selection.as_ref().map(|tab| &tab.key),
                             Some(ObjectKey::PoolStatus { .. })
                         ) {
                             self.apply(vec![UiAction::LoadPoolStatus]);
@@ -1117,10 +1076,7 @@ impl App {
                             .push(Toast::new(message, ToastKind::Success));
                         self.state.pool_status_state = LoadState::Idle;
                         if matches!(
-                            self.state
-                                .object_tabs
-                                .get(self.state.active_tab)
-                                .map(|tab| &tab.key),
+                            self.state.selection.as_ref().map(|tab| &tab.key),
                             Some(ObjectKey::PoolStatus { .. })
                         ) {
                             self.apply(vec![UiAction::LoadPoolStatus]);
@@ -1189,10 +1145,7 @@ impl App {
                             .push(Toast::new(message, ToastKind::Success));
                         self.state.pool_status_state = LoadState::Idle;
                         if matches!(
-                            self.state
-                                .object_tabs
-                                .get(self.state.active_tab)
-                                .map(|tab| &tab.key),
+                            self.state.selection.as_ref().map(|tab| &tab.key),
                             Some(ObjectKey::PoolStatus { .. })
                         ) {
                             self.apply(vec![UiAction::LoadPoolStatus]);
@@ -1235,10 +1188,7 @@ impl App {
                             .toasts
                             .push(Toast::new(message, ToastKind::Success));
                         if matches!(
-                            self.state
-                                .object_tabs
-                                .get(self.state.active_tab)
-                                .map(|tab| &tab.key),
+                            self.state.selection.as_ref().map(|tab| &tab.key),
                             Some(ObjectKey::PoolStatus { .. })
                         ) {
                             self.apply(vec![UiAction::LoadPoolStatus]);
@@ -1471,17 +1421,12 @@ impl App {
                                 ToastKind::Success,
                             ));
                         }
-                        if self
-                            .state
-                            .object_tabs
-                            .get(self.state.active_tab)
-                            .is_some_and(|tab| {
-                                matches!(
-                                    &tab.key,
-                                    ObjectKey::Storage { sr_uuid: current, .. } if current == &sr_uuid
-                                )
-                            })
-                        {
+                        if self.state.selection.as_ref().is_some_and(|tab| {
+                            matches!(
+                                &tab.key,
+                                ObjectKey::Storage { sr_uuid: current, .. } if current == &sr_uuid
+                            )
+                        }) {
                             self.state.pbd_catalog_sr = None;
                         }
                     }
@@ -2067,7 +2012,6 @@ impl App {
         }
         let mut focus_search = false;
         let mut refresh = false;
-        let mut close_tab = false;
         let mut zoom_action = None;
         ctx.input_mut(|input| {
             if input.consume_key(egui::Modifiers::COMMAND, egui::Key::K) {
@@ -2075,9 +2019,6 @@ impl App {
             }
             if input.consume_key(egui::Modifiers::NONE, egui::Key::F5) {
                 refresh = true;
-            }
-            if input.consume_key(egui::Modifiers::COMMAND, egui::Key::W) {
-                close_tab = true;
             }
             if input.consume_key(egui::Modifiers::COMMAND, egui::Key::Plus)
                 || input.consume_key(egui::Modifiers::COMMAND, egui::Key::Equals)
@@ -2094,9 +2035,6 @@ impl App {
         if focus_search {
             self.state.focus_search = true;
         }
-        if close_tab {
-            self.close_tab(self.state.active_tab);
-        }
         if refresh {
             let connection = self.state.scope.connection_id().map(str::to_owned);
             self.apply(vec![UiAction::Refresh(connection)]);
@@ -2111,6 +2049,7 @@ impl App {
             crate::config::save_ui_preferences(&crate::config::UiPreferences {
                 light: theme::is_light(),
                 zoom: next,
+                tree: self.state.tree_preferences.clone(),
             });
             self.state.toasts.push(Toast::new(
                 format!("UI scale {:.0}%", next * 100.0),
@@ -2374,12 +2313,6 @@ impl App {
                     self.open_object(key, None);
                     self.state.navigating_history = false;
                 }
-                UiAction::ActivateTab(index) => {
-                    self.activate_tab(index);
-                }
-                UiAction::CloseTab(index) => {
-                    self.close_tab(index);
-                }
                 UiAction::Connect {
                     settings,
                     password,
@@ -2549,7 +2482,7 @@ impl App {
                     );
                 }
                 UiAction::CloseHostDetails => {
-                    self.close_tab(self.state.active_tab);
+                    self.clear_selection();
                     self.state.host_route = None;
                     self.state.host_state = LoadState::Idle;
                     self.state.perf_state = LoadState::Idle;
@@ -2604,11 +2537,7 @@ impl App {
                         self.apply(vec![UiAction::LoadVmPerformance]);
                     }
                     if tab == crate::state::VmTab::Console
-                        && let Some(key) = self
-                            .state
-                            .object_tabs
-                            .get(self.state.active_tab)
-                            .map(|tab| tab.key.clone())
+                        && let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone())
                         && let Some((connection_id, vm_uuid)) = vm_key(&key)
                         && find_vm(&self.workspace, &connection_id, &vm_uuid)
                             .is_some_and(|(_, vm)| vm.kind == "vm" && vm.power_state == "Running")
@@ -2620,11 +2549,7 @@ impl App {
                     }
                 }
                 UiAction::ReloadVmDetails => {
-                    if let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
+                    if let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone())
                         && let Some((connection_id, vm_uuid)) = vm_key(&key)
                     {
                         self.state.vm_seq += 1;
@@ -2637,11 +2562,7 @@ impl App {
                     }
                 }
                 UiAction::LoadVmPerformance => {
-                    if let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
+                    if let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone())
                         && let Some((connection_id, vm_uuid)) = vm_key(&key)
                     {
                         self.state.vm_perf_seq += 1;
@@ -2771,12 +2692,7 @@ impl App {
                     }
                 }
                 UiAction::OpenVmResources => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -2872,12 +2788,7 @@ impl App {
                     });
                 }
                 UiAction::OpenIsoDialog { vbd_uuid, drive } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -2939,12 +2850,7 @@ impl App {
                     });
                 }
                 UiAction::AddCdDrive => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -2958,8 +2864,8 @@ impl App {
                 UiAction::OpenDrTaskDialog => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3036,8 +2942,8 @@ impl App {
                 } => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3075,8 +2981,8 @@ impl App {
                 UiAction::OpenPvsSiteDialog => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3119,8 +3025,8 @@ impl App {
                 UiAction::OpenPvsServerDialog => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3199,8 +3105,8 @@ impl App {
                 UiAction::OpenPvsCacheDialog => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3304,8 +3210,8 @@ impl App {
                 UiAction::OpenPvsProxyDialog => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3367,8 +3273,8 @@ impl App {
                 UiAction::PromptPvsDelete { kind, uuid, name } => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3424,8 +3330,8 @@ impl App {
                 UiAction::OpenVmssCreate => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3463,8 +3369,8 @@ impl App {
                 UiAction::OpenVmssEdit(uuid) => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3604,8 +3510,8 @@ impl App {
                 UiAction::PromptVmssDelete { uuid, name } => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3643,8 +3549,8 @@ impl App {
                 UiAction::OpenHaEnable => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3716,8 +3622,8 @@ impl App {
                 UiAction::PromptHaDisable => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3734,8 +3640,8 @@ impl App {
                 UiAction::OpenWlbConfig => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3795,8 +3701,8 @@ impl App {
                 UiAction::PromptWlbToggle(enabled) => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3827,8 +3733,8 @@ impl App {
                 UiAction::PromptWlbDeconfigure => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -3888,12 +3794,7 @@ impl App {
                     }
                 }
                 UiAction::OpenRdpDialog => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -3986,12 +3887,7 @@ impl App {
                     self.state.rdp_console = None;
                 }
                 UiAction::OpenSshDialog => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -4081,8 +3977,8 @@ impl App {
                 UiAction::OpenAdEnable => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -4136,8 +4032,8 @@ impl App {
                 UiAction::OpenAdDisable => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -4195,8 +4091,8 @@ impl App {
                 UiAction::OpenUserRoles(subject_uuid) => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -4261,8 +4157,8 @@ impl App {
                 UiAction::LoadPoolStatus => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -4278,8 +4174,8 @@ impl App {
                 UiAction::LoadAuth => {
                     let Some(connection_id) = self
                         .state
-                        .object_tabs
-                        .get(self.state.active_tab)
+                        .selection
+                        .as_ref()
                         .and_then(|tab| tab.key.connection_id())
                         .map(str::to_owned)
                     else {
@@ -4318,11 +4214,7 @@ impl App {
                     let Some(ObjectKey::Storage {
                         connection_id,
                         sr_uuid,
-                    }) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
+                    }) = self.state.selection.as_ref().map(|tab| tab.key.clone())
                     else {
                         continue;
                     };
@@ -4830,11 +4722,7 @@ impl App {
                     let Some(ObjectKey::Storage {
                         connection_id,
                         sr_uuid,
-                    }) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
+                    }) = self.state.selection.as_ref().map(|tab| tab.key.clone())
                     else {
                         continue;
                     };
@@ -4949,12 +4837,7 @@ impl App {
                     });
                 }
                 UiAction::PromptDeleteSnapshots => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5090,11 +4973,7 @@ impl App {
                     let Some(ObjectKey::Storage {
                         connection_id,
                         sr_uuid,
-                    }) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
+                    }) = self.state.selection.as_ref().map(|tab| tab.key.clone())
                     else {
                         continue;
                     };
@@ -5130,12 +5009,7 @@ impl App {
                     });
                 }
                 UiAction::OpenHaEdit => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5210,12 +5084,7 @@ impl App {
                     });
                 }
                 UiAction::OpenAttachVdi => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5271,12 +5140,7 @@ impl App {
                     size,
                     source_sr_uuid,
                 } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5357,12 +5221,7 @@ impl App {
                     });
                 }
                 UiAction::SetVbdMode { vbd_uuid, mode } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5376,12 +5235,7 @@ impl App {
                     });
                 }
                 UiAction::SetVbdPlugged { vbd_uuid, plugged } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5395,12 +5249,7 @@ impl App {
                     });
                 }
                 UiAction::SetVbdBootable { vbd_uuid, bootable } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5484,12 +5333,7 @@ impl App {
                     ));
                 }
                 UiAction::OpenAddDisk => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5537,12 +5381,7 @@ impl App {
                     name,
                     current_gib,
                 } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5566,12 +5405,7 @@ impl App {
                     name,
                     owner,
                 } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5670,12 +5504,7 @@ impl App {
                     }
                 }
                 UiAction::OpenVifDialog(vif_uuid) => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5771,12 +5600,7 @@ impl App {
                     }
                 }
                 UiAction::PromptRemoveVif { vif_uuid, mac } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5801,12 +5625,7 @@ impl App {
                     });
                 }
                 UiAction::SetVifPlugged { vif_uuid, plugged } => {
-                    let Some(key) = self
-                        .state
-                        .object_tabs
-                        .get(self.state.active_tab)
-                        .map(|tab| tab.key.clone())
-                    else {
+                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
@@ -5988,7 +5807,6 @@ impl eframe::App for App {
         views::shell::toolbar(ui, &mut self.state, &self.workspace, &mut actions);
         views::shell::statusbar(ui, &self.state, &self.workspace);
         views::sidebar::show(ui, &mut self.state, &self.workspace, &mut actions);
-        views::chrome::object_tabs(ui, &mut self.state, &self.workspace, &mut actions);
 
         egui::CentralPanel::default()
             .frame(

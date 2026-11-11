@@ -128,7 +128,28 @@ fn write_saved_searches(path: &std::path::Path, searches: &[SavedSearch]) {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct TreePreferences {
+    pub custom_templates: bool,
+    pub default_templates: bool,
+    pub local_storage: bool,
+    pub hidden_objects: bool,
+}
+impl Default for TreePreferences {
+    fn default() -> Self {
+        Self {
+            custom_templates: true,
+            default_templates: false,
+            local_storage: true,
+            hidden_objects: false,
+        }
+    }
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 pub struct UiPreferences {
+    #[serde(default)]
+    pub tree: TreePreferences,
     #[serde(default = "default_light")]
     pub light: bool,
     #[serde(default = "default_zoom")]
@@ -146,6 +167,7 @@ pub fn default_zoom() -> f32 {
 impl Default for UiPreferences {
     fn default() -> Self {
         Self {
+            tree: TreePreferences::default(),
             light: default_light(),
             zoom: default_zoom(),
         }

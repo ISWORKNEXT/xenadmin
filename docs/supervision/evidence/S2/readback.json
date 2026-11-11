@@ -1,0 +1,42 @@
+{
+  "time_utc": "2026-11-11T16:07:49.337945+00:00",
+  "host": "192.168.8.170",
+  "hosts": [
+    {
+      "uuid": "f2347fdf-e320-4d3b-994b-7eb12f860c58",
+      "name": "OIIO-Server"
+    }
+  ],
+  "pool_names": [
+    ""
+  ],
+  "selected_vms": [
+    {
+      "uuid": "a0740b7f-0120-051f-557c-9a1a5accfdb2",
+      "name": "XOA",
+      "power_state": "Running",
+      "tags": [
+        "",
+        "XOA",
+        "2025.12"
+      ]
+    },
+    {
+      "uuid": "99e0ffe0-cf1b-72c2-2ca3-489f124f1fd4",
+      "name": "AlmaLinux 10 (TH) - Guest Agent copy",
+      "power_state": "Halted",
+      "tags": []
+    }
+  ],
+  "default_template_names": [
+    "AlmaLinux 9",
+    "AlmaLinux 10",
+    "AlmaLinux 8"
+  ],
+  "persisted_tree_preferences": {
+    "custom_templates": true,
+    "default_templates": true,
+    "local_storage": true,
+    "hidden_objects": false
+  }
+}

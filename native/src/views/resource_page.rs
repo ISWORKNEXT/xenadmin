@@ -683,10 +683,7 @@ pub fn network(
 }
 
 fn active_key(state: &UiState) -> Option<ObjectKey> {
-    state
-        .object_tabs
-        .get(state.active_tab)
-        .map(|tab| tab.key.clone())
+    state.selection.as_ref().map(|tab| tab.key.clone())
 }
 
 #[allow(clippy::too_many_arguments)]

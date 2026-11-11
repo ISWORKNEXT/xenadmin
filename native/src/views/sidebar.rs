@@ -1,18 +1,17 @@
+use crate::{
+    state::{
+        ListKind, ObjectKey, UiAction, UiState, connection_id, connection_inventory,
+        connection_name, is_online,
+    },
+    theme::*,
+    widgets,
+};
 use egui::{
     Align, Align2, Color32, CornerRadius, FontId, Frame, Layout, Margin, Rect, RichText, Sense,
     Stroke, Ui, Vec2, pos2, vec2,
 };
-use xen_core::workspace::{ConnectionView, WorkspaceView};
-use xen_core::xapi::{Host, Network, Storage, VirtualMachine};
-
-use crate::format;
-use crate::state::{
-    ActionKind, ConnectState, ListKind, ObjectKey, UiAction, UiState, action_allowed,
-    connected_connections, connection_id, connection_inventory, connection_name,
-    connection_settings, connection_status, is_read_only, running_task,
-};
-use crate::theme::*;
-use crate::widgets;
+use std::{cmp::Ordering, collections::BTreeMap};
+use xen_core::{workspace::WorkspaceView, xapi::NavigationMetadata};
 
 const TREE_WIDTH: f32 = 310.0;
 const ROW_HEIGHT: f32 = 28.0;
@@ -26,7 +25,407 @@ pub(super) enum TreeIcon {
     Template,
     Storage,
     Network,
-    Tasks,
+    Running,
+    Halted,
+    Paused,
+    Suspended,
+    Maintenance,
+    Disconnected,
+    DefaultStorage,
+    DetachedStorage,
+    BrokenStorage,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum NavigationMode {
+    #[default]
+    Infrastructure,
+    Objects,
+    Tags,
+    Folders,
+    CustomFields,
+    Vapps,
+    SavedSearches,
+    Notifications,
+}
+
+#[derive(Clone)]
+struct Node {
+    id: String,
+    name: String,
+    key: Option<ObjectKey>,
+    icon: TreeIcon,
+    rank: u8,
+    metadata: NavigationMetadata,
+    children: Vec<Node>,
+}
+impl Node {
+    fn new(id: String, name: String, key: Option<ObjectKey>, icon: TreeIcon, rank: u8) -> Self {
+        Self {
+            id,
+            name,
+            key,
+            icon,
+            rank,
+            metadata: Default::default(),
+            children: vec![],
+        }
+    }
+    fn group(name: &str) -> Self {
+        Self::new(
+            format!("group:{name}"),
+            name.into(),
+            None,
+            TreeIcon::Root,
+            4,
+        )
+    }
+    fn sort(&mut self) {
+        self.children.sort_by(|a, b| {
+            a.rank
+                .cmp(&b.rank)
+                .then_with(|| natural_cmp(&a.name, &b.name))
+                .then(a.id.cmp(&b.id))
+        });
+        for child in &mut self.children {
+            child.sort();
+        }
+    }
+    fn filter(&mut self, needle: &str) -> bool {
+        // A name match keeps the whole matching subtree; descendants retain ancestors.
+        if self.name.to_lowercase().contains(needle) {
+            return true;
+        }
+        self.children.retain_mut(|child| child.filter(needle));
+        !self.children.is_empty()
+    }
+}
+
+fn natural_cmp(a: &str, b: &str) -> Ordering {
+    let a = a.to_lowercase();
+    let b = b.to_lowercase();
+    let mut a = a.chars().peekable();
+    let mut b = b.chars().peekable();
+    loop {
+        match (a.peek(), b.peek()) {
+            (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
+                let x: String = std::iter::from_fn(|| a.next_if(|c| c.is_ascii_digit())).collect();
+                let y: String = std::iter::from_fn(|| b.next_if(|c| c.is_ascii_digit())).collect();
+                let x = x.trim_start_matches('0');
+                let y = y.trim_start_matches('0');
+                let order = x.len().cmp(&y.len()).then_with(|| x.cmp(y));
+                if order != Ordering::Equal {
+                    return order;
+                }
+            }
+            _ => match (a.next(), b.next()) {
+                (None, None) => return Ordering::Equal,
+                (None, _) => return Ordering::Less,
+                (_, None) => return Ordering::Greater,
+                (Some(x), Some(y)) if x != y => return x.cmp(&y),
+                _ => {}
+            },
+        }
+    }
+}
+
+fn objects(workspace: &WorkspaceView, state: &UiState) -> Vec<(String, Vec<Node>)> {
+    let mut result = vec![];
+    for connection in &workspace.connections {
+        let id = connection_id(connection).to_owned();
+        let Some(inv) = connection_inventory(connection).filter(|_| is_online(connection)) else {
+            result.push((
+                id.clone(),
+                vec![Node::new(
+                    format!("offline:{id}"),
+                    connection_name(connection),
+                    Some(ObjectKey::Pool(id)),
+                    TreeIcon::Disconnected,
+                    1,
+                )],
+            ));
+            continue;
+        };
+        let mut nodes = vec![];
+        let mut add = |uuid: &str, name: &str, key: ObjectKey, icon: TreeIcon, rank: u8| {
+            let metadata = inv.navigation.get(uuid).cloned().unwrap_or_default();
+            if metadata.hidden && !state.tree_preferences.hidden_objects {
+                return;
+            }
+            let mut node = Node::new(
+                format!("object:{id}:{uuid}"),
+                name.into(),
+                Some(key),
+                icon,
+                rank,
+            );
+            node.metadata = metadata;
+            nodes.push(node);
+        };
+        if inv.named_pool || inv.hosts.len() > 1 {
+            add(
+                &inv.pool_id,
+                &inv.pool_name,
+                ObjectKey::Pool(id.clone()),
+                TreeIcon::Pool,
+                0,
+            );
+        }
+        for host in &inv.hosts {
+            let live = inv.navigation.get(&host.uuid).is_some_and(|m| m.live);
+            add(
+                &host.uuid,
+                &host.name,
+                ObjectKey::Host {
+                    connection_id: id.clone(),
+                    host_uuid: host.uuid.clone(),
+                },
+                if !live {
+                    TreeIcon::Disconnected
+                } else if !host.enabled {
+                    TreeIcon::Maintenance
+                } else {
+                    TreeIcon::Host
+                },
+                1,
+            );
+        }
+        for vm in inv.vms.iter().chain(&inv.templates).chain(&inv.snapshots) {
+            let (key, icon, rank) = match vm.kind.as_str() {
+                "template" => (
+                    ObjectKey::Template {
+                        connection_id: id.clone(),
+                        vm_uuid: vm.uuid.clone(),
+                    },
+                    TreeIcon::Template,
+                    4,
+                ),
+                "snapshot" => (
+                    ObjectKey::Snapshot {
+                        connection_id: id.clone(),
+                        vm_uuid: vm.uuid.clone(),
+                    },
+                    TreeIcon::Template,
+                    5,
+                ),
+                _ => (
+                    ObjectKey::Vm {
+                        connection_id: id.clone(),
+                        vm_uuid: vm.uuid.clone(),
+                    },
+                    match vm.power_state.as_str() {
+                        "Running" => TreeIcon::Running,
+                        "Paused" => TreeIcon::Paused,
+                        "Suspended" => TreeIcon::Suspended,
+                        _ => TreeIcon::Halted,
+                    },
+                    2,
+                ),
+            };
+            add(&vm.uuid, &vm.name, key, icon, rank);
+        }
+        for sr in &inv.storage {
+            if inv.navigation.get(&sr.uuid).is_some_and(|m| m.tools_sr)
+                || matches!(sr.name.as_str(), "XenServer Tools" | "XCP-ng Tools")
+            {
+                continue;
+            }
+            let icon = if sr.pbd_count == 0 {
+                TreeIcon::DetachedStorage
+            } else if sr.pbd_attached < sr.pbd_count {
+                TreeIcon::BrokenStorage
+            } else if sr.is_default {
+                TreeIcon::DefaultStorage
+            } else {
+                TreeIcon::Storage
+            };
+            add(
+                &sr.uuid,
+                &sr.name,
+                ObjectKey::Storage {
+                    connection_id: id.clone(),
+                    sr_uuid: sr.uuid.clone(),
+                },
+                icon,
+                6,
+            );
+        }
+        for net in &inv.networks {
+            add(
+                &net.uuid,
+                &net.name,
+                ObjectKey::Network {
+                    connection_id: id.clone(),
+                    network_uuid: net.uuid.clone(),
+                },
+                TreeIcon::Network,
+                7,
+            );
+        }
+        result.push((id, nodes));
+    }
+    result
+}
+
+fn build_tree(workspace: &WorkspaceView, state: &UiState) -> Node {
+    let mode = state.navigation_mode;
+    let title = match mode {
+        NavigationMode::Objects => "Objects",
+        NavigationMode::Tags => "Tags",
+        NavigationMode::Folders => "Folders",
+        NavigationMode::CustomFields => "Custom Fields",
+        NavigationMode::Vapps => "vApps",
+        NavigationMode::SavedSearches => "Saved Searches",
+        _ => "Xen Desktop",
+    };
+    let mut root = Node::new(
+        format!("root:{title}"),
+        title.into(),
+        Some(ObjectKey::Home),
+        TreeIcon::Root,
+        0,
+    );
+    let connections = objects(workspace, state);
+    if mode == NavigationMode::Infrastructure || mode == NavigationMode::Notifications {
+        for (id, nodes) in connections {
+            let inv = workspace
+                .connections
+                .iter()
+                .find(|c| connection_id(c) == id)
+                .and_then(connection_inventory);
+            let Some(inv) = inv else {
+                root.children.extend(nodes);
+                continue;
+            };
+            let mut pool = nodes
+                .iter()
+                .find(|n| matches!(n.key, Some(ObjectKey::Pool(_))) && n.rank == 0)
+                .cloned();
+            let mut hosts: Vec<_> = nodes.iter().filter(|n| n.rank == 1).cloned().collect();
+            let mut unhomed = vec![];
+            for node in nodes.into_iter().filter(|n| n.rank > 1) {
+                match &node.key {
+                    Some(ObjectKey::Snapshot { .. } | ObjectKey::Network { .. }) => continue,
+                    Some(ObjectKey::Template { .. })
+                        if if node.metadata.default_template {
+                            !state.tree_preferences.default_templates
+                        } else {
+                            !state.tree_preferences.custom_templates
+                        } =>
+                    {
+                        continue;
+                    }
+                    Some(ObjectKey::Storage { sr_uuid, .. })
+                        if !state.tree_preferences.local_storage
+                            && inv
+                                .storage
+                                .iter()
+                                .any(|sr| sr.uuid == *sr_uuid && !sr.shared) =>
+                    {
+                        continue;
+                    }
+                    _ => {}
+                }
+                let host = inv.hosts.iter().find(|h| h.reference == node.metadata.home);
+                if host.is_some_and(|h| !inv.navigation.get(&h.uuid).is_some_and(|m| m.live)) {
+                    continue;
+                }
+                let host_uuid = host.map(|h| h.uuid.as_str()).or_else(|| {
+                    (pool.is_none() && hosts.len() == 1)
+                        .then(|| inv.hosts.first().map(|h| h.uuid.as_str()))
+                        .flatten()
+                });
+                if let Some(parent) = hosts.iter_mut().find(|n| matches!(&n.key, Some(ObjectKey::Host { host_uuid: uuid, .. }) if Some(uuid.as_str()) == host_uuid)) { parent.children.push(node); }
+                else { unhomed.push(node); }
+            }
+            if let Some(pool) = &mut pool {
+                pool.children.extend(hosts);
+                pool.children.extend(unhomed);
+                root.children.push(pool.clone());
+            } else {
+                root.children.extend(hosts);
+                root.children.extend(unhomed);
+            }
+        }
+    } else if mode == NavigationMode::Objects {
+        for (rank, name) in [
+            (0, "Pools"),
+            (1, "Servers"),
+            (2, "VMs"),
+            (4, "Templates"),
+            (5, "Snapshots"),
+            (6, "Storage"),
+            (8, "Virtual Disks"),
+            (7, "Networks"),
+        ] {
+            let mut group = Node::group(name);
+            group.rank = root.children.len() as u8;
+            group.children = connections
+                .iter()
+                .flat_map(|(_, ns)| ns.iter())
+                .filter(|n| n.rank == rank)
+                .cloned()
+                .collect();
+            root.children.push(group);
+        }
+    } else if matches!(
+        mode,
+        NavigationMode::Tags | NavigationMode::Folders | NavigationMode::CustomFields
+    ) {
+        let mut groups: BTreeMap<Vec<String>, Vec<Node>> = BTreeMap::new();
+        for (_, nodes) in connections {
+            for node in nodes {
+                let paths: Vec<Vec<String>> = match mode {
+                    NavigationMode::Tags => node
+                        .metadata
+                        .tags
+                        .iter()
+                        .map(|tag| vec![tag.clone()])
+                        .collect(),
+                    NavigationMode::Folders => {
+                        let path: Vec<_> = node
+                            .metadata
+                            .folder
+                            .split('/')
+                            .filter(|part| !part.is_empty())
+                            .map(str::to_owned)
+                            .collect();
+                        if path.is_empty() { vec![] } else { vec![path] }
+                    }
+                    _ => node
+                        .metadata
+                        .custom_fields
+                        .iter()
+                        .map(|(key, value)| vec![key.clone(), value.clone()])
+                        .collect(),
+                };
+                for path in paths {
+                    groups.entry(path).or_default().push(node.clone());
+                }
+            }
+        }
+        for (path, nodes) in groups {
+            let mut parent = &mut root;
+            for name in path {
+                let index = parent
+                    .children
+                    .iter()
+                    .position(|n| n.key.is_none() && n.name == name)
+                    .unwrap_or_else(|| {
+                        parent.children.push(Node::group(&name));
+                        parent.children.len() - 1
+                    });
+                parent = &mut parent.children[index];
+            }
+            parent.children.extend(nodes);
+        }
+    }
+    root.sort();
+    let needle = state.tree_query.trim().to_lowercase();
+    if !needle.is_empty() {
+        root.children.retain_mut(|n| n.filter(&needle));
+    }
+    root
 }
 
 pub fn show(
@@ -45,704 +444,190 @@ pub fn show(
                 .inner_margin(Margin::symmetric(10, 8)),
         )
         .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 1.0;
-            header(ui, state, workspace);
-            ui.add_space(4.0);
-            let response =
-                widgets::search_field(ui, &mut state.tree_query, "Search infrastructure…");
+            let response = widgets::search_field(ui, &mut state.tree_query, "Search tree…");
             if state.focus_search {
                 response.request_focus();
                 state.focus_search = false;
             }
             ui.add_space(4.0);
-
+            let tree = build_tree(workspace, state);
+            let height = (ui.available_height() - 192.0).max(80.0);
             egui::ScrollArea::vertical()
-                .id_salt("infrastructure-tree")
+                .id_salt("navigation-tree")
+                .max_height(height)
+                .min_scrolled_height(height)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    let running = workspace
-                        .tasks
-                        .iter()
-                        .filter(|task| {
-                            matches!(task.status, xen_core::operations::TaskStatus::Running)
-                        })
-                        .count();
-                    root_row(ui, state, workspace, actions, running);
-                    ui.add_space(2.0);
-                    for connection in &workspace.connections {
-                        pool_node(ui, state, workspace, connection, actions);
+                    draw_node(ui, state, &tree, 0, "", actions);
+                    if tree.children.is_empty()
+                        && !matches!(
+                            state.navigation_mode,
+                            NavigationMode::Infrastructure
+                                | NavigationMode::Objects
+                                | NavigationMode::Notifications
+                        )
+                    {
+                        ui.label(
+                            RichText::new("No objects available in this view.")
+                                .size(11.0)
+                                .color(dim_fg()),
+                        );
                     }
                 });
-
-            ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
-                ui.add_space(2.0);
-                ui.label(
-                    RichText::new("Ctrl+K search · F5 refresh · Ctrl+W close tab")
-                        .monospace()
-                        .size(9.5)
-                        .color(dim_fg()),
+            ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                ui.separator();
+                for (mode, label) in [
+                    (NavigationMode::Infrastructure, "Infrastructure"),
+                    (NavigationMode::Objects, "Objects"),
+                ] {
+                    if ui
+                        .selectable_label(state.navigation_mode == mode, label)
+                        .clicked()
+                    {
+                        state.navigation_mode = mode;
+                    }
+                }
+                let org = matches!(
+                    state.navigation_mode,
+                    NavigationMode::Tags
+                        | NavigationMode::Folders
+                        | NavigationMode::CustomFields
+                        | NavigationMode::Vapps
                 );
-            });
-        });
-}
-
-fn header(ui: &mut Ui, state: &mut UiState, workspace: &WorkspaceView) {
-    ui.horizontal(|ui| {
-        ui.label(RichText::new("INFRASTRUCTURE").size(10.0).color(dim_fg()));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if ui
-                .add(
-                    egui::Button::new(RichText::new("+").size(17.0).color(muted_fg())).frame(false),
-                )
-                .on_hover_text("Add connection")
-                .clicked()
-            {
-                state.connect = Some(ConnectState::empty());
-            }
-            ui.label(
-                RichText::new(format!(
-                    "{}/{}",
-                    connected_connections(workspace).len(),
-                    workspace.connections.len()
-                ))
-                .monospace()
-                .size(10.0)
-                .color(dim_fg()),
-            );
-        });
-    });
-}
-
-fn root_row(
-    ui: &mut Ui,
-    state: &mut UiState,
-    workspace: &WorkspaceView,
-    actions: &mut Vec<UiAction>,
-    running: usize,
-) {
-    let selected = state
-        .object_tabs
-        .get(state.active_tab)
-        .is_some_and(|tab| tab.key == ObjectKey::Home);
-    let (main, _) = tree_row(
-        ui,
-        "root",
-        0,
-        "Infrastructure",
-        TreeIcon::Root,
-        selected,
-        false,
-        true,
-        Some(format!(
-            "{}/{}",
-            connected_connections(workspace).len(),
-            workspace.connections.len()
-        )),
-    );
-    if main.clicked() {
-        actions.push(UiAction::OpenObject {
-            key: ObjectKey::Home,
-            title: "Home".into(),
-        });
-    }
-    main.context_menu(|ui| {
-        if ui.button("Home").clicked() {
-            actions.push(UiAction::OpenObject {
-                key: ObjectKey::Home,
-                title: "Home".into(),
-            });
-            ui.close();
-        }
-        if ui.button("Activity & tasks").clicked() {
-            actions.push(UiAction::OpenObject {
-                key: ObjectKey::Tasks,
-                title: "Activity & tasks".into(),
-            });
-            ui.close();
-        }
-        ui.separator();
-        if ui.button("Refresh all").clicked() {
-            actions.push(UiAction::Refresh(None));
-            ui.close();
-        }
-        if ui.button("Add connection").clicked() {
-            state.connect = Some(ConnectState::empty());
-            ui.close();
-        }
-    });
-
-    let tasks_selected = state
-        .object_tabs
-        .get(state.active_tab)
-        .is_some_and(|tab| tab.key == ObjectKey::Tasks);
-    let (tasks, _) = tree_row(
-        ui,
-        "tasks",
-        0,
-        "Activity & tasks",
-        TreeIcon::Tasks,
-        tasks_selected,
-        false,
-        true,
-        (running > 0).then(|| running.to_string()),
-    );
-    if tasks.clicked() {
-        actions.push(UiAction::OpenObject {
-            key: ObjectKey::Tasks,
-            title: "Activity & tasks".into(),
-        });
-    }
-}
-
-fn pool_node(
-    ui: &mut Ui,
-    state: &mut UiState,
-    workspace: &WorkspaceView,
-    connection: &ConnectionView,
-    actions: &mut Vec<UiAction>,
-) {
-    let id = connection_id(connection).to_owned();
-    let name = connection_name(connection);
-    let status = connection_status(connection);
-    let read_only = is_read_only(connection);
-    let node_id = format!("pool:{id}");
-    let expanded = tree_open(state, &node_id);
-    let selected = state
-        .object_tabs
-        .get(state.active_tab)
-        .is_some_and(|tab| matches!(&tab.key, ObjectKey::Pool(cid) if cid == &id));
-    let needle = state.tree_query.trim().to_lowercase();
-    let pool_matches = needle.is_empty() || name.to_lowercase().contains(&needle);
-
-    let inventory = connection_inventory(connection);
-    let hosts: Vec<&Host> = inventory
-        .map(|inventory| {
-            inventory
-                .hosts
-                .iter()
-                .filter(|host| {
-                    pool_matches
-                        || needle.is_empty()
-                        || host.name.to_lowercase().contains(&needle)
-                        || host.address.to_lowercase().contains(&needle)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let vms: Vec<&VirtualMachine> = inventory
-        .map(|inventory| {
-            inventory
-                .vms
-                .iter()
-                .filter(|vm| {
-                    pool_matches
-                        || needle.is_empty()
-                        || vm.name.to_lowercase().contains(&needle)
-                        || vm.uuid.to_lowercase().contains(&needle)
-                        || vm.host_name.to_lowercase().contains(&needle)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let templates: Vec<&VirtualMachine> = inventory
-        .map(|inventory| {
-            inventory
-                .templates
-                .iter()
-                .filter(|vm| {
-                    pool_matches || needle.is_empty() || vm.name.to_lowercase().contains(&needle)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let storage: Vec<&Storage> = inventory
-        .map(|inventory| {
-            inventory
-                .storage
-                .iter()
-                .filter(|sr| {
-                    let hidden = sr.storage_type == "udev"
-                        || sr.storage_type == "tmpfs"
-                        || sr.name.starts_with("__gui__")
-                        || sr.name == "XenServer Tools"
-                        || sr.name == "XCP-ng Tools";
-                    !hidden
-                        && (pool_matches
-                            || needle.is_empty()
-                            || sr.name.to_lowercase().contains(&needle)
-                            || sr.storage_type.to_lowercase().contains(&needle))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let networks: Vec<&Network> = inventory
-        .map(|inventory| {
-            inventory
-                .networks
-                .iter()
-                .filter(|network| {
-                    network.bridge != "xenapi"
-                        && (pool_matches
-                            || needle.is_empty()
-                            || network.name.to_lowercase().contains(&needle))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let has_match = pool_matches
-        || !needle.is_empty()
-            && (!hosts.is_empty()
-                || !vms.is_empty()
-                || !templates.is_empty()
-                || !storage.is_empty()
-                || !networks.is_empty());
-    if !needle.is_empty() && !has_match {
-        return;
-    }
-
-    let (main, chevron) = tree_row(
-        ui,
-        &node_id,
-        0,
-        &name,
-        TreeIcon::Pool,
-        selected,
-        true,
-        expanded,
-        Some(if status == "offline" {
-            "offline".into()
-        } else if read_only {
-            "RO".into()
-        } else {
-            String::new()
-        }),
-    );
-    if let Some(chevron) = chevron
-        && chevron.clicked()
-    {
-        actions.push(UiAction::ToggleTreeNode(node_id.clone()));
-    }
-    if main.clicked() {
-        actions.push(UiAction::OpenObject {
-            key: ObjectKey::Pool(id.clone()),
-            title: name.clone(),
-        });
-    }
-    main.context_menu(|ui| {
-        if status == "offline" {
-            if ui.button("Connect to this host").clicked() {
-                state.connect = Some(ConnectState::from_profile(
-                    id.clone(),
-                    connection_settings(connection).clone(),
-                ));
-                ui.close();
-            }
-        } else {
-            if ui.button("Refresh inventory").clicked() {
-                actions.push(UiAction::Refresh(Some(id.clone())));
-                ui.close();
-            }
-            if ui.button("Reconnect").clicked() {
-                actions.push(UiAction::Reconnect(id.clone()));
-                ui.close();
-            }
-            if ui.button("Disconnect").clicked() {
-                actions.push(UiAction::Disconnect(id.clone()));
-                ui.close();
-            }
-            ui.separator();
-            ui.add_enabled(false, egui::Button::new("Disconnect before removing"));
-        }
-        if status == "offline" {
-            ui.separator();
-            if ui.button("Remove saved connection").clicked() {
-                actions.push(UiAction::ConfirmRemove(id.clone()));
-                ui.close();
-            }
-        }
-    });
-
-    if !expanded {
-        return;
-    }
-
-    let groups = [
-        (
-            ListKind::Hosts,
-            "Hosts",
-            hosts.len(),
-            TreeIcon::Host,
-            hosts.is_empty(),
-        ),
-        (
-            ListKind::Vms,
-            "Virtual machines",
-            vms.len(),
-            TreeIcon::Vm,
-            vms.is_empty(),
-        ),
-        (
-            ListKind::Templates,
-            "Templates",
-            templates.len(),
-            TreeIcon::Template,
-            templates.is_empty(),
-        ),
-        (
-            ListKind::Storage,
-            "Storage",
-            storage.len(),
-            TreeIcon::Storage,
-            storage.is_empty(),
-        ),
-        (
-            ListKind::Networks,
-            "Networks",
-            networks.len(),
-            TreeIcon::Network,
-            networks.is_empty(),
-        ),
-    ];
-
-    for (kind, title, count, icon, empty) in groups {
-        if !needle.is_empty() && empty {
-            continue;
-        }
-        let group_id = format!("group:{kind:?}:{id}");
-        let group_open = tree_open(state, &group_id);
-        let group_selected = state.object_tabs.get(state.active_tab).is_some_and(|tab| {
-            matches!(
-                &tab.key,
-                ObjectKey::List {
-                    connection_id: Some(cid),
-                    kind: list_kind,
-                    host_ref: None,
-                } if cid == &id && *list_kind == kind
-            )
-        });
-        let (group_main, group_chevron) = tree_row(
-            ui,
-            &group_id,
-            1,
-            title,
-            icon,
-            group_selected,
-            true,
-            group_open,
-            Some(count.to_string()),
-        );
-        if let Some(chevron) = group_chevron
-            && chevron.clicked()
-        {
-            actions.push(UiAction::ToggleTreeNode(group_id.clone()));
-        }
-        if group_main.clicked() {
-            actions.push(UiAction::OpenObject {
-                key: ObjectKey::List {
-                    connection_id: Some(id.clone()),
-                    kind,
-                    host_ref: None,
-                },
-                title: title.into(),
-            });
-        }
-        if !group_open {
-            continue;
-        }
-
-        match kind {
-            ListKind::Hosts => {
-                for host in &hosts {
-                    host_leaf(ui, state, workspace, &id, host, actions);
+                ui.menu_button(
+                    if org {
+                        "● Organization Views ▾"
+                    } else {
+                        "Organization Views ▾"
+                    },
+                    |ui| {
+                        for (mode, label) in [
+                            (NavigationMode::Tags, "Objects by Tag"),
+                            (NavigationMode::Folders, "Objects by Folder"),
+                            (NavigationMode::CustomFields, "Objects by Custom Field"),
+                            (NavigationMode::Vapps, "vApps"),
+                        ] {
+                            if ui
+                                .selectable_label(state.navigation_mode == mode, label)
+                                .clicked()
+                            {
+                                state.navigation_mode = mode;
+                                ui.close();
+                            }
+                        }
+                    },
+                );
+                ui.menu_button(
+                    if state.navigation_mode == NavigationMode::SavedSearches {
+                        "● Saved Searches ▾"
+                    } else {
+                        "Saved Searches ▾"
+                    },
+                    |ui| {
+                        let mut searches: Vec<_> =
+                            state.saved_searches.iter().enumerate().collect();
+                        searches.sort_by(|(_, a), (_, b)| natural_cmp(&a.name, &b.name));
+                        if searches.is_empty() {
+                            ui.label("No saved searches.");
+                        }
+                        for (index, saved) in searches {
+                            if ui.button(&saved.name).clicked() {
+                                state.navigation_mode = NavigationMode::SavedSearches;
+                                actions.push(UiAction::OpenObject {
+                                    key: ObjectKey::List {
+                                        connection_id: None,
+                                        kind: ListKind::Vms,
+                                        host_ref: None,
+                                    },
+                                    title: saved.name.clone(),
+                                });
+                                actions.push(UiAction::ApplySavedSearch(index));
+                                ui.close();
+                            }
+                        }
+                    },
+                );
+                let failed = workspace
+                    .tasks
+                    .iter()
+                    .filter(|t| t.status == xen_core::operations::TaskStatus::Failed)
+                    .count();
+                let label = if failed > 0 {
+                    format!("Notifications ({failed})")
+                } else {
+                    "Notifications".into()
+                };
+                if ui
+                    .selectable_label(
+                        state.navigation_mode == NavigationMode::Notifications,
+                        label,
+                    )
+                    .clicked()
+                {
+                    state.navigation_mode = NavigationMode::Notifications;
+                    actions.push(UiAction::OpenObject {
+                        key: ObjectKey::Tasks,
+                        title: "Activity & tasks".into(),
+                    });
                 }
-            }
-            ListKind::Vms => {
-                for vm in &vms {
-                    vm_leaf(ui, state, workspace, &id, vm, actions);
-                }
-            }
-            ListKind::Templates => {
-                for template in &templates {
-                    template_leaf(ui, state, workspace, &id, template, actions);
-                }
-            }
-            ListKind::Storage => {
-                for sr in &storage {
-                    storage_leaf(ui, state, &id, sr, actions);
-                }
-            }
-            ListKind::Networks => {
-                for network in &networks {
-                    network_leaf(ui, state, &id, network, actions);
-                }
-            }
-        }
-    }
-}
-
-fn host_leaf(
-    ui: &mut Ui,
-    state: &mut UiState,
-    workspace: &WorkspaceView,
-    connection_id: &str,
-    host: &Host,
-    actions: &mut Vec<UiAction>,
-) {
-    let key = ObjectKey::Host {
-        connection_id: connection_id.to_owned(),
-        host_uuid: host.uuid.clone(),
-    };
-    let selected = active_key(state).is_some_and(|active| *active == key);
-    let (main, _) = tree_row(
-        ui,
-        &format!("host:{connection_id}:{}", host.reference),
-        2,
-        &host.name,
-        TreeIcon::Host,
-        selected,
-        false,
-        true,
-        (!host.enabled).then(|| "disabled".into()),
-    );
-    if main.clicked() {
-        actions.push(UiAction::OpenObject {
-            key,
-            title: host.name.clone(),
-        });
-    }
-    main.context_menu(|ui| {
-        if ui.button("Open host details").clicked() {
-            actions.push(UiAction::OpenObject {
-                key: ObjectKey::Host {
-                    connection_id: connection_id.to_owned(),
-                    host_uuid: host.uuid.clone(),
-                },
-                title: host.name.clone(),
             });
-            ui.close();
-        }
-        if ui.button("Refresh inventory").clicked() {
-            actions.push(UiAction::Refresh(Some(connection_id.to_owned())));
-            ui.close();
-        }
-        ui.separator();
-        ui.label(
-            RichText::new(format!("{} · {}", host.address, host.version))
-                .size(10.0)
-                .color(dim_fg()),
-        );
-        let _ = workspace;
-    });
+        });
 }
 
-fn vm_leaf(
+fn draw_node(
     ui: &mut Ui,
     state: &mut UiState,
-    workspace: &WorkspaceView,
-    connection_id: &str,
-    vm: &VirtualMachine,
-    actions: &mut Vec<UiAction>,
-) {
-    let key = ObjectKey::Vm {
-        connection_id: connection_id.to_owned(),
-        vm_uuid: vm.uuid.clone(),
-    };
-    let selected = active_key(state).is_some_and(|active| *active == key);
-    let power = widgets::power_style(&vm.power_state).1;
-    let task = running_task(workspace, connection_id, &vm.uuid);
-    let (main, _) = tree_row_colored(
-        ui,
-        &format!("vm:{connection_id}:{}", vm.uuid),
-        2,
-        &vm.name,
-        TreeIcon::Vm,
-        selected,
-        false,
-        true,
-        None,
-        power,
-        task,
-    );
-    if main.clicked() {
-        actions.push(UiAction::OpenObject {
-            key,
-            title: vm.name.clone(),
-        });
-    }
-    main.context_menu(|ui| {
-        if ui.button("Open").clicked() {
-            actions.push(UiAction::OpenObject {
-                key: ObjectKey::Vm {
-                    connection_id: connection_id.to_owned(),
-                    vm_uuid: vm.uuid.clone(),
-                },
-                title: vm.name.clone(),
-            });
-            ui.close();
-        }
-        ui.separator();
-        let read_only = workspace
-            .connections
-            .iter()
-            .find(|connection| crate::state::connection_id(connection) == connection_id)
-            .is_some_and(is_read_only);
-        if read_only {
-            ui.label(RichText::new("Read-only").size(10.0).color(amber()));
-        }
-        for kind in ActionKind::MENU {
-            let allowed = action_allowed(workspace, connection_id, vm, kind.operation());
-            let color = if kind.destructive() { red() } else { fg() };
-            if ui
-                .add_enabled(
-                    allowed,
-                    egui::Button::new(RichText::new(kind.label()).size(11.5).color(color))
-                        .frame(false),
-                )
-                .clicked()
-            {
-                actions.push(UiAction::Propose(
-                    kind,
-                    vec![(connection_id.to_owned(), vm.uuid.clone())],
-                ));
-                ui.close();
-            }
-        }
-    });
-}
-
-fn template_leaf(
-    ui: &mut Ui,
-    state: &mut UiState,
-    _workspace: &WorkspaceView,
-    connection_id: &str,
-    template: &VirtualMachine,
-    actions: &mut Vec<UiAction>,
-) {
-    let key = ObjectKey::Template {
-        connection_id: connection_id.to_owned(),
-        vm_uuid: template.uuid.clone(),
-    };
-    let selected = active_key(state).is_some_and(|active| *active == key);
-    let (main, _) = tree_row(
-        ui,
-        &format!("template:{connection_id}:{}", template.uuid),
-        2,
-        &template.name,
-        TreeIcon::Template,
-        selected,
-        false,
-        true,
-        None,
-    );
-    if main.clicked() {
-        actions.push(UiAction::OpenObject {
-            key,
-            title: template.name.clone(),
-        });
-    }
-}
-
-fn storage_leaf(
-    ui: &mut Ui,
-    state: &mut UiState,
-    connection_id: &str,
-    sr: &Storage,
-    actions: &mut Vec<UiAction>,
-) {
-    let key = ObjectKey::Storage {
-        connection_id: connection_id.to_owned(),
-        sr_uuid: sr.uuid.clone(),
-    };
-    let selected = active_key(state).is_some_and(|active| *active == key);
-    let badge = if sr.total == 0 {
-        None
-    } else {
-        Some(format!("{:.0}%", format::percent(sr.used, sr.total)))
-    };
-    let (main, _) = tree_row(
-        ui,
-        &format!("sr:{connection_id}:{}", sr.uuid),
-        2,
-        &sr.name,
-        TreeIcon::Storage,
-        selected,
-        false,
-        true,
-        badge,
-    );
-    if main.clicked() {
-        actions.push(UiAction::OpenObject {
-            key,
-            title: sr.name.clone(),
-        });
-    }
-}
-
-fn network_leaf(
-    ui: &mut Ui,
-    state: &mut UiState,
-    connection_id: &str,
-    network: &Network,
-    actions: &mut Vec<UiAction>,
-) {
-    let key = ObjectKey::Network {
-        connection_id: connection_id.to_owned(),
-        network_uuid: network.uuid.clone(),
-    };
-    let selected = active_key(state).is_some_and(|active| *active == key);
-    let (main, _) = tree_row(
-        ui,
-        &format!("net:{connection_id}:{}", network.uuid),
-        2,
-        &network.name,
-        TreeIcon::Network,
-        selected,
-        false,
-        true,
-        None,
-    );
-    if main.clicked() {
-        actions.push(UiAction::OpenObject {
-            key,
-            title: network.name.clone(),
-        });
-    }
-}
-
-fn active_key(state: &UiState) -> Option<&ObjectKey> {
-    state.object_tabs.get(state.active_tab).map(|tab| &tab.key)
-}
-
-fn tree_open(state: &UiState, id: &str) -> bool {
-    !state.tree_query.trim().is_empty() || state.tree_expanded.contains(id)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn tree_row(
-    ui: &mut Ui,
-    id: &str,
+    node: &Node,
     depth: usize,
-    label: &str,
-    icon: TreeIcon,
-    selected: bool,
-    has_children: bool,
-    expanded: bool,
-    badge: Option<String>,
-) -> (egui::Response, Option<egui::Response>) {
-    tree_row_colored(
+    parent_id: &str,
+    actions: &mut Vec<UiAction>,
+) {
+    let path_id = format!("{parent_id}/{}", node.id);
+    if state.tree_initialized.insert(path_id.clone()) && (depth == 0 || node.rank <= 1) {
+        state.tree_expanded.insert(path_id.clone());
+    }
+    let expanded = !state.tree_query.trim().is_empty() || state.tree_expanded.contains(&path_id);
+    let selected = node
+        .key
+        .as_ref()
+        .is_some_and(|key| state.selection.as_ref().is_some_and(|s| &s.key == key));
+    let (main, chevron) = tree_row_colored(
         ui,
-        id,
+        &path_id,
         depth,
-        label,
-        icon,
+        &node.name,
+        node.icon,
         selected,
-        has_children,
+        !node.children.is_empty(),
         expanded,
-        badge,
-        muted_fg(),
+        None,
+        match node.icon {
+            TreeIcon::Running => green(),
+            TreeIcon::Disconnected | TreeIcon::DetachedStorage => dim_fg(),
+            TreeIcon::BrokenStorage => red(),
+            TreeIcon::Paused | TreeIcon::Suspended | TreeIcon::Maintenance => amber(),
+            _ => muted_fg(),
+        },
         false,
-    )
+    );
+    if chevron.is_some_and(|c| c.clicked()) {
+        actions.push(UiAction::ToggleTreeNode(path_id.clone()));
+    }
+    if main.clicked() {
+        if let Some(key) = &node.key {
+            actions.push(UiAction::OpenObject {
+                key: key.clone(),
+                title: node.name.clone(),
+            });
+        } else {
+            actions.push(UiAction::ToggleTreeNode(path_id.clone()));
+        }
+    }
+    if expanded {
+        for child in &node.children {
+            draw_node(ui, state, child, depth + 1, &path_id, actions);
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -845,7 +730,13 @@ fn tree_row_colored(
         icon,
         if selected { accent() } else { icon_color },
     );
-    let text_color = if selected { fg() } else { muted_fg() };
+    let text_color = if matches!(icon, TreeIcon::Disconnected) {
+        dim_fg()
+    } else if selected {
+        fg()
+    } else {
+        muted_fg()
+    };
     let text_x = icon_rect.right() + 6.0;
     let badge_width = badge
         .as_ref()
@@ -880,15 +771,23 @@ pub(super) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, co
     let center = rect.center();
     match icon {
         TreeIcon::Root => {
-            for offset in [-4.0, 0.0, 4.0] {
-                painter.line_segment(
-                    [
-                        pos2(rect.left() + 1.0, center.y + offset),
-                        pos2(rect.right() - 1.0, center.y + offset),
-                    ],
-                    stroke,
-                );
-            }
+            painter.line_segment(
+                [pos2(rect.left(), center.y), pos2(center.x, rect.top())],
+                stroke,
+            );
+            painter.line_segment(
+                [pos2(center.x, rect.top()), pos2(rect.right(), center.y)],
+                stroke,
+            );
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    pos2(rect.left() + 2.0, center.y),
+                    pos2(rect.right() - 2.0, rect.bottom()),
+                ),
+                CornerRadius::ZERO,
+                stroke,
+                egui::StrokeKind::Inside,
+            );
         }
         TreeIcon::Pool => {
             painter.rect_stroke(
@@ -899,7 +798,7 @@ pub(super) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, co
             );
             painter.circle_filled(center, 1.6, color);
         }
-        TreeIcon::Host => {
+        TreeIcon::Host | TreeIcon::Maintenance | TreeIcon::Disconnected => {
             for offset in [-3.5, 0.0, 3.5] {
                 painter.line_segment(
                     [
@@ -911,7 +810,11 @@ pub(super) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, co
                 painter.circle_filled(pos2(rect.right() - 1.5, center.y + offset), 0.9, color);
             }
         }
-        TreeIcon::Vm => {
+        TreeIcon::Vm
+        | TreeIcon::Running
+        | TreeIcon::Halted
+        | TreeIcon::Paused
+        | TreeIcon::Suspended => {
             painter.rect_stroke(
                 Rect::from_min_max(
                     pos2(rect.left() + 1.0, rect.top() + 2.0),
@@ -949,7 +852,10 @@ pub(super) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, co
                 egui::StrokeKind::Inside,
             );
         }
-        TreeIcon::Storage => {
+        TreeIcon::Storage
+        | TreeIcon::DefaultStorage
+        | TreeIcon::DetachedStorage
+        | TreeIcon::BrokenStorage => {
             painter.rect_stroke(
                 Rect::from_min_max(
                     pos2(rect.left() + 1.0, rect.top() + 1.0),
@@ -995,10 +901,47 @@ pub(super) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, co
                 stroke,
             );
         }
-        TreeIcon::Tasks => {
-            painter.circle_stroke(center, 4.5, stroke);
-            painter.line_segment([center, pos2(center.x, center.y - 2.2)], stroke);
-            painter.line_segment([center, pos2(center.x + 2.0, center.y + 1.0)], stroke);
-        }
+    }
+    let symbol = match icon {
+        TreeIcon::Running => "▶",
+        TreeIcon::Halted => "■",
+        TreeIcon::Paused => "Ⅱ",
+        TreeIcon::Suspended => "z",
+        TreeIcon::Maintenance => "!",
+        TreeIcon::Disconnected => "×",
+        TreeIcon::DefaultStorage => "★",
+        TreeIcon::DetachedStorage => "−",
+        TreeIcon::BrokenStorage => "!",
+        _ => "",
+    };
+    if !symbol.is_empty() {
+        let position = pos2(rect.right(), rect.bottom());
+        painter.circle_filled(position - vec2(2.0, 3.0), 5.0, panel());
+        painter.text(
+            position,
+            Align2::RIGHT_BOTTOM,
+            symbol,
+            FontId::proportional(9.0),
+            color,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn natural_names_and_parent_preserving_search() {
+        let mut root = Node::group("root");
+        let mut host = Node::group("server");
+        host.children.push(Node::group("VM 10"));
+        host.children.push(Node::group("vm 2"));
+        root.children.push(host);
+        root.sort();
+        assert_eq!(root.children[0].children[0].name, "vm 2");
+        assert!(root.filter("vm 10"));
+        assert_eq!(root.children[0].name, "server");
+        assert_eq!(root.children[0].children.len(), 1);
+        assert_eq!(natural_cmp("VM 0002", "vm 2"), Ordering::Equal);
     }
 }

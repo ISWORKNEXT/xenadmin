@@ -45,6 +45,7 @@ pub enum CommandAction {
     Connect,
     Exit,
     Toolbar,
+    TreeView(&'static str),
     Theme,
     Zoom(f32),
     AllConnections(bool),
@@ -53,8 +54,8 @@ pub type Resolution = Result<CommandAction, &'static str>;
 
 pub fn selection(state: &UiState) -> &ObjectKey {
     state
-        .object_tabs
-        .get(state.active_tab)
+        .selection
+        .as_ref()
         .map_or(&ObjectKey::Home, |tab| &tab.key)
 }
 
@@ -80,7 +81,11 @@ pub fn implemented(command: &str) -> bool {
     vm_kind(command).is_some()
         || matches!(
             command,
-            "AddHostCommand"
+            "CustomTemplates"
+                | "XenDesktopTemplates"
+                | "LocalStorage"
+                | "HiddenObjects"
+                | "AddHostCommand"
                 | "Exit"
                 | "Toolbar"
                 | "Theme"
@@ -155,6 +160,10 @@ pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Res
         "AddHostCommand" => return Ok(Connect),
         "Exit" => return Ok(Exit),
         "Toolbar" => return Ok(Toolbar),
+        "CustomTemplates" => return Ok(TreeView("CustomTemplates")),
+        "XenDesktopTemplates" => return Ok(TreeView("XenDesktopTemplates")),
+        "LocalStorage" => return Ok(TreeView("LocalStorage")),
+        "HiddenObjects" => return Ok(TreeView("HiddenObjects")),
         "Theme" => return Ok(Theme),
         "ZoomIn" => return Ok(Zoom(1.1)),
         "ZoomOut" => return Ok(Zoom(0.9)),
@@ -739,10 +748,7 @@ pub fn menus(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
                 MenuItem::item("Enable PVS-Accelerator...", "EnablePvsReadCachingCommand"),
                 MenuItem::item("Disable PVS-Accelerator", "DisablePvsReadCachingCommand"),
                 MenuItem::separator(),
-                MenuItem::item(
-                    "Install XenServer VM Tools...",
-                    "Install XenServer VM Tools...",
-                ),
+                MenuItem::item("Install Guest Tools...", "Install Guest Tools..."),
                 MenuItem::item("Send Ctrl+Alt+Del", "SendCtrlAltDel"),
                 MenuItem::separator(),
                 MenuItem::item("Delete VM", "DeleteVMCommand"),

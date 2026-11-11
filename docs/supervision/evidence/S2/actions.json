@@ -1,0 +1,188 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        165,
+        222
+      ],
+      "snap": "infrastructure-vm",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        180,
+        14
+      ],
+      "snap": "infrastructure-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Escape"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        184
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ],
+      "snap": "infrastructure-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Escape"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        25,
+        55
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+k"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "Alma",
+      "snap": "infrastructure-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        57,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        145,
+        92
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        57,
+        14
+      ],
+      "snap": "infrastructure-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Escape",
+      "snap": "infrastructure-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+k"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+a"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "BackSpace"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        55,
+        766
+      ],
+      "snap": "objects"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        104,
+        805
+      ],
+      "snap": "tags"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        95,
+        652
+      ],
+      "snap": "tags"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        39,
+        261
+      ],
+      "snap": "tags"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        112,
+        300
+      ],
+      "snap": "tags",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]
