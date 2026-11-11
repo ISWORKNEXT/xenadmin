@@ -1,0 +1,117 @@
+{
+  "OpenVm": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/13-template-open.png",
+    "note": "Clicked Other install media label from filtered template list; opened template details."
+  },
+  "OpenObject": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/57-host-open-click.png",
+    "note": "OwnVM tree and Hosts list navigation work; direct host tree uses opaque ref and FAILS UUID guard. Mixed variant outcomes; not universal pass."
+  },
+  "ActivateTab": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/38-snapshots-tab.png",
+    "note": "Physically selected own VM and Home tabs; continued mutation workflow after Activity auto-navigation."
+  },
+  "ToggleTreeNode": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/57-host-open-click.png",
+    "note": "Clicked Hosts expand arrow; host leaf appeared. Only this tree group covered."
+  },
+  "Propose": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/14-clone-review.png",
+    "note": "Clone/start/snapshot/revert/destroy confirmations physically opened; force shutdown confirmation opened but submit rejected by stale state guard."
+  },
+  "SubmitIntent": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/55-vm-deleted.png",
+    "note": "Clone,snapshot,revert,start,delete submissions succeeded with backend readback. Force shutdown CLICKED_REJECTED; Halted state cannot be attributed to that submission."
+  },
+  "CloseIntent": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/40-revert-cancelled.png",
+    "note": "Clicked Cancel on revert confirmation; dialog closed without adding a task,then reopened/submitted."
+  },
+  "OpenVmEdit": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/19-edit-dialog.png",
+    "note": "Clicked Edit/Resources on owned halted VM."
+  },
+  "SaveVmEdit": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/23-edit-saved.png",
+    "note": "Clicked Save; backend confirmed renamed VM and2/2vCPUs,256MiB retained. Description also edited; no boot settings tested."
+  },
+  "SetVmTab": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/38-snapshots-tab.png",
+    "note": "Physically clicked Storage,Network,Snapshots or corresponding quick action tabs on own VM; other VM tabs startup-render only."
+  },
+  "OpenAddDisk": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/25-add-disk-dialog.png",
+    "note": "Clicked Add disk; set1GiB and owned prefix."
+  },
+  "OpenDiskResize": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/29-resize-dialog.png",
+    "note": "Clicked disk Manage\u2192Resize;2GiB default proposed."
+  },
+  "SaveDiskDialog": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/52-disk-removed.png",
+    "note": "Add1GiB,resize2GiB,and remove with delete-from-storage checked succeeded; independent VDI size/state readback."
+  },
+  "PromptRemoveDisk": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/51-remove-disk-confirm.png",
+    "note": "Clicked Manage\u2192Remove on only own VBD; checked owned VDI deletion retained."
+  },
+  "OpenVifDialog": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/32-add-vif-dialog.png",
+    "note": "Clicked Add interface; inspected dropdown and explicitly chose Pool-wide network0."
+  },
+  "SaveVif": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/34-vif-added.png",
+    "note": "Clicked Add interface; backend confirmed own VIF device0 and MAC; existing networks unchanged."
+  },
+  "PromptRemoveVif": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/49-remove-vif-confirm.png",
+    "note": "Clicked Remove on own VIF; confirmation showed exact MAC."
+  },
+  "RemoveVif": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/50-vif-removed.png",
+    "note": "Clicked Remove interface; backend vifs=[] confirmed."
+  },
+  "PromptDeleteSnapshots": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/42-delete-snapshot-confirm.png",
+    "note": "Selected own snapshot checkbox then Delete selected; exact owned target confirmation shown."
+  },
+  "ConfirmSnapshotDelete": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/43-snapshot-deleted.png",
+    "note": "Clicked Delete snapshots; independent readback snapshot record and snapshotVDI absent."
+  },
+  "ReloadHostDetails": {
+    "status": "CLICK_VERIFIED_FAILURE",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/58-host-retry-click.png",
+    "note": "Clicked Retry on sidebar-opened host; same UUID-scope error persisted. Reproduction of routing failure."
+  },
+  "OpenHostDetails": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/62-host-card-open.png",
+    "note": "Clicked Hosts list\u2192Host details card button; actual hostUUID route worked, unlike direct tree leaf."
+  },
+  "SetHostTab": {
+    "status": "CLICK_VERIFIED",
+    "evidence": "docs/audit-live-ui-evidence-20261111/clicks/64-host-performance-click.png",
+    "note": "Physically clicked CPU & memory then Performance from working card route; real data and168metrics chart rendered. Other host tabs startup-render only."
+  }
+}

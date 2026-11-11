@@ -1,0 +1,4 @@
+{"prefix":"zz-parity-snapshot-01a1c8af-e5d8-75d5-90f0-3f5dbcfe93d7"}
+{"allowed":["destroy","metadata_export","export","changing_NVRAM","changing_shadow_memory","changing_static_range","changing_dynamic_range","migrate_send","provision","copy","clone"],"phase":"source-created","power":"Halted","template":false,"uuid":"4eaa93cc-d29b-0a25-a160-11578486248a"}
+{"cleanup":"completed","result":{"Err":"The host does not currently allow this operation. Refresh and check the VM state."}}
+Error: Xen("The host does not currently allow this operation. Refresh and check the VM state.")

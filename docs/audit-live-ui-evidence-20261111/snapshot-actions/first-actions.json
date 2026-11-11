@@ -1,0 +1,87 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "wait": 3,
+      "snap": "snapshot-page"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        455,
+        333
+      ],
+      "snap": "snapshot-vm-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        956,
+        594
+      ],
+      "wait": 10,
+      "snap": "snapshot-vm-submitted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        110,
+        231
+      ],
+      "wait": 2,
+      "snap": "snapshot-vm-tasks"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        505,
+        124
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        678,
+        331
+      ],
+      "snap": "snapshot-template-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        596
+      ],
+      "wait": 8
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        106,
+        230
+      ],
+      "wait": 3,
+      "snap": "snapshot-template-tasks"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

@@ -1,0 +1,7 @@
+{"directory":"/tmp/.tmpwS1GAN","prefix":"zz-parity-xva-01a1c8df-a26a-7387-8d01-b2abb468a13a"}
+{"archive":"/tmp/.tmpwS1GAN/source.xva","check":"export","result":{"Exported":{"bytes":3172864}},"source_uuid":"9430ae3a-3535-0f51-a864-ce5817ee6f0e"}
+{"check":"roundtrip","halted":true,"imported_disk":"751d8348-d832-4221-80a8-8d59eb7857cc","imported_uuid":"7a19be18-d530-6478-0e4f-99f399ecdf35","network_mapped":true,"overwrite_rejected":true,"raw_bytes":16777216,"sha256":"18922f71ac3c9670033d57eae14f38155cd787037b59f85c9b22eea85990e6dc","source_disk":"7e691ada-b2e6-4a10-b0bd-4db49d0546c6","source_unchanged":true}
+{"check":"truncated-import","error":"The XVA archive is incomplete or has invalid tar headers. Select a complete XVA file."}
+{"check":"corrupt-import","error":"The host rejected the transfer: IMPORT_ERROR."}
+{"check":"template-roundtrip","disk_sha256":"18922f71ac3c9670033d57eae14f38155cd787037b59f85c9b22eea85990e6dc","network_mapped":true,"uuid":"61182eb4-5fc8-1e22-58b2-34e364755ad4"}
+{"cleanup":"completed","result":{"Ok":"pass"}}

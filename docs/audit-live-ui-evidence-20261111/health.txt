@@ -1,0 +1,48 @@
+(Xen Desktop »c=-
+
+ED infrastructure > Health & diagnostics
+
+INFRASTRUCTURE 1/1 + | Home AUTHORIZED DEVHOST/READ ON... x Health & diagnostics x
+Search infrastructure, cucu usnoenes
+= Infrastructure uw 4 AUTHORIZED DEV HOST / READ ONLY
+© Activity & tasks — “
+v @ AUTHORIZED DEVHOST/READ ONLY RO © critical © Warning
+> = Hosts 1 0 2
+> © Virtual machines 4 checks checks
+> © Templates st
+> © storane ° @ Alerts o«
+> A Networks 1 No priority 1-3 alerts.
+
+CtrUuK search + F5 refresh + Ctrl! close tab
+
+Host availability o«
+
+All hosts are enabled and powered on,
+
+CPU/ memory pressure Waring
+
+1 capacity warning()
+
++ 0110-Server: vCPU overcommit 10/4
+
+Storage health ox
+
+Storage repositories have capacity, shared storage and attached PBDs.
+
+Storage types info
+
+1 storage type note(s)
+
+© Info
+
+AUTHORIZED DEVHOST/READONIY-RO®) 110% © - OD X
+
+Refresh
+
+Read-only
+
+Werning Refresh
+
+22
+
+checks

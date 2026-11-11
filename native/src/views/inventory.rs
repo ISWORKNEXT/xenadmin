@@ -33,6 +33,68 @@ pub fn vms(
         query.matches(target.vm, &connection) && state.power.matches(&target.vm.power_state)
     });
 
+    let creation_targets: Vec<_> = crate::state::visible_connections(workspace, &state.scope)
+        .into_iter()
+        .filter(|connection| crate::state::is_online(connection) && !is_read_only(connection))
+        .filter_map(|connection| {
+            let inventory = crate::state::connection_inventory(connection)?;
+            let template = inventory
+                .templates
+                .iter()
+                .find(|vm| vm.allowed_operations.iter().any(|op| op == "clone"))?;
+            Some((
+                connection_id(connection).to_owned(),
+                connection_name(connection),
+                template.uuid.clone(),
+            ))
+        })
+        .collect();
+    ui.horizontal(|ui| {
+        let import_targets: Vec<_> = crate::state::visible_connections(workspace, &state.scope)
+            .into_iter()
+            .filter(|c| crate::state::is_online(c) && !is_read_only(c))
+            .collect();
+        if let [connection] = import_targets.as_slice() {
+            if ui.button("Import XVA…").clicked() {
+                actions.push(UiAction::OpenXvaImport(
+                    connection_id(connection).to_owned(),
+                ));
+            }
+        } else if !import_targets.is_empty() {
+            ui.menu_button("Import XVA…", |ui| {
+                for connection in &import_targets {
+                    if ui.button(connection_name(connection)).clicked() {
+                        actions.push(UiAction::OpenXvaImport(
+                            connection_id(connection).to_owned(),
+                        ));
+                        ui.close();
+                    }
+                }
+            });
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if let [(connection_id, _, template_uuid)] = creation_targets.as_slice() {
+                if ui.add(widgets::primary_button("New VM…")).clicked() {
+                    actions.push(UiAction::OpenNewVmWizard {
+                        connection_id: connection_id.clone(),
+                        template_uuid: template_uuid.clone(),
+                    });
+                }
+            } else if !creation_targets.is_empty() {
+                ui.menu_button("New VM…", |ui| {
+                    for (connection_id, name, template_uuid) in &creation_targets {
+                        if ui.button(name).clicked() {
+                            actions.push(UiAction::OpenNewVmWizard {
+                                connection_id: connection_id.clone(),
+                                template_uuid: template_uuid.clone(),
+                            });
+                            ui.close();
+                        }
+                    }
+                });
+            }
+        });
+    });
     toolbar(ui, state, actions, targets.len(), templates);
     if !templates {
         bulk_bar(ui, state, workspace, actions, &targets);

@@ -1,0 +1,22 @@
+{"check":"Create file-backed temporary SR","status":"PASS"}
+{"check":"SR scan","status":"PASS"}
+{"check":"Unplug temporary PBD","status":"PASS"}
+{"check":"PBD detached readback","status":"PASS"}
+{"check":"Repair temporary SR","status":"PASS"}
+{"check":"PBD repaired readback","status":"PASS"}
+{"check":"Detach temporary SR","status":"PASS"}
+{"check":"Reattach temporary SR","status":"PASS"}
+{"check":"Probe file-backed SR","error":"The host rejected the operation: INTERNAL_ERROR.","status":"FAIL"}
+{"check":"TRIM file-backed SR","error":"Trim failed: Trim on [76ec362d-a149-c123-cf50-641eb886b4a6] not supported","status":"FAIL"}
+{"check":"Detach SR before forget","status":"PASS"}
+{"check":"Forget temporary SR","status":"PASS"}
+{"check":"Reintroduce temporary SR","status":"PASS"}
+{"check":"Reattach reintroduced SR","status":"PASS"}
+{"check":"Destroy temporary SR","status":"PASS"}
+{"check":"Create disabled empty VMSS","error":"The host rejected the operation: INVALID_VALUE.","status":"FAIL"}
+{"check":"Introduce temporary PVS site","status":"PASS"}
+{"check":"Introduce temporary PVS server record","status":"PASS"}
+{"check":"Forget temporary PVS server","status":"PASS"}
+{"check":"Forget temporary PVS site","status":"PASS"}
+{"check":"Services cleanup readback","temporary_pvs_sites":0,"temporary_srs":0,"temporary_vmss":0}
+{"check":"Service sequence finished","status":"PASS"}

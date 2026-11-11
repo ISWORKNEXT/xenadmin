@@ -287,6 +287,21 @@ fn action_bar(
     is_snapshot: bool,
     actions: &mut Vec<UiAction>,
 ) {
+    ui.horizontal(|ui| {
+        if ui
+            .add_enabled(
+                vm.power_state == "Halted"
+                    && action_allowed(workspace, connection_id, vm, "export"),
+                egui::Button::new("Export XVA…"),
+            )
+            .clicked()
+        {
+            actions.push(UiAction::OpenXvaExport {
+                connection_id: connection_id.to_owned(),
+                vm_uuid: vm_uuid.to_owned(),
+            });
+        }
+    });
     if is_template {
         ui.horizontal(|ui| {
             let can_clone = action_allowed(workspace, connection_id, vm, "clone");
@@ -324,7 +339,21 @@ fn action_bar(
         return;
     }
     if is_snapshot {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            for kind in [ActionKind::SnapshotToVm, ActionKind::SnapshotToTemplate] {
+                if ui
+                    .add_enabled(
+                        action_allowed(workspace, connection_id, vm, "clone"),
+                        egui::Button::new(kind.label()),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::Propose(
+                        kind,
+                        vec![(connection_id.to_owned(), vm_uuid.to_owned())],
+                    ));
+                }
+            }
             let allowed =
                 action_allowed(workspace, connection_id, vm, ActionKind::Revert.operation());
             if ui
@@ -2778,6 +2807,14 @@ fn snapshots(
                     );
                 });
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.menu_button("Create…", |ui| {
+                        for kind in [ActionKind::SnapshotToVm, ActionKind::SnapshotToTemplate] {
+                            if ui.add_enabled(action_allowed(workspace, connection_id(connection), snapshot, "clone"), egui::Button::new(kind.label())).clicked() {
+                                actions.push(UiAction::Propose(kind, vec![(connection_id(connection).to_owned(), snapshot.uuid.clone())]));
+                                ui.close();
+                            }
+                        }
+                    });
                     if ui
                         .add_enabled(
                             !read_only,

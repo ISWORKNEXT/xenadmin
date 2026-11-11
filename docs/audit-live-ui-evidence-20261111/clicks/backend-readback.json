@@ -1,0 +1,374 @@
+[
+  {
+    "stage": "disk2g-and-vif-added",
+    "vms": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      }
+    ],
+    "vbds": [
+      {
+        "uuid": "cf9bfc26-6837-2210-3358-26a40767b7ed",
+        "userdevice": "0",
+        "currently_attached": false,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      }
+    ],
+    "vdis": [
+      {
+        "uuid": "dc120783-2653-40a7-85c6-28c03501ae8d",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": false,
+        "read_only": false
+      }
+    ],
+    "vifs": [
+      {
+        "uuid": "febce928-f1d6-ae6f-c291-158cccb503c6",
+        "device": "0",
+        "MAC": "e6:fa:f0:57:2f:71",
+        "currently_attached": false,
+        "locking_mode": "network_default"
+      }
+    ]
+  },
+  {
+    "stage": "snapshot-created",
+    "vms": [
+      {
+        "uuid": "723c14fb-ccf4-aa27-fb40-ab0992929c3e",
+        "name_label": "zz-parity-ui-snapshot",
+        "power_state": "Halted",
+        "is_a_snapshot": true,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      },
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      }
+    ],
+    "vbds": [
+      {
+        "uuid": "cf9bfc26-6837-2210-3358-26a40767b7ed",
+        "userdevice": "0",
+        "currently_attached": false,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      },
+      {
+        "uuid": "8330d9f2-2e43-0dcd-a5ff-329a20f6c24f",
+        "userdevice": "0",
+        "currently_attached": false,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      }
+    ],
+    "vdis": [
+      {
+        "uuid": "dc120783-2653-40a7-85c6-28c03501ae8d",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": false,
+        "read_only": false
+      },
+      {
+        "uuid": "f15cd468-e8ce-481e-86aa-6bab8c344d3b",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": true,
+        "read_only": false
+      }
+    ],
+    "vifs": [
+      {
+        "uuid": "febce928-f1d6-ae6f-c291-158cccb503c6",
+        "device": "0",
+        "MAC": "e6:fa:f0:57:2f:71",
+        "currently_attached": false,
+        "locking_mode": "network_default"
+      },
+      {
+        "uuid": "728c50c0-7734-33d6-27f0-a2df03d3148c",
+        "device": "0",
+        "MAC": "e6:fa:f0:57:2f:71",
+        "currently_attached": false,
+        "locking_mode": "network_default"
+      }
+    ]
+  },
+  {
+    "stage": "snapshot-reverted",
+    "vms": [
+      {
+        "uuid": "723c14fb-ccf4-aa27-fb40-ab0992929c3e",
+        "name_label": "zz-parity-ui-snapshot",
+        "power_state": "Halted",
+        "is_a_snapshot": true,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      },
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      }
+    ],
+    "vbds": [
+      {
+        "uuid": "8330d9f2-2e43-0dcd-a5ff-329a20f6c24f",
+        "userdevice": "0",
+        "currently_attached": false,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      },
+      {
+        "uuid": "29647a81-c5af-bf55-4408-37dcbe717f72",
+        "userdevice": "0",
+        "currently_attached": false,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      }
+    ],
+    "vdis": [
+      {
+        "uuid": "f15cd468-e8ce-481e-86aa-6bab8c344d3b",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": true,
+        "read_only": false
+      },
+      {
+        "uuid": "6179684d-3c11-4231-9c3e-4214fe43d8f7",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": false,
+        "read_only": false
+      }
+    ],
+    "vifs": [
+      {
+        "uuid": "728c50c0-7734-33d6-27f0-a2df03d3148c",
+        "device": "0",
+        "MAC": "e6:fa:f0:57:2f:71",
+        "currently_attached": false,
+        "locking_mode": "network_default"
+      },
+      {
+        "uuid": "6d341e8c-cf8c-d524-5a2f-24cac4f7a91c",
+        "device": "0",
+        "MAC": "e6:fa:f0:57:2f:71",
+        "currently_attached": false,
+        "locking_mode": "network_default"
+      }
+    ]
+  },
+  {
+    "stage": "snapshot-deleted",
+    "vms": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      }
+    ],
+    "vbds": [
+      {
+        "uuid": "29647a81-c5af-bf55-4408-37dcbe717f72",
+        "userdevice": "0",
+        "currently_attached": false,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      }
+    ],
+    "vdis": [
+      {
+        "uuid": "6179684d-3c11-4231-9c3e-4214fe43d8f7",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": false,
+        "read_only": false
+      }
+    ],
+    "vifs": [
+      {
+        "uuid": "6d341e8c-cf8c-d524-5a2f-24cac4f7a91c",
+        "device": "0",
+        "MAC": "e6:fa:f0:57:2f:71",
+        "currently_attached": false,
+        "locking_mode": "network_default"
+      }
+    ]
+  },
+  {
+    "stage": "vm-started",
+    "vms": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Running",
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      }
+    ],
+    "vbds": [
+      {
+        "uuid": "29647a81-c5af-bf55-4408-37dcbe717f72",
+        "userdevice": "0",
+        "currently_attached": true,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      }
+    ],
+    "vdis": [
+      {
+        "uuid": "6179684d-3c11-4231-9c3e-4214fe43d8f7",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": false,
+        "read_only": false
+      }
+    ],
+    "vifs": [
+      {
+        "uuid": "6d341e8c-cf8c-d524-5a2f-24cac4f7a91c",
+        "device": "0",
+        "MAC": "e6:fa:f0:57:2f:71",
+        "currently_attached": true,
+        "locking_mode": "network_default"
+      }
+    ]
+  },
+  {
+    "stage": "vm-force-stopped",
+    "vms": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      }
+    ],
+    "vbds": [
+      {
+        "uuid": "29647a81-c5af-bf55-4408-37dcbe717f72",
+        "userdevice": "0",
+        "currently_attached": false,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      }
+    ],
+    "vdis": [
+      {
+        "uuid": "6179684d-3c11-4231-9c3e-4214fe43d8f7",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": false,
+        "read_only": false
+      }
+    ],
+    "vifs": [
+      {
+        "uuid": "6d341e8c-cf8c-d524-5a2f-24cac4f7a91c",
+        "device": "0",
+        "MAC": "e6:fa:f0:57:2f:71",
+        "currently_attached": false,
+        "locking_mode": "network_default"
+      }
+    ]
+  },
+  {
+    "stage": "vif-removed",
+    "vms": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      }
+    ],
+    "vbds": [
+      {
+        "uuid": "29647a81-c5af-bf55-4408-37dcbe717f72",
+        "userdevice": "0",
+        "currently_attached": false,
+        "type": "Disk",
+        "mode": "RW",
+        "bootable": false
+      }
+    ],
+    "vdis": [
+      {
+        "uuid": "6179684d-3c11-4231-9c3e-4214fe43d8f7",
+        "name_label": "zz-parity-ui-disk",
+        "virtual_size": 2147483648,
+        "is_a_snapshot": false,
+        "read_only": false
+      }
+    ],
+    "vifs": []
+  },
+  {
+    "stage": "disk-removed",
+    "vms": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456
+      }
+    ],
+    "vbds": [],
+    "vdis": [],
+    "vifs": []
+  },
+  {
+    "stage": "final-cleanup",
+    "vms": [],
+    "vbds": [],
+    "vdis": [],
+    "vifs": []
+  }
+]

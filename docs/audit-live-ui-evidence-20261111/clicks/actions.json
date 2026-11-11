@@ -1,0 +1,1070 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        277
+      ],
+      "text": "Other",
+      "wait": 1,
+      "snap": "10-other-search-keymap"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "name:Other",
+      "wait": 1,
+      "snap": "11-other-template"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        375
+      ],
+      "wait": 2,
+      "snap": "12-template-details"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        430,
+        375
+      ],
+      "wait": 2,
+      "snap": "13-template-open"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        445,
+        333
+      ],
+      "wait": 1,
+      "snap": "14-clone-review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        522
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "zz-parity-ui-20261111",
+      "wait": 1,
+      "snap": "15-clone-named"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        575
+      ],
+      "wait": 5,
+      "snap": "16-clone-result",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        162
+      ],
+      "text": "zz-parity-ui",
+      "wait": 1,
+      "snap": "17-tree-search"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        160,
+        329
+      ],
+      "wait": 2,
+      "snap": "18-own-vm-details"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        332
+      ],
+      "wait": 1,
+      "snap": "19-edit-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        292
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "-edited"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        570,
+        571
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        571
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "2",
+      "snap": "20-edit-values"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        204
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "-edited",
+      "snap": "21-edit-name"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        483
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        850,
+        483
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "2",
+      "snap": "22-edit-cpu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        821
+      ],
+      "wait": 4,
+      "snap": "23-edit-saved",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1230,
+        202
+      ],
+      "wait": 1,
+      "snap": "24-storage-tab"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1263,
+        398
+      ],
+      "wait": 2,
+      "snap": "25-add-disk-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        600,
+        508
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        600,
+        577
+      ],
+      "text": "zz-parity-ui-disk",
+      "snap": "26-disk-values"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        980,
+        629
+      ],
+      "wait": 4,
+      "snap": "27-disk-added",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1268,
+        483
+      ],
+      "wait": 1,
+      "snap": "28-disk-manage-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1265,
+        600
+      ],
+      "wait": 1,
+      "snap": "29-resize-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        974,
+        575
+      ],
+      "wait": 4,
+      "snap": "30-disk-resized"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1158,
+        202
+      ],
+      "wait": 1,
+      "snap": "31-network-tab"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1343,
+        398
+      ],
+      "wait": 1,
+      "snap": "32-add-vif-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        984,
+        418
+      ],
+      "wait": 0.5,
+      "snap": "33-vif-network-options"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        540,
+        494
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        954,
+        607
+      ],
+      "wait": 4,
+      "snap": "34-vif-added"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        735,
+        332
+      ],
+      "wait": 1,
+      "snap": "35-snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        521
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "zz-parity-ui-snapshot",
+      "snap": "36-snapshot-named"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        575
+      ],
+      "wait": 6,
+      "snap": "37-snapshot-result",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "723c14fb-ccf4-aa27-fb40-ab0992929c3e",
+        "name_label": "zz-parity-ui-snapshot",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": true,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        903,
+        124
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        643,
+        290
+      ],
+      "wait": 1,
+      "snap": "38-snapshots-tab"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1302,
+        442
+      ],
+      "wait": 1,
+      "snap": "39-revert-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        554
+      ],
+      "wait": 0.7,
+      "snap": "40-revert-cancelled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1302,
+        442
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        555
+      ],
+      "wait": 6,
+      "snap": "41-revert-result",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "723c14fb-ccf4-aa27-fb40-ab0992929c3e",
+        "name_label": "zz-parity-ui-snapshot",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": true,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        903,
+        124
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        399,
+        442
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1345,
+        398
+      ],
+      "wait": 1,
+      "snap": "42-delete-snapshot-confirm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        936,
+        647
+      ],
+      "wait": 5,
+      "snap": "43-snapshot-deleted",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        390,
+        332
+      ],
+      "wait": 1,
+      "snap": "44-start-confirm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        541
+      ],
+      "wait": 7,
+      "snap": "45-start-result",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Running",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        903,
+        124
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        640,
+        332
+      ],
+      "wait": 1,
+      "snap": "46-power-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        657,
+        718
+      ],
+      "wait": 1,
+      "snap": "47-force-stop-confirm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        554
+      ],
+      "wait": 5,
+      "snap": "48-force-stop-result",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "d992dbae-0fa2-e4f2-4bf0-8c1f7f01a2c4",
+        "name_label": "zz-parity-ui-20261111-edited",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        903,
+        124
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1158,
+        202
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1367,
+        485
+      ],
+      "wait": 1,
+      "snap": "49-remove-vif-confirm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        914,
+        534
+      ],
+      "wait": 3,
+      "snap": "50-vif-removed"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1230,
+        202
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1268,
+        483
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1285,
+        652
+      ],
+      "wait": 1,
+      "snap": "51-remove-disk-confirm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        971,
+        551
+      ],
+      "wait": 3,
+      "snap": "52-disk-removed"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        640,
+        332
+      ],
+      "wait": 0.5,
+      "snap": "53-delete-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        636,
+        794
+      ],
+      "wait": 1,
+      "snap": "54-delete-vm-confirm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        615
+      ],
+      "wait": 5,
+      "snap": "55-vm-deleted",
+      "readback": true
+    },
+    "readback": []
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        162
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Home"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L+End"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "BackSpace",
+      "wait": 1,
+      "snap": "56-tree-cleared"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        39,
+        296
+      ],
+      "wait": 0.7
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        133,
+        329
+      ],
+      "wait": 2,
+      "snap": "57-host-open-click"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        414,
+        388
+      ],
+      "wait": 2,
+      "snap": "58-host-retry-click"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        379,
+        125
+      ],
+      "wait": 1,
+      "snap": "59-home-click"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        87,
+        297
+      ],
+      "wait": 1,
+      "snap": "60-host-list-click"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        824,
+        519
+      ],
+      "wait": 2,
+      "snap": "61-host-card-details-click"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        824,
+        487
+      ],
+      "wait": 2,
+      "snap": "62-host-card-open"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        449,
+        312
+      ],
+      "wait": 1,
+      "snap": "63-host-cpu-click"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        535,
+        312
+      ],
+      "wait": 2,
+      "snap": "64-host-performance-click"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

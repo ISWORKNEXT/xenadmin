@@ -1,0 +1,4 @@
+uuid ( RO)                    : dc120783-2653-40a7-85c6-28c03501ae8d
+              name-label ( RW): zz-parity-ui-disk
+            virtual-size ( RO): 2147483648
+    physical-utilisation ( RO): 7168

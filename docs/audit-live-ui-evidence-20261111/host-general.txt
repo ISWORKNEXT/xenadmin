@@ -1,0 +1,42 @@
+|X | Xen Desktop Host-RO®) 110% © - o x
+
+Infrastructure » OllO-Server Refresh details Refres
+a Fresh
+
+INFRASTRUCTURE at + Home —llO-Server_
+
+Search infrastructure,
+‘<Back to hosts - AUTHORIZED DEV HOST / READ ONLY Read-only connection _Refresh details
+= Infrastructure wa
+
+ollO-Server
+
+Y © AUTHORIZED DEVHOST/READ ONLY — 80 192.168.8170 - 12347Faf-<:
+
+© Activity & tasks
+
+-994b-7eb12860:
+
+Hosts 1
+General CPU & memory Performance Networking Storage Hardware Updates Certificates Health
+
+Oll0-Server
+> © Virtual machines 6 Identity Host configuration
+> @ Templates 51 Name ollo-Server Maintenance mode Unavailable
+> @ Storage 2
+Description Default install iSCSIIQN ign.2026-10.com.example:725b432F
+> A Networks 2
+Hostname ollo-Server
+Management address 192.168.8.170
+uui £2347FdF-2320-4d3b-994b-7eb12F860¢58
+Enabled Yes
+Tegs None
+capabilities xen-3.0-x86_64, hvm-3,0-x86_32, hvm-3.0-x86 320,
+m hym-3.0-x86_64, —
+Runtime Software
+Boot time (Unix seconds) 1794320318. Product xcP-ng
+‘Agent start time (Unix seconds) 1794320464. Version 830
+Host uptime 0d 12h 40m Display version 83
+© Connected. Loading pool inventory.
+‘Agent uptime od 12h 37m Short version 83
+CtrUK search - FS refresh - Ctrl close tab . XenDesktop - Rust + egui

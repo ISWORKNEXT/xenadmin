@@ -65,6 +65,49 @@ impl HostTransport {
         self.client.post(endpoint).json(request).send().await
     }
 
+    pub(crate) async fn export_xva(
+        &self,
+        session: &str,
+        uuid: &str,
+        task: &str,
+    ) -> Result<Response, reqwest::Error> {
+        let mut endpoint = self.origin.clone();
+        endpoint.set_path("/export");
+        self.client
+            .get(endpoint)
+            .query(&[("session_id", session), ("uuid", uuid), ("task_id", task)])
+            .timeout(Duration::from_secs(24 * 60 * 60))
+            .send()
+            .await
+    }
+
+    pub(crate) async fn import_xva(
+        &self,
+        session: &str,
+        sr: &str,
+        task: &str,
+        file: tokio::fs::File,
+        length: u64,
+    ) -> Result<Response, reqwest::Error> {
+        let mut endpoint = self.origin.clone();
+        endpoint.set_path("/import");
+        self.client
+            .put(endpoint)
+            .query(&[
+                ("session_id", session),
+                ("sr_id", sr),
+                ("task_id", task),
+                ("restore", "false"),
+                ("force", "false"),
+            ])
+            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+            .header(reqwest::header::CONTENT_LENGTH, length)
+            .body(reqwest::Body::from(file))
+            .timeout(Duration::from_secs(24 * 60 * 60))
+            .send()
+            .await
+    }
+
     /// Only called after resolving a member host from the authenticated pool.
     pub(crate) fn for_member(
         &self,

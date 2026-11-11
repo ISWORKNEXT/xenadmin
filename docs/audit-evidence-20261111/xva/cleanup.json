@@ -1,0 +1,7 @@
+{
+  "test_vms": [],
+  "xva_tasks": [],
+  "vm_uuids_match_baseline": true,
+  "vdi_refs_match_baseline": true,
+  "network_refs_match_baseline": true
+}

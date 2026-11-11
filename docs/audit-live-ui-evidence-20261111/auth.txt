@@ -1,0 +1,42 @@
+(x } Xen Desktop «
+
+AUTHORIZED DEVHOST/READONIY-RO®) 110% © - OD X
+
+ED infrastructure » Authentication & RBAC Refresh
+
+INFRASTRUCTURE 1/1 + | Home AUTHORIZED DEVHOST/READON... x Authentication &RBAC x
+
+Search infrastructure. _
+
+= infrastructure vA AUTHORIZED DEV HOST / READ ONLY
+
+Read-only external authentication, subjects and roles
+
+Read-only Refresh
+© Activity & tasks
+
+ges require aw
+v © AUTHORIZED DEVHOST/READ ONLY — RO
+
+> = Hosts 1
+© Authentication @ Senice © Subjecs © oles
+> © Virtual machines 14
+Local authentication Not configured 1 6
+> Templates 51
+> B storage 2
+SA Networks : External authentication
+Type Local authentication
+Service name
+Local auth threads 8
+External auth cache Disabled
+Subjects +
+Identifier Display name Ema soles Actions
+© root Local root sccount - rman protaciad
+Roles 6
+sole Desc
+
+CtrUuK search + F5 refresh + Ctrl! close tab
+
+© Inventor
+
+Xen Desktop - Rust + egui

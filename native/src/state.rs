@@ -131,7 +131,7 @@ pub enum ObjectKey {
     Pool(String),
     Host {
         connection_id: String,
-        host_ref: String,
+        host_uuid: String,
     },
     Vm {
         connection_id: String,
@@ -256,6 +256,8 @@ pub enum ActionKind {
     Suspend,
     Resume,
     Clone,
+    SnapshotToVm,
+    SnapshotToTemplate,
     Snapshot,
     Revert,
     Destroy,
@@ -296,6 +298,7 @@ impl ActionKind {
             ActionKind::Suspend => "suspend",
             ActionKind::Resume => "resume",
             ActionKind::Clone => "clone",
+            ActionKind::SnapshotToVm | ActionKind::SnapshotToTemplate => "clone",
             ActionKind::Snapshot => "snapshot",
             ActionKind::Revert => "revert",
             ActionKind::Destroy => "destroy",
@@ -314,6 +317,8 @@ impl ActionKind {
             ActionKind::Suspend => "Suspend",
             ActionKind::Resume => "Resume",
             ActionKind::Clone => "Clone",
+            ActionKind::SnapshotToVm => "Create VM from snapshot",
+            ActionKind::SnapshotToTemplate => "Create template from snapshot",
             ActionKind::Snapshot => "Take snapshot",
             ActionKind::Revert => "Revert snapshot",
             ActionKind::Destroy => "Delete",
@@ -331,7 +336,13 @@ impl ActionKind {
     }
 
     pub fn needs_name(self) -> bool {
-        matches!(self, ActionKind::Clone | ActionKind::Snapshot)
+        matches!(
+            self,
+            ActionKind::Clone
+                | ActionKind::Snapshot
+                | ActionKind::SnapshotToVm
+                | ActionKind::SnapshotToTemplate
+        )
     }
 
     pub fn to_action(
@@ -364,6 +375,12 @@ impl ActionKind {
             ActionKind::Clone => VmAction::Clone {
                 name: name.trim().to_owned(),
             },
+            ActionKind::SnapshotToVm | ActionKind::SnapshotToTemplate => {
+                VmAction::CreateFromSnapshot {
+                    name: name.trim().to_owned(),
+                    as_template: self == ActionKind::SnapshotToTemplate,
+                }
+            }
             ActionKind::Snapshot => VmAction::Snapshot {
                 name: name.trim().to_owned(),
             },
@@ -1205,7 +1222,30 @@ pub struct VmEditState {
     pub submitting: bool,
 }
 
+pub struct NewVmWizard {
+    pub connection_id: String,
+    pub draft: xen_core::provisioning::CreateVmRequest,
+    pub step: usize,
+    pub template: LoadState<VmDetails>,
+    pub error: Option<String>,
+    pub submitting: bool,
+}
+
+pub struct XvaDialog {
+    pub connection_id: String,
+    pub vm_uuid: Option<String>,
+    pub path: String,
+    pub name: String,
+    pub sr_uuid: Option<String>,
+    pub network_uuid: Option<String>,
+    pub error: Option<String>,
+    pub submitting: bool,
+}
+
 pub struct UiState {
+    pub xva_dialog: Option<XvaDialog>,
+    pub new_vm: Option<NewVmWizard>,
+    pub new_vm_seq: u64,
     pub view: View,
     pub scope: Scope,
     pub object_tabs: Vec<ObjectTab>,
@@ -1322,6 +1362,9 @@ pub struct UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
+            xva_dialog: None,
+            new_vm: None,
+            new_vm_seq: 0,
             view: View::Overview,
             scope: Scope::All,
             object_tabs: vec![ObjectTab {
@@ -1441,6 +1484,20 @@ impl Default for UiState {
 }
 
 pub enum UiAction {
+    OpenXvaExport {
+        connection_id: String,
+        vm_uuid: String,
+    },
+    OpenXvaImport(String),
+    CloseXvaDialog,
+    SubmitXvaTransfer,
+    OpenNewVmWizard {
+        connection_id: String,
+        template_uuid: String,
+    },
+    SelectNewVmTemplate(String),
+    CloseNewVmWizard,
+    CreateNewVm,
     SetView(View),
     SetScope(Scope),
     OpenObject {

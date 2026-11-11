@@ -1,0 +1,58 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "wait": 10,
+      "snap": "source-ready"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        421,
+        333
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        636,
+        488
+      ],
+      "key": "Control_L+a",
+      "text": "/tmp/xen-xva-cancel-ui-20261111/cancelled.xva",
+      "snap": "cancel-export-ready"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1018,
+        569
+      ],
+      "wait": 4,
+      "snap": "cancel-running"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1348,
+        368
+      ],
+      "wait": 3,
+      "snap": "cancel-requested"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

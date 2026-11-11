@@ -1,0 +1,10 @@
+{
+  "ui_action_variants": 179,
+  "click_verified_variants": 22,
+  "click_outcome_counts": {
+    "CLICK_VERIFIED": 22,
+    "CLICK_VERIFIED_FAILURE": 1,
+    "NOT_VERIFIED_BY_CLICK": 156
+  },
+  "note": "Each enum variant may cover multiple objects, choices and states. A verified click covers only the documented instance. Startup flags and backend calls do not count as clicks."
+}

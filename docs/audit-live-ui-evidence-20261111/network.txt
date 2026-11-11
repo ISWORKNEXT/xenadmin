@@ -1,0 +1,111 @@
+| X | Xen Desktop
+EY infrastructure » Pool-wide network 0
+INFRASTRUCTURE
+
+Search infrastructure,
+
+= Infrastructure
+© Activity & tasks
+
+¥ © AUTHORIZED DEV HOST / READ ONLY
+
+Hosts
+
+© Virtual machines
+
+Templates
+
+6 Storage
+
+<
+
+A. Networks
+| & Pootwide network o
+
+A zzparity-ro:
+
+atcT02a-7e81-73,
+
+Ctrlik search + FS refresh
+
+wit
+
+wa
+
+Ro
+
+16
+
+SL
+
+Ctrl close tab
+
+Home
+
+AUTHORIZED DEVHOST/READON... x
+
+Pool-wide network 0 x
+
+N Pool-wide network 0
+
+AUTHORIZED DEV HOST /
+3801787ed
+
+Boats
+
+Network
+Name
+Bridge
+MTU
+Description
+
+uuID
+
+Physical interfaces
+
+Hos
+
+ollo-server
+
+(D ONLY -xenbro
+
+Pool-wide network 0
+xenbrO
+
+1500
+
+No description
+
+30afc560-17ec-23ce-75b3-e263801787ed
+
+Device
+
+etho
+
+AUTHORIZED DEV HOST / READ ONLY-RO ©
+
+Attachments.
+Physical interfaces
+
+Virtual interfaces
+
+Mac
+
+50:9
+
+VLAN
+
+0% € - O X
+
+Refresh
+Read-only Refresh
+Manage network.
+1
+15
+Refresh
+Management Attached Actions
+Protected ves =
+
+© Connected. Loading pool inventory.
+
+Xen Desktop - Rust +

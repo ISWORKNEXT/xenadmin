@@ -1,0 +1,95 @@
+(x } Xen Desktop x:
+
+Binks
+
+INFRASTRUCTURE
+
+Search infrastructure,
+= Infrastructure
+© Activity & tasks
+
+¥ © AUTHORIZED DEV HOST / READ ONLY
+
+Vv = Ho:
+
+ollo-Server
+
+> © Virtual machines
+
+Templates
+
+> @ Storage
+
+> A Networks
+
+CErUuK search + FS
+
+ucture » OllO-Server Refresh details
+
+wit
+
+wa
+
+Ro
+
+14
+
+SL
+
+Host-Roe) 110% ©
+
+Home  ollO-Server_ x
+
+‘<Back to hosts - AUTHORIZED DEV HOST / READ ONLY
+
+OllO-Server
+
+492.168.8170 - 12347Fa¥-
+
+General CPU & memory Performance Networking Storage Hardware Updates Certificates Health
+
+Storage repositories
+
+Host storage attachment and repository capacity
+
+Search storage repositories.
+
+Name Type shared attached statue capacity
+vp drives udev No Yes Connecced 0008
+Local storage ec No Yes Connecced 4165268
+NFSISO iso Yes Yes Connecced 907.09 GiB
+Removable storage udev No Yes Connecced 0.008
+
+© Inventory rafrashe
+
+Refresh
+
+Read-only connection
+
+Uses
+
+0.008
+
+108.16 GiB
+
+503.23 GiB
+
+0.008
+
+- o
+
+Refresh details
+
+records
+
+Rust +
+
+Free
+
+0.008
+
+3073
+
+4038
+
+0.008

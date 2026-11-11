@@ -1,0 +1,78 @@
+ifrasructu
+
+(x } Xen Desktop c=
+
+Binks
+
+INFRASTRUCTURE
+Search infrastructure.
+= Infrastructure
+© Activity & tasks
+y © AUTHORIZED DEV HOST / READ ONLY
+v = Hosts
+
+ollo-Server
+
+> © Virtual machines
+
+Templates
+
+> @ Storage
+
+> A Networks
+
+sh CtrUW
+
+CErUuK search + FS
+
+wit
+
+ucture » OllO-Server Refresh details
+
+wa
+
+Ro
+
+14
+
+SL
+
+Home  ollO-Server_ x
+
+‘<Back to hosts - AUTHORIZED DEV HOST / READ ONLY
+
+OllO-Server
+
+492.168.8170 - 12347Fa¥-
+
+-4d3b-994b-7eb121864
+
+General CPU & memory Performance Networking Storage Hardware Updates Certificates Health
+
+Network interfaces
+
+Physical NICs, Bonds, VLANs and management networking reported by the host.
+
+Search network interfaces.
+
+loverface Network Management
+
+‘etho Pook-wide network 0 Yes
+
+© Inventor
+
+ac
+
+S0sadc1456:c0
+
+Pua
+
+192.168.8170
+
+Host-rOe) 110% € - O X
+
+Refresh
+Read-only connection _Refresh details
+1 record
+Pus mtu VLAN
+None 1500 4

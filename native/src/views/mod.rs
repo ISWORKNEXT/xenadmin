@@ -12,3 +12,6 @@ pub mod resource_page;
 pub mod sidebar;
 pub mod tasks;
 pub mod vm_detail;
+
+pub mod new_vm;
+pub mod xva;

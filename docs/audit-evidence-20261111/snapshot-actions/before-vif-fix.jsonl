@@ -1,0 +1,3 @@
+{"prefix":"zz-parity-snapshot-01a1c8ae-8329-774b-93ac-d85a7bfe2477"}
+{"cleanup":"completed","result":{"Err":"The host does not currently allow this operation. Refresh and check the VM state."}}
+Error: Xen("The host does not currently allow this operation. Refresh and check the VM state.")

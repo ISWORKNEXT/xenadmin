@@ -1,0 +1,117 @@
+[
+  {
+    "uuid": "ba583137-0340-e3c4-b652-b498fea31705",
+    "name_label": "zz-parity-snapshot-01a1c8b2-9eab-7528-a0fc-b2f843a53b01-snapshot",
+    "is_a_template": true,
+    "is_a_snapshot": true,
+    "power_state": "Halted",
+    "allowed_operations": [
+      "destroy",
+      "metadata_export",
+      "export",
+      "revert",
+      "copy",
+      "clone"
+    ],
+    "instant": null,
+    "disks": [
+      {
+        "uuid": "7955dffb-aa7a-46d7-900a-c9abe251d181",
+        "size": "10737418240",
+        "owner": true
+      }
+    ]
+  },
+  {
+    "uuid": "f12a93bb-1a8a-1de1-cf79-bf252a89ddc5",
+    "name_label": "zz-parity-snapshot-01a1c8b2-9eab-7528-a0fc-b2f843a53b01-snapshot template",
+    "is_a_template": true,
+    "is_a_snapshot": false,
+    "power_state": "Halted",
+    "allowed_operations": [
+      "destroy",
+      "metadata_export",
+      "export",
+      "changing_NVRAM",
+      "changing_shadow_memory",
+      "changing_static_range",
+      "changing_dynamic_range",
+      "migrate_send",
+      "provision",
+      "copy",
+      "clone"
+    ],
+    "instant": "true",
+    "disks": [
+      {
+        "uuid": "695c9dfa-618a-43d0-9aa3-ea9480097233",
+        "size": "10737418240",
+        "owner": true
+      }
+    ]
+  },
+  {
+    "uuid": "b8ab17f1-4f2a-c526-f255-8f1af1fa3e5b",
+    "name_label": "zz-parity-snapshot-01a1c8b2-9eab-7528-a0fc-b2f843a53b01-source",
+    "is_a_template": false,
+    "is_a_snapshot": false,
+    "power_state": "Halted",
+    "allowed_operations": [
+      "create_vtpm",
+      "destroy",
+      "metadata_export",
+      "export",
+      "make_into_template",
+      "changing_NVRAM",
+      "changing_shadow_memory",
+      "changing_static_range",
+      "changing_dynamic_range",
+      "migrate_send",
+      "start_on",
+      "start",
+      "copy",
+      "clone",
+      "snapshot"
+    ],
+    "instant": null,
+    "disks": [
+      {
+        "uuid": "f4e3e5e9-e786-4b5c-abdd-e77f0ad9e7e4",
+        "size": "10737418240",
+        "owner": true
+      }
+    ]
+  },
+  {
+    "uuid": "7d74d187-0cd9-21d4-0f41-4f3ddc8e6482",
+    "name_label": "zz-parity-snapshot-01a1c8b2-9eab-7528-a0fc-b2f843a53b01-snapshot VM",
+    "is_a_template": false,
+    "is_a_snapshot": false,
+    "power_state": "Halted",
+    "allowed_operations": [
+      "create_vtpm",
+      "destroy",
+      "metadata_export",
+      "export",
+      "make_into_template",
+      "changing_NVRAM",
+      "changing_shadow_memory",
+      "changing_static_range",
+      "changing_dynamic_range",
+      "migrate_send",
+      "start_on",
+      "start",
+      "copy",
+      "clone",
+      "snapshot"
+    ],
+    "instant": null,
+    "disks": [
+      {
+        "uuid": "d578d7eb-1576-4cab-8bf2-1d3b5ed17dfe",
+        "size": "10737418240",
+        "owner": true
+      }
+    ]
+  }
+]

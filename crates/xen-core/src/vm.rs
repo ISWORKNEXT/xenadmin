@@ -47,6 +47,7 @@ pub struct VmDetails {
     pub guest_ips: Vec<String>,
     pub tags: Vec<String>,
     pub disks: Vec<VmDisk>,
+    pub provision_disks: Vec<crate::provisioning::ProvisionDisk>,
     pub isos: Vec<VmIso>,
     pub interfaces: Vec<VmInterface>,
     pub snapshots: Vec<VmSnapshot>,
@@ -403,6 +404,16 @@ impl Connection {
             .unwrap_or("false")
             .to_owned();
 
+        let provision_disks = match crate::provisioning::provision_disks(
+            vm["other_config"]["disks"].as_str().unwrap_or_default(),
+        ) {
+            Ok(disks) => disks,
+            Err(error) => {
+                warnings.push(error.to_string());
+                Vec::new()
+            }
+        };
+
         Ok(VmDetails {
             uuid: vm_uuid.into(),
             name: text(&vm, "name_label"),
@@ -433,8 +444,20 @@ impl Connection {
             affinity_ref,
             platform,
             other_config,
-            os_version: text(guest, "os_version"),
-            pv_drivers_version: text(guest, "PV_drivers_version"),
+            os_version: if guest["os_version"].is_object() {
+                text(&guest["os_version"], "name")
+            } else {
+                text(guest, "os_version")
+            },
+            pv_drivers_version: if guest["PV_drivers_version"].is_object() {
+                ["major", "minor", "micro", "build"]
+                    .iter()
+                    .filter_map(|key| guest["PV_drivers_version"][key].as_str())
+                    .collect::<Vec<_>>()
+                    .join(".")
+            } else {
+                text(guest, "PV_drivers_version")
+            },
             pv_drivers_up_to_date: guest["PV_drivers_up_to_date"].as_bool().unwrap_or(false),
             guest_ips,
             tags: vm["tags"]
@@ -447,6 +470,7 @@ impl Connection {
                 })
                 .unwrap_or_default(),
             disks,
+            provision_disks,
             isos,
             interfaces,
             snapshots,

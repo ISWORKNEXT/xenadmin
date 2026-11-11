@@ -1,0 +1,37 @@
+(Xen Desktop xce-n0
+
+AUTHORIZED DEVHOST/READONIY-RO®) 110% © - OD X
+
+ED infrastructure » Virtual machines Refresh
+
+FRASTRUCTURE 1/1 + Home — Virtualmachines x
+
+Sarah bine AUTHORIZED DEV HOST READ ONLY
+
+= Infrastructure vt Virtual machines. peat-only
+© Activity & tasks Guest virtual machines across the selected scope.
+Y © AUTHORIZED DEVHOST/READ ONLY FO
+‘ Search name:/host:/tag:/memory:/power_sta.. ROSE y || Savedsearches | Allpowerstates © -W 14 machines
+> = Hosts 1
+> © Virtual machines 4 Neme Connection CPUs Memory
+> © Templates Si ;
+‘AlmaLinux 10 (TH) - Guest Agent copy BOE OEM ECS EES OMS? Dercconpect 1 2.0 GiB
+> & Storage 2 Unes
+> A Networks 1 Windows 10 (64-bit) (1) AUTHORIZED DEV HOST / READ ONLY = @ Running 4 24.0 GiB
+HOA AUTHORIZED DEV HOST/READ ONLY °° Running a 20 6D
+ollo-Server
+rental-order-01a125da-bfa8-7000-bb87-21cb6Fcbc6b1-job-01a125d..,. AUTHORIZED DEV HOST / READ ONLY *° @ stopped 2 8.0 GiB
+u
+rental-order-01a1354a-1Bef-70e9-9342-2bcBaf744d43-job-01a1354.., AUTHORIZED DEV HOST / READ ONLY *° @ stopped 2 4.0 GiB
+u
+rental-order-01a135da-18ef-7029-9342-2bcBaf744d43-previous-O1a... AUTHORIZED DEVHOST/ READONLY @ stopped 2 4.0 GiB
+u
+rental-order-01a1359e-d31b-771F-8970-a207ffcd9eb1-job-01a1359.., AUTHORIZED DEV HOST / READ ONLY *° @ stopped 2 4.0 GiB
+a
+rental-order-01a1359e-d31b-771F-8970-a207Ffcd9eb1-previous-O1a.... AUTHORIZED DEV HOST / READ ONLY *° @ stopped 2 4.0 GiB
+u
+rental-order-01a16343-6059-7a56-a275-c85a5a3e28a7-job-01a163.., AUTHORIZED DEV HOST / READ ONLY *° @ cton nad 1 2.0 GiB
+Unassig
+rental-order-01a16343-6059-7256-2275-c85aSa3e28a7-previous-01..,. AUTHORIZED DEVHOST/ READONLY © @ stopped 1 2.0 GiB
+
+CtrUuK search + F5 refresh + Ctrl! close tab

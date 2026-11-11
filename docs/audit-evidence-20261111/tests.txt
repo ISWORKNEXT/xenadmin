@@ -1,0 +1,148 @@
+    Finished `test` profile [unoptimized] target(s) in 0.54s
+warning: the following packages contain code that will be rejected by a future version of Rust: russh v0.54.5
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`
+     Running unittests src/lib.rs (target/debug/deps/xen_core-e030221eb97a6b14)
+
+running 89 tests
+test auth::tests::auth_labels_cover_local_and_ad ... ok
+test auth::tests::ad_enable_fields_are_validated ... ok
+test auth::tests::ad_disable_credentials_are_paired ... ok
+test auth::tests::redacts_secret_values_only ... ok
+test auth::tests::parses_subjects_and_resolves_roles ... ok
+test dr::tests::dr_device_settings_are_sane_and_unique ... ok
+test auth::tests::role_resolution_accepts_uuid_and_name_and_rejects_internal_or_unknown ... ok
+test dr::tests::dr_types_and_required_settings_are_validated ... ok
+test auth::tests::role_diff_adds_and_removes_only_changes ... ok
+test dr::tests::dr_whitelist_requires_valid_unique_uuids ... ok
+test health::tests::detects_broken_disks_alerts_capacity_and_hosts ... ok
+test health::tests::detects_boot_order_referencing_missing_devices ... ok
+test health::tests::detects_cpu_memory_overcommit_and_low_free_memory ... ok
+test health::tests::detects_duplicate_vif_macs ... ok
+test health::tests::detects_ha_and_guest_tool_issues ... ok
+test health::tests::detects_expired_or_expiring_certificates_and_pending_updates ... ok
+test health::tests::detects_management_pif_and_local_storage ... ok
+test health::tests::detects_missing_ha_statefile_degraded_bond_and_no_default_sr ... ok
+test health::tests::detects_missing_suspend_sr_and_reports_tools_iso_and_pv_guests ... ok
+test health::tests::detects_unattached_pbd ... ok
+test health::tests::detects_vbd_slot_boot_and_cd_consistency_issues ... ok
+test health::tests::flags_deprecated_and_local_storage_types ... ok
+test health::tests::healthy_inventory_has_no_warnings ... ok
+test health::tests::reports_reference_and_naming_integrity_issues ... ok
+test health::tests::warns_at_eighty_five_percent_storage ... ok
+test host::tests::absent_memory_inputs_cannot_inflate_available_capacity ... ok
+test host::tests::advertised_primary_references_distinguish_missing_foreign_partial_and_empty ... ok
+test health::tests::reports_security_and_configuration_posture ... ok
+test host::tests::certificates_are_host_scoped_public_only_and_missing_refs_are_not_empty ... ok
+test host::tests::method_absence_permission_denial_and_empty_success_are_distinct ... ok
+test host::tests::maintenance_uses_original_uppercase_key_and_distinguishes_missing ... ok
+test host::tests::general_allowlist_redacts_secrets_and_uses_server_clock_and_modern_iqn ... ok
+test host::tests::missing_storage_dependency_is_not_a_phantom_or_an_empty_success ... ok
+test host::tests::multipath_metadata_exports_only_valid_counts ... ok
+test host::tests::memory_matches_legacy_formulas_without_exposing_guest_rows ... ok
+test host::tests::patch_guidance_compares_application_time_to_boot_and_agent_start ... ok
+test host::tests::placement_headroom_clamps_at_zero ... ok
+test host::tests::nested_network_relations_never_export_foreign_metadata ... ok
+test network::tests::bond_and_vlan_fields_are_validated ... ok
+test network::tests::sriov_and_chin_fields_are_validated ... ok
+test host::tests::storage_filters_hidden_foreign_and_tools_and_redacts_attachment_config ... ok
+test network::tests::management_interfaces_are_never_bond_or_vlan_members ... ok
+test network::tests::sriov_and_chin_pif_eligibility_is_enforced ... ok
+test operations::tests::attach_accepts_only_available_user_disks ... ok
+test host::tests::vlan_never_inherits_cross_host_sriov_metadata_or_link_state ... ok
+test operations::tests::boot_option_validation_rejects_unsafe_combinations ... ok
+test operations::tests::destroy_uses_the_plain_object_reference ... ok
+test operations::tests::cleans_and_validates_tags ... ok
+test operations::tests::disk_mode_validation_is_strict ... ok
+test operations::tests::disk_move_accepts_only_halted_or_running_vms ... ok
+test operations::tests::empty_names_cannot_submit_clone_or_snapshot ... ok
+test operations::tests::host_actions_use_async_host_methods ... ok
+test operations::tests::only_writable_user_disks_are_deletable ... ok
+test operations::tests::only_owned_disks_and_the_suspend_image_are_cleaned_up ... ok
+test operations::tests::sr_create_fields_and_locations_are_validated ... ok
+test operations::tests::sr_introduce_fields_are_validated ... ok
+test operations::tests::start_and_resume_never_force_a_vm ... ok
+test operations::tests::task_references_are_unwrapped ... ok
+test host::tests::vlan_inherits_same_host_sriov_reboot_and_unknown_mode_link_state ... ok
+test operations::tests::validates_vm_ha_restart_priority_and_delays ... ok
+test performance::tests::server_clock_supports_xenapi_dates_without_using_client_timezone ... ok
+test performance::tests::vm_series_are_selected_separately_from_host_series ... ok
+test pool_actions::tests::ha_failure_tolerance_must_leave_a_host ... ok
+test pool_actions::tests::wlb_configuration_is_validated ... ok
+test pool_status::tests::config_values_are_redacted_sorted_and_bool_rendered ... ok
+test pool_status::tests::pvs_ports_and_reference_labels_are_friendly ... ok
+test pool_actions::tests::ha_heartbeats_require_shared_user_storage ... ok
+test pool_status::tests::schedule_fields_are_parsed_for_editing ... ok
+test pool_status::tests::schedules_are_rendered_deterministically ... ok
+test pool_status::tests::sriov_networks_and_purposes_are_classified ... ok
+test operations::tests::trim_results_are_interpreted ... ok
+test performance::tests::rrd_excludes_other_hosts_and_vms_and_preserves_unknown_gaps ... ok
+test pvs::tests::ports_and_cache_sizes_are_validated ... ok
+test pvs::tests::site_fields_are_validated ... ok
+test pvs::tests::server_addresses_are_normalized_and_validated ... ok
+test storage::tests::parses_probe_xml_records ... ok
+test transport::tests::bypass_requires_explicit_setting ... ok
+test transport::tests::old_connection_settings_keep_certificate_verification ... ok
+test transport::tests::rejects_credentials_plaintext_and_non_origin_urls ... ok
+test vmss::tests::schedules_are_rendered_per_frequency ... ok
+test vmss::tests::vmss_fields_are_validated ... ok
+test vmss::tests::vmss_targets_exclude_templates_snapshots_and_dom0 ... ok
+test vmss::tests::weekly_schedules_need_valid_unique_days ... ok
+test xapi::tests::production_host_cannot_disable_read_only ... ok
+test xapi::tests::proxy_urls_are_validated_per_connection ... ok
+test xapi::tests::xapi_timestamps_are_parsed ... ok
+test xapi::tests::xenapi_numbers_accept_strings_and_unknown_capacity ... ok
+test xapi::tests::read_only_blocks_mutations_before_any_network_request ... ok
+test transport::tests::validates_and_builds_proxy_clients ... ok
+
+test result: ok. 89 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/host_details.rs (target/debug/deps/host_details-13b0ac1b6413ef0a)
+
+running 4 tests
+test host_details_are_scoped_redacted_and_read_only ... ok
+test failed_optional_dataset_keeps_primary_section_and_emits_warning ... ok
+test permission_denied_is_unavailable_and_not_reported_as_empty ... ok
+test unknown_optional_api_is_unsupported_and_true_zero_is_ready_empty ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.51s
+
+     Running tests/workspace.rs (target/debug/deps/workspace-aa67c45af86bf28c)
+
+running 5 tests
+test host_detail_requests_cannot_escape_the_selected_connection ... ok
+test host_failure_is_reported_as_failure_not_success ... ok
+test cancellation_uses_the_original_connection_and_task ... ok
+test failed_pool_refresh_preserves_other_connections ... ok
+test same_vm_uuid_and_name_in_two_pools_never_cross_targets ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.15s
+
+     Running unittests src/main.rs (target/debug/deps/xen_native-fbe74b8adc46d9c0)
+
+running 18 tests
+test config::saved_search_tests::saved_search_upsert_and_edit_replace_in_place ... ok
+test config::saved_search_tests::group_by_keys_are_stable ... ok
+test rdp::tests::input_translation_emits_fast_path_events ... ok
+test rdp::tests::rdp_credentials_are_validated ... ok
+test rdp::tests::rdp_key_map_covers_letters_and_extended_keys ... ok
+test config::saved_search_tests::saved_searches_round_trip_and_default_grouping ... ok
+test search::tests::free_text_searches_name_uuid_host_connection_description_and_tags ... ok
+test search::tests::filters_fields_and_comparators ... ok
+test search::tests::malformed_queries_fall_back_to_flat_and_without_panicking ... ok
+test search::tests::quoted_values_keep_parentheses_and_spaces ... ok
+test ssh::tests::terminal_buffer_handles_ansi_crlf_backspace_and_scrollback ... ok
+test ssh::tests::terminal_buffer_keeps_unicode_and_clears ... ok
+test state::tests::console_blit_forces_opaque_alpha_and_ignores_out_of_bounds ... ok
+test state::tests::console_copy_rect_supports_overlapping_regions ... ok
+test views::inventory::tests::groups_vms_by_connection_host_power_and_first_tag ... ok
+test views::vm_detail::tests::console_keysyms_use_x11_values ... ok
+test search::tests::supports_and_or_not_parentheses_and_precedence ... ok
+test ssh::tests::ssh_credentials_are_validated ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xen_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

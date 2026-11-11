@@ -352,7 +352,7 @@ fn hosts_card(
                     actions.push(UiAction::OpenObject {
                         key: ObjectKey::Host {
                             connection_id: connection_id.to_owned(),
-                            host_ref: host.reference.clone(),
+                            host_uuid: host.uuid.clone(),
                         },
                         title: host.name.clone(),
                     });

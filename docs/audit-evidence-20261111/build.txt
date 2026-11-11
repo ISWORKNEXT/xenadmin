@@ -1,0 +1,4 @@
+   Compiling xen-native v0.1.0 (/home/tinnerkun/Desktop/xen/xenadmin/native)
+    Finished `dev` profile [unoptimized] target(s) in 5.58s
+warning: the following packages contain code that will be rejected by a future version of Rust: russh v0.54.5
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`

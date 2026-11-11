@@ -1,0 +1,47 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        675,
+        331
+      ],
+      "wait": 1,
+      "snap": "snapshot-template-dialog-fixed"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        954,
+        596
+      ],
+      "wait": 10
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        110,
+        231
+      ],
+      "wait": 3,
+      "snap": "snapshot-template-success"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 3,
+      "snap": "snapshot-template-final"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

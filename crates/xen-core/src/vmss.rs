@@ -318,8 +318,10 @@ pub fn validate_vmss_fields(
             "Frequency must be hourly, daily or weekly.".into(),
         ));
     }
-    if schedule.minute > 59 || schedule.hour > 23 {
-        return Err(ApiError::Xen("The schedule time is out of range.".into()));
+    if ![0, 15, 30, 45].contains(&schedule.minute) || schedule.hour > 23 {
+        return Err(ApiError::Xen(
+            "Select minute 0, 15, 30 or 45 and an hour between 0 and 23.".into(),
+        ));
     }
     if schedule.frequency == "weekly" {
         if schedule.days.is_empty() {

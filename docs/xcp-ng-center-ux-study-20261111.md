@@ -1,0 +1,43 @@
+# ศึกษา UX ของ XCP-ng Center จากซอร์สต้นฉบับ
+
+อ้างอิง [xcp-ng/xenadmin commit `ba43130ff`](https://github.com/xcp-ng/xenadmin/tree/ba43130ffb30d05d1eb40187b8ef9f2de111468a). เอกสารนี้ศึกษาลำดับการใช้งานจาก WinForms source เทียบกับ Rust UI ปัจจุบัน ไม่ได้รันต้นฉบับหรือเชื่อมต่อ dev host. ผลทดสอบจริงก่อนหน้าดูใน [live UI audit](audit-live-ui-20261111.md).
+
+ข้อเสนอหลัก: เก็บโครง tree และ object tabs ของเราไว้ แล้วนำพฤติกรรมสำคัญของต้นฉบับมาใช้ ได้แก่ การเลือกเป้าหมายเดียวกันจากหลายทาง การอธิบายว่าคำสั่งใช้ไม่ได้เพราะอะไร การตรวจความพร้อมก่อนส่ง และการแสดงผลจริงหลังส่งคำสั่ง.
+
+## การเลือก object เป็นจุดเริ่มต้นของงาน
+
+ต้นฉบับเลือกชุดแท็บตามชนิด object และ capability ใน [`MainWindow.GetNewTabPages`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/MainWindow.cs#L1293). เมื่อเปลี่ยน selection จะรักษาแท็บที่เกี่ยวข้อง และมีตัวเลือกจำแท็บล่าสุดของ object. Navigation มีมุมมอง Infrastructure, Objects, Tags, Folders, Custom Fields, vApps, Saved Search และ Notifications ผ่าน [`NavigationPane`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Controls/MainWindowControls/NavigationPane.cs#L46). จุดที่ควรนำมาใช้ก่อนคือการให้ tree, card และเมนูคลิกขวาเปิด object เดียวกันและใช้เงื่อนไขเดียวกัน.
+
+ของเรามีหลักฐานว่ากด host จาก tree แล้วโหลดไม่ได้ แต่เปิดจาก host card ได้. ควรทำให้ Host details เปิดได้จากทุกทางก่อนเพิ่มแท็บหรือแต่งหน้าจอ: ใช้ UUID สำหรับ route ที่เรียก API และใช้ reference สำหรับการกรอง inventory ตามที่ API นั้นต้องการ. เกณฑ์ตรวจคือชื่อ host, แท็บ, Retry และ Refresh ต้องชี้ host เดิมเมื่อเปิดจาก tree, context menu, card หรือ startup flag.
+
+[`MultiSelectTreeView`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Controls/TreeViews/MultiSelectTreeView.cs#L799) เปลี่ยน selection เมื่อคลิกขวานอกกลุ่มที่เลือก แต่รักษากลุ่มเมื่อคลิกขวาภายใน. ควรนำกฎนี้มาใช้กับคำสั่งที่เปลี่ยนทรัพยากร และให้ dialog แสดงเป้าหมายจริงเสมอ. ต้นฉบับยังแยกการตั้งใจเปิด Console ออกจากการเลือก VM ที่จำแท็บ Console ไว้: กรณีหลังรักษา keyboard focus ที่ tree. การเปลี่ยน selection จึงไม่ควรส่งคีย์ไปเข้า guest โดยไม่ตั้งใจ. [หลักฐานการจัด focus](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/MainWindow.cs#L1640)
+
+## ลำดับการกดที่ควรเทียบ
+
+| งาน | พฤติกรรมของต้นฉบับและหลักฐาน | สิ่งที่ควรนำมาใช้กับ Xen Desktop |
+|---|---|---|
+| คำสั่งตาม selection | [`Command`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Commands/Command.cs#L125) มี `CanRunCore`, confirmation และแยก object ที่ทำได้ออกจาก object ที่ทำไม่ได้พร้อมเหตุผล | ปุ่มบน toolbar กับเมนูคลิกขวาควรให้ผลตรงกัน. ใน bulk action แสดงจำนวนเป้าหมายที่ทำได้และเหตุผลของรายการที่ถูกข้าม |
+| Start VM | [`StartVMCommand`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Commands/StartVMCommand.cs#L91) มีทางเลือก Eject, Ignore และ Cancel เมื่อพบกรณีสื่อที่ต้องจัดการก่อน start. ผูกกับ HA warning และ start diagnosis | ให้คำเตือนบอกวิธีแก้และเป้าหมายที่ได้รับผล แทนการแสดงข้อความจาก task อย่างเดียว. คงการตรวจ state ล่าสุดก่อนส่ง |
+| Force shut down | [`ForceVMShutDownCommand`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Commands/ForceVMShutDownCommand.cs#L121) ต้องยืนยัน และปรับข้อความตามจำนวน VM, งานที่กำลังทำ และ HA protection | ระบุชื่อ VM และผลกระทบตามสถานะจริง. ถ้า VM หยุดระหว่างเปิดกล่อง ให้บอกสถานะใหม่และไม่รายงานว่าคำสั่งทำให้หยุด |
+| Delete VM | [`ConfirmVMDeleteDialog`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Dialogs/ConfirmVMDeleteDialog.cs#L87) แสดงดิสก์และ snapshot ให้เลือก โดยค่าเริ่มต้นของดิสก์อิง ownership | แสดงรายการที่จะลบก่อนยืนยัน แยกดิสก์ที่เป็นของ VM กับดิสก์ที่ใช้ร่วมกัน. การเลือก snapshot เป็นรายตัวคือช่องว่างจากตัวเลือกทั้งหมดหรือไม่มีของเรา |
+| Snapshots | [`SnapshotsPage.RefreshToolStripButtons`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/TabPages/SnapshotsPage.cs#L585) เปิด Revert, Save และ Delete เมื่อเลือกหนึ่ง snapshot; เลือกหลายตัวเหลือ Delete; ไม่เลือกเลยปิดทั้งหมด | รักษา selection และปุ่มให้สัมพันธ์กัน. Revert ต้องบอกว่าจะย้อน VM ตัวใดและผลต่อ power state. แยกการยกเลิก dialog ออกจากการยกเลิก task ที่ส่งแล้ว |
+| New VM | [`NewVMWizard`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Wizards/NewVMWizard/NewVMWizard.cs#L70) ไล่ Template → Name → Installation media → Home server → CPU/memory → Storage → Networking → Finish. สิทธิ์มีผลต่อการปิดบางขั้นและช่องกรอก | เก็บ clone แบบเร็วไว้. เพิ่ม wizard สำหรับเลือก resource ก่อนสร้าง VM และมีหน้า review สุดท้าย. อย่าแสดงตัวเลือกที่ยังไม่มี backend รองรับ |
+| Add interface | [`VIFDialog.LoadNetworks`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Dialogs/VIFDialog.cs#L185) กรอง visibility, membership และ SR-IOV eligibility ก่อนเลือกค่าเริ่มต้น | ใช้รายการ network ที่เหมาะกับ VM. ไม่เลือก Host internal management network เป็นค่าเริ่มต้น. ถ้าไม่มีตัวเลือกที่ใช้ได้ ให้บอกเหตุผลก่อนเปิด Submit |
+| New SR และ New network | [`NewSRWizard`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Wizards/NewSRWizard.cs#L253) และ [`NewNetworkWizard`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Wizards/NewNetworkWizard.cs#L104) เปลี่ยนหน้าตั้งค่าตามชนิดที่เลือก | เลือกชนิดก่อน แสดงเฉพาะข้อมูลที่จำเป็นสำหรับชนิดนั้น และแยกตรวจ configuration ออกจากการสร้างจริง |
+| ย้าย VM และนำเข้า | [`CrossPoolMigrateWizard`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Wizards/CrossPoolMigrateWizard/CrossPoolMigrateWizard.cs#L196) แยก flow ตาม copy mode และปลายทาง. [`ImportWizard`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Wizards/ImportWizard/ImportWizard.cs#L106) แยก source, host, storage, network และ finish | เตรียมการ mapping ปลายทางและ review ไว้เป็นเงื่อนไขออกแบบ. ย้าย VDI เป็นคนละงานกับย้าย VM จึงควรใช้ชื่อและจุดเริ่มคนละแบบ |
+| Maintenance mode | [`HostMaintenanceModeCommand`](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/Commands/HostMaintenanceModeCommand.cs#L73) ใช้ evacuation dialog, ตรวจ HA/coordinator และมีทางเลือกคืน VM เมื่อออกจากโหมด | ไม่ทำให้ Disable host หรือ Evacuate ดูเหมือน maintenance ครบกระบวนการ. ต้องเห็น VM ที่ได้รับผลและผลของแต่ละงานก่อนสรุปว่า host พร้อม maintenance |
+
+## ค้นหาและติดตามผลหลังส่งคำสั่ง
+
+- **Search:** ต้นฉบับปรับ scope ตาม selection. เลือกหลาย object ใน pool เดียวจะจำกัดการค้นหาใน pool นั้น ส่วนข้าม pool ใช้ global search. Saved search ระบุ connection ที่บันทึกและส่งออกได้. ของเราบันทึก local JSON; ควรแสดง scope ให้ชัดก่อนเพิ่มการบันทึกฝั่ง pool. [Selection scope](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/MainWindow.cs#L1716) · [Save/import/export](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/TabPages/SearchPage.cs#L220)
+- **Tasks:** History มีตัวกรองวันที่ ตำแหน่ง และสถานะ รวมถึงเปิดรายละเอียดและกลับไปหา object. Cancel มีให้เฉพาะงานที่ยังทำอยู่และยกเลิกได้. ของเราควรแสดงลำดับ *ส่งแล้ว → กำลังทำ → ผลจาก host* พร้อมลิงก์กลับ object และเก็บรายละเอียดความล้มเหลวไว้ให้เปิดดูภายหลัง. [History filters](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/TabPages/HistoryPage.cs#L234) · [Action menu](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/TabPages/HistoryPage.cs#L540)
+- **Alerts:** ต้นฉบับแยก filter ตามวันที่ ตำแหน่ง และ severity และเสนอ Fix เฉพาะ alert ที่มีทางแก้. ควรให้ผู้ใช้กระโดดจาก alert ไปยัง object ได้ และแยก Dismiss ออกจากการแก้สาเหตุ. [AlertSummaryPage](https://github.com/xcp-ng/xenadmin/blob/ba43130ffb30d05d1eb40187b8ef9f2de111468a/XenAdmin/TabPages/AlertSummaryPage.cs#L647)
+
+## ลำดับที่แนะนำสำหรับรอบพัฒนา
+
+1. แก้เส้นทางเปิด Host details และตัวเลือก network เริ่มต้นก่อน เพราะพบปัญหาจากการกดจริงแล้ว.
+2. ทำให้ปุ่มและเมนูใช้กฎ eligibility เดียวกัน แสดงเหตุผลเมื่อทำไม่ได้ และแยกผล Submit จากผล task.
+3. ทำ New VM wizard เป็น flow แรกที่ครอบคลุมการเลือก resource ก่อนสร้าง. ใช้รูปแบบ conditional steps เดียวกันเป็นแนวทางสำหรับ SR และ network.
+4. เพิ่ม mapping/review ของ migration และ import/export เมื่อ backend รองรับจริง.
+
+เมื่อ dev host เปิด ให้เริ่มตรวจจากการกดจริง: tree→host→Retry/Refresh, VM→Add interface→ตรวจค่าเริ่มต้น→Cancel, template→New VM→Back/Next→Review→Submit→task→readback. ตรวจทั้งการยกเลิกและกรณี object เปลี่ยนสถานะระหว่างเปิด dialog. ไม่ใช้ผลจาก startup flags แทนผลกดเส้นทางปกติ.

@@ -1,0 +1,112 @@
+(Xen Desktop xce-n0
+
+BD infrastru
+
+INFR
+
+TRUC
+
+URE
+Search infrastructure
+= Infrastructure
+© Activity & tasks
+
+v @ AUTHORIZED DEV HOST /READ ONLY
+
+> = Hosts
+
+© Virtual machines
+
+Templates
+
+> & Storage
+
+> A Networks
+
+Ctrlik search + FS refresh
+
+AUTHORIZED DEV HOST/ READ ONLY
+
+wit
+
+Home
+
+192.168.8.170
+
+Hosts 1
+
+© oll0-Server
+
+Networks
+
+Pool-wide network 0
+
+AUTHORIZED DEVHOST/READ ON... x
+
+Poot UUID 36
+
+. Virtual machines
+
+14
+
+5e-B4542311b
+
+192.168.8.170
+
+xenbro
+
+View all>
+
+4cPus 62968 §
+
+Viewall>
+
+AUTHORIZED DEV HOST / READ ONLY-RO ©
+
+AUTHORIZED DEV HOST /READ ONLY.csses; coment) peveen”aunenseason pola
+
+Storage .
+
+612.1 GiB
+
+Storage 2
+
+Local storage
+
+NFS ISO
+
+Virtual machines 14
+
+.
+
+‘AlmaLinux 10 (TH) - Guest Agent copy
+© Windows 10 (64-bit) (1)
+
+© xOA
+
+0% € - O X
+
+Refresh
+
+Health check
+Networks .
+Viewall>
+_ 416.5 GiB
+— 907.1 GiB
+Viewall>
+
+Stopped
+
+Running
+
+fe Running
+
+© rental-order-01a125de-bfa8-7000-bb87-2'1cb6fcbc6b 1-job-0 121 2Sda-bfa8-7000-bb87-24eh
+
+© rental-order-01a13542-18ef-70e9-9342-2beBaF744d43,job-0121354a-18ef-70e9-9342-2be8
+
+© rental-order-01a1354a-18ef-70e9-9342-2bcBaf744d43-previous-01a1354c-1Sde-7000-9834
+
+© rental-order-01a1359e-d311b-771F-8970-a207F¥cd9eb1Jjob-0141359e-d31b-77 18970-2207
+
+Rust +

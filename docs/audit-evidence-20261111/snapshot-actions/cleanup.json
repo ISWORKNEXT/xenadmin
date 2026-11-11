@@ -1,0 +1,8 @@
+{
+  "test_vms": [],
+  "test_policies": [],
+  "original_vm_uuids_match": true,
+  "vdi_refs_match_baseline": true,
+  "new_vdi_refs": [],
+  "missing_vdi_refs": []
+}

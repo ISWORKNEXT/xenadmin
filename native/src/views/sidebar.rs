@@ -494,7 +494,7 @@ fn host_leaf(
 ) {
     let key = ObjectKey::Host {
         connection_id: connection_id.to_owned(),
-        host_ref: host.reference.clone(),
+        host_uuid: host.uuid.clone(),
     };
     let selected = active_key(state).is_some_and(|active| *active == key);
     let (main, _) = tree_row(
@@ -519,7 +519,7 @@ fn host_leaf(
             actions.push(UiAction::OpenObject {
                 key: ObjectKey::Host {
                     connection_id: connection_id.to_owned(),
-                    host_ref: host.reference.clone(),
+                    host_uuid: host.uuid.clone(),
                 },
                 title: host.name.clone(),
             });

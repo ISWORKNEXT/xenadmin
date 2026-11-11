@@ -1,0 +1,252 @@
+[
+  {
+    "route": "overview",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Connected pool summary rendered (startup connection selects pool; not the global Home dashboard).",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "vms",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Real guest list rendered,14 visible guests at capture; read-only actions disabled.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "templates",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "51 real templates rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "tasks",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Owned tasks empty for this fresh process; external XenAPI tasks displayed.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "health",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "34 cached health checks rendered:0 critical,2 warning,10 info,22 OK at capture.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "auth",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Local authentication,1 protected root subject,6 roles rendered; write buttons disabled.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "pool-status",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "HA/WLB disabled; PVS/VMSS/DR zero at capture; fields rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "storage",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Local ext SR,attached PBD,capacity and19 user VDI rows rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "network",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Pool-wide network0,bridge xenbr0,management eth0/PIF and VIF counts rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-general",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Real identity/software/uptime rendered; maintenance mode explicitly Unavailable.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-cpu",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "4 CPU records,63.89GiB physical memory and allocation groups rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-performance",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "168 real RRD metrics,four CPU series,15-minute chart,actual60-second samples rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-networking",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "One eth0 management interface and hostIP rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-storage",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Four host storage attachment rows rendered,including local ext/ISO/udev.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-hardware",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "One Intel GPU and seven PCI devices rendered in initial viewport; lower USB section not fully reviewed.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-updates",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Empty updates/patches section rendered; not proof of update apply capability.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-certificates",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Two host/host_internal public certificate metadata records rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "host-health",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Empty alerts and crashdump sections rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "vm-general",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Running Windows10 guest details,4vCPU/24GiB fields rendered read-only.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "vm-performance",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "37 real VM RRD metrics/four CPU series rendered.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "vm-storage",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Existing ISO+64GiB disk and CD media displayed read-only.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "vm-network",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Existing eth0/MAC and attached status rendered read-only.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "vm-ha",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Existing VM HA priority/affinity/delay/resource fields rendered read-only.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "vm-snapshots",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "One pre-existing guest snapshot displayed read-only; no action on it.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  },
+  {
+    "route": "vm-console",
+    "alive_after_settle": true,
+    "window_captured": true,
+    "settle_seconds": 7,
+    "exit_code_before_cleanup": null,
+    "visual_review": "OBSERVED_RENDERED",
+    "observed_outcome": "Actual1920x1200 Windows desktop framebuffer displayed via VNC; no guest input sent.",
+    "evidence_level": "Real-host startup route rendering only; not button interaction coverage"
+  }
+]

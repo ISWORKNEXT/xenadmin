@@ -166,14 +166,14 @@ impl App {
                 .map_or_else(|| id.clone(), crate::state::connection_name),
             ObjectKey::Host {
                 connection_id,
-                host_ref,
+                host_uuid,
             } => find_connection(&self.workspace, connection_id)
                 .and_then(|connection| {
                     crate::state::connection_inventory(connection).and_then(|inventory| {
                         inventory
                             .hosts
                             .iter()
-                            .find(|host| &host.reference == host_ref)
+                            .find(|host| &host.uuid == host_uuid)
                             .map(|host| host.name.clone())
                     })
                 })
@@ -288,29 +288,46 @@ impl App {
             }
             ObjectKey::Host {
                 connection_id,
-                host_ref,
+                host_uuid,
             } => {
-                self.state.scope = Scope::Host {
-                    connection_id: connection_id.clone(),
-                    host_ref: host_ref.clone(),
-                };
+                self.state.scope = find_connection(&self.workspace, connection_id)
+                    .and_then(crate::state::connection_inventory)
+                    .and_then(|inventory| {
+                        inventory.hosts.iter().find(|host| &host.uuid == host_uuid)
+                    })
+                    .map_or_else(
+                        || Scope::Connection(connection_id.clone()),
+                        |host| Scope::Host {
+                            connection_id: connection_id.clone(),
+                            host_ref: host.reference.clone(),
+                        },
+                    );
                 let host_name = self.object_title(&key);
                 let same = self.state.host_route.as_ref().is_some_and(|route| {
-                    &route.connection_id == connection_id && &route.host_uuid == host_ref
+                    &route.connection_id == connection_id && &route.host_uuid == host_uuid
                 });
                 self.state.host_route = Some(crate::state::HostRoute {
                     connection_id: connection_id.clone(),
-                    host_uuid: host_ref.clone(),
+                    host_uuid: host_uuid.clone(),
                     host_name,
                 });
+                if !same {
+                    self.state.perf_seq += 1;
+                    self.state.perf_state = LoadState::Idle;
+                }
                 if !same || matches!(self.state.host_state, LoadState::Idle | LoadState::Error(_)) {
                     self.state.host_seq += 1;
                     self.state.host_state = LoadState::Loading;
                     self.worker.send(Command::HostDetails {
                         seq: self.state.host_seq,
                         connection_id: connection_id.clone(),
-                        host_uuid: host_ref.clone(),
+                        host_uuid: host_uuid.clone(),
                     });
+                }
+                if self.state.host_tab == crate::state::HostTab::Performance
+                    && matches!(self.state.perf_state, LoadState::Idle)
+                {
+                    self.apply(vec![UiAction::LoadPerformance]);
                 }
             }
             ObjectKey::Vm {
@@ -530,7 +547,7 @@ impl App {
                             self.open_object(
                                 ObjectKey::Host {
                                     connection_id,
-                                    host_ref: uuid,
+                                    host_uuid: uuid,
                                 },
                                 Some(host_name),
                             );
@@ -721,6 +738,63 @@ impl App {
                         }
                     }
                 }
+                Event::WizardTemplate { seq, result } => {
+                    if seq == self.state.new_vm_seq
+                        && let Some(wizard) = self.state.new_vm.as_mut()
+                    {
+                        wizard.template = match result {
+                            Ok(details) => {
+                                wizard.draft.vcpus = details.vcpus_at_startup.max(1);
+                                wizard.draft.memory_mib = details
+                                    .memory_dynamic_max
+                                    .div_ceil(1024 * 1024)
+                                    .max(details.memory_static_min.div_ceil(1024 * 1024))
+                                    .max(64);
+                                wizard.draft.new_disk_gib =
+                                    if details.disks.iter().all(|disk| disk.is_cd) {
+                                        Some(details.provision_disks.first().map_or(20, |disk| {
+                                            disk.size.div_ceil(1024 * 1024 * 1024)
+                                        }))
+                                    } else {
+                                        None
+                                    };
+                                if wizard.draft.name.is_empty() {
+                                    wizard.draft.name = format!("{} VM", details.name);
+                                }
+                                LoadState::Ready(*details)
+                            }
+                            Err(message) => LoadState::Error(message),
+                        };
+                    }
+                }
+                Event::XvaQueued { result } => match result {
+                    Ok(()) => {
+                        self.state.xva_dialog = None;
+                        self.open_object(ObjectKey::Tasks, None);
+                    }
+                    Err(message) => {
+                        if let Some(dialog) = self.state.xva_dialog.as_mut() {
+                            dialog.submitting = false;
+                            dialog.error = Some(message);
+                        }
+                    }
+                },
+                Event::VmCreationQueued { result } => match result {
+                    Ok(()) => {
+                        self.state.new_vm = None;
+                        self.open_object(ObjectKey::Tasks, None);
+                        self.state.toasts.push(Toast::new(
+                            "VM creation queued. Follow progress in Activity & tasks.",
+                            ToastKind::Info,
+                        ));
+                    }
+                    Err(message) => {
+                        if let Some(wizard) = self.state.new_vm.as_mut() {
+                            wizard.submitting = false;
+                            wizard.error = Some(message);
+                        }
+                    }
+                },
                 Event::HostDetails { seq, result } => {
                     if seq == self.state.host_seq {
                         self.state.host_state = match result {
@@ -1892,6 +1966,158 @@ impl App {
     fn apply(&mut self, actions: Vec<UiAction>) {
         for action in actions {
             match action {
+                UiAction::OpenXvaExport {
+                    connection_id,
+                    vm_uuid,
+                } => {
+                    let name = find_vm(&self.workspace, &connection_id, &vm_uuid)
+                        .map(|(_, v)| v.name.clone())
+                        .unwrap_or_else(|| "VM".into());
+                    let file_name: String = name
+                        .chars()
+                        .take(64)
+                        .map(|c| {
+                            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                                c
+                            } else {
+                                '_'
+                            }
+                        })
+                        .collect();
+                    let directory = std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    self.state.xva_dialog = Some(crate::state::XvaDialog {
+                        connection_id,
+                        vm_uuid: Some(vm_uuid),
+                        path: directory
+                            .join(format!("{file_name}.xva"))
+                            .to_string_lossy()
+                            .into_owned(),
+                        name,
+                        sr_uuid: None,
+                        network_uuid: None,
+                        error: None,
+                        submitting: false,
+                    });
+                }
+                UiAction::OpenXvaImport(connection_id) => {
+                    self.state.xva_dialog = Some(crate::state::XvaDialog {
+                        connection_id,
+                        vm_uuid: None,
+                        path: String::new(),
+                        name: "Imported VM".into(),
+                        sr_uuid: None,
+                        network_uuid: None,
+                        error: None,
+                        submitting: false,
+                    });
+                }
+                UiAction::CloseXvaDialog => {
+                    if self
+                        .state
+                        .xva_dialog
+                        .as_ref()
+                        .is_some_and(|d| !d.submitting)
+                    {
+                        self.state.xva_dialog = None;
+                    }
+                }
+                UiAction::SubmitXvaTransfer => {
+                    if let Some(dialog) = self.state.xva_dialog.as_mut()
+                        && !dialog.submitting
+                    {
+                        let request = match &dialog.vm_uuid {
+                            Some(vm_uuid) => xen_core::xva::XvaRequest::Export {
+                                vm_uuid: vm_uuid.clone(),
+                                path: dialog.path.clone().into(),
+                            },
+                            None => xen_core::xva::XvaRequest::Import {
+                                path: dialog.path.clone().into(),
+                                sr_uuid: dialog.sr_uuid.clone().unwrap_or_default(),
+                                name: dialog.name.clone(),
+                                network_uuid: dialog.network_uuid.clone(),
+                            },
+                        };
+                        dialog.submitting = true;
+                        dialog.error = None;
+                        self.worker.send(Command::XvaTransfer {
+                            connection_id: dialog.connection_id.clone(),
+                            request,
+                        });
+                    }
+                }
+                UiAction::OpenNewVmWizard {
+                    connection_id,
+                    template_uuid,
+                } => {
+                    if !find_connection(&self.workspace, &connection_id)
+                        .is_some_and(|connection| !crate::state::is_read_only(connection))
+                    {
+                        self.state.toasts.push(Toast::new(
+                            "Connect with write access to create a VM.",
+                            ToastKind::Error,
+                        ));
+                        continue;
+                    }
+                    self.state.new_vm = Some(crate::state::NewVmWizard {
+                        connection_id,
+                        draft: xen_core::provisioning::CreateVmRequest {
+                            template_uuid: String::new(),
+                            name: String::new(),
+                            description: String::new(),
+                            vcpus: 1,
+                            memory_mib: 1024,
+                            sr_uuid: String::new(),
+                            new_disk_gib: Some(20),
+                            network_uuid: None,
+                            iso_uuid: None,
+                            affinity_host_uuid: None,
+                        },
+                        step: 0,
+                        template: LoadState::Idle,
+                        error: None,
+                        submitting: false,
+                    });
+                    self.apply(vec![UiAction::SelectNewVmTemplate(template_uuid)]);
+                }
+                UiAction::SelectNewVmTemplate(uuid) => {
+                    if let Some(wizard) = self.state.new_vm.as_mut() {
+                        wizard.draft.template_uuid = uuid.clone();
+                        wizard.template = LoadState::Loading;
+                        wizard.draft.iso_uuid = None;
+                        wizard.error = None;
+                        self.state.new_vm_seq += 1;
+                        self.worker.send(Command::WizardTemplate {
+                            seq: self.state.new_vm_seq,
+                            connection_id: wizard.connection_id.clone(),
+                            template_uuid: uuid,
+                        });
+                    }
+                }
+                UiAction::CloseNewVmWizard => {
+                    if self
+                        .state
+                        .new_vm
+                        .as_ref()
+                        .is_some_and(|wizard| !wizard.submitting)
+                    {
+                        self.state.new_vm_seq += 1;
+                        self.state.new_vm = None;
+                    }
+                }
+                UiAction::CreateNewVm => {
+                    if let Some(wizard) = self.state.new_vm.as_mut()
+                        && !wizard.submitting
+                    {
+                        wizard.submitting = true;
+                        wizard.error = None;
+                        self.worker.send(Command::CreateVm {
+                            connection_id: wizard.connection_id.clone(),
+                            request: wizard.draft.clone(),
+                        });
+                    }
+                }
                 UiAction::SetView(view) => {
                     self.open_list_for_view(view);
                 }
@@ -1963,6 +2189,19 @@ impl App {
                     self.open_object(key, None);
                 }
                 UiAction::Propose(kind, targets) => {
+                    if kind == ActionKind::Clone
+                        && targets.len() == 1
+                        && let Some((connection, vm)) = targets.first()
+                        && find_vm(&self.workspace, connection, vm)
+                            .is_some_and(|(_, template)| template.kind == "template")
+                    {
+                        self.apply(vec![UiAction::OpenNewVmWizard {
+                            connection_id: connection.clone(),
+                            template_uuid: vm.clone(),
+                        }]);
+                        continue;
+                    }
+
                     let first_name = targets
                         .first()
                         .and_then(|(connection_id, vm_uuid)| {
@@ -1972,6 +2211,8 @@ impl App {
                         .unwrap_or_else(|| "VM".into());
                     let name = match kind {
                         ActionKind::Clone => format!("{first_name} copy"),
+                        ActionKind::SnapshotToVm => format!("{first_name} VM"),
+                        ActionKind::SnapshotToTemplate => format!("{first_name} template"),
                         ActionKind::Snapshot => {
                             format!("Snapshot {}", Local::now().format("%Y-%m-%d"))
                         }
@@ -2049,7 +2290,7 @@ impl App {
                     self.open_object(
                         ObjectKey::Host {
                             connection_id,
-                            host_ref: host_uuid,
+                            host_uuid,
                         },
                         Some(host_name),
                     );
@@ -5126,6 +5367,14 @@ impl App {
                     let Some((connection_id, vm_uuid)) = vm_key(&key) else {
                         continue;
                     };
+                    let existing = vif_uuid.as_ref().and_then(|vif_uuid| {
+                        self.state.vm_state.ready().and_then(|details| {
+                            details
+                                .interfaces
+                                .iter()
+                                .find(|interface| &interface.uuid == vif_uuid)
+                        })
+                    });
                     let networks: Vec<(String, String)> =
                         find_connection(&self.workspace, &connection_id)
                             .and_then(crate::state::connection_inventory)
@@ -5133,6 +5382,12 @@ impl App {
                                 inventory
                                     .networks
                                     .iter()
+                                    .filter(|network| {
+                                        network.bridge != "xenapi"
+                                            || existing.is_some_and(|interface| {
+                                                interface.network_uuid == network.uuid
+                                            })
+                                    })
                                     .map(|network| (network.uuid.clone(), network.name.clone()))
                                     .collect()
                             })
@@ -5144,21 +5399,13 @@ impl App {
                         ));
                         continue;
                     }
-                    let existing = vif_uuid.as_ref().and_then(|vif_uuid| {
-                        self.state.vm_state.ready().and_then(|details| {
-                            details
-                                .interfaces
-                                .iter()
-                                .find(|interface| &interface.uuid == vif_uuid)
-                        })
-                    });
                     self.state.vif_dialog = Some(crate::state::VifDialog {
                         connection_id,
                         vm_uuid,
                         vif_uuid,
                         network_uuid: existing
                             .map(|interface| interface.network_uuid.clone())
-                            .or_else(|| networks.first().map(|(uuid, _)| uuid.clone())),
+                            .filter(|uuid| networks.iter().any(|(candidate, _)| candidate == uuid)),
                         networks,
                         mac: existing
                             .map(|interface| interface.mac.clone())

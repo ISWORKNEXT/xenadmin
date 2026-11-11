@@ -19,6 +19,12 @@ use crate::{
     xapi::{ApiError, Connection, ConnectionSettings, Inventory, RawInventory},
 };
 
+enum CloneMode {
+    Clone,
+    NewVm(crate::provisioning::CreateVmRequest),
+    Snapshot { as_template: bool },
+}
+
 const EVENT_CLASSES: &[&str] = &[
     "VM",
     "host",
@@ -100,6 +106,7 @@ struct TrackedTask {
     record: Operation,
     remote_ref: String,
     restore: Option<(String, String)>,
+    local_cancel: Option<Arc<AtomicBool>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1869,7 +1876,19 @@ impl Workspace {
                 .await;
         }
         if let VmAction::Clone { name } = action {
-            return self.start_clone(connection_id, vm_uuid, name).await;
+            return self
+                .start_clone(connection_id, vm_uuid, name, CloneMode::Clone)
+                .await;
+        }
+        if let VmAction::CreateFromSnapshot { name, as_template } = action {
+            return self
+                .start_clone(
+                    connection_id,
+                    vm_uuid,
+                    name,
+                    CloneMode::Snapshot { as_template },
+                )
+                .await;
         }
         let active = self.active(&connection_id).await?;
         let lease = active.lifecycle.clone().read_owned().await;
@@ -1930,6 +1949,7 @@ impl Workspace {
                 record: record.clone(),
                 remote_ref: remote_ref.clone(),
                 restore,
+                local_cancel: None,
             },
         );
         let workspace = self.clone();
@@ -1950,11 +1970,143 @@ impl Workspace {
         Ok(record)
     }
 
+    pub async fn create_vm_from_template(
+        self: &Arc<Self>,
+        connection_id: String,
+        request: crate::provisioning::CreateVmRequest,
+    ) -> Result<Operation, String> {
+        self.start_clone(
+            connection_id,
+            request.template_uuid.clone(),
+            request.name.clone(),
+            CloneMode::NewVm(request),
+        )
+        .await
+    }
+
+    pub async fn start_xva_transfer(
+        self: &Arc<Self>,
+        connection_id: String,
+        request: crate::xva::XvaRequest,
+    ) -> Result<Operation, String> {
+        use crate::xva::{XvaOutcome, XvaRequest};
+        let active = self.active(&connection_id).await?;
+        let lease = active.lifecycle.clone().read_owned().await;
+        if active.connection.settings.read_only {
+            return Err("This connection is read-only.".into());
+        }
+        let (busy_key, action, object_name) = match &request {
+            XvaRequest::Export { vm_uuid, .. } => {
+                let snapshot = active.snapshot.read().await;
+                let vm = snapshot
+                    .vms
+                    .iter()
+                    .chain(&snapshot.templates)
+                    .chain(&snapshot.snapshots)
+                    .find(|v| &v.uuid == vm_uuid)
+                    .ok_or("The object is not part of this connection.")?;
+                (vm_uuid.clone(), "Export XVA", vm.name.clone())
+            }
+            XvaRequest::Import { name, .. } => ("xva-import".into(), "Import XVA", name.clone()),
+        };
+        if !active.busy_vms.lock().await.insert(busy_key.clone()) {
+            return Err("A task is already active for this object.".into());
+        }
+        let remote_ref = match active.connection.create_xva_task(action).await {
+            Ok(reference) => reference,
+            Err(error) => {
+                active.busy_vms.lock().await.remove(&busy_key);
+                return Err(error.to_string());
+            }
+        };
+        let connection_name = display_name(
+            &active.connection.settings,
+            &active.snapshot.read().await.pool_name,
+        );
+        let local_cancel = Arc::new(AtomicBool::new(false));
+        let record = Operation {
+            id: Uuid::now_v7().to_string(),
+            connection_id,
+            connection_name,
+            vm_uuid: busy_key.clone(),
+            remote_ref: remote_ref.clone(),
+            object_name,
+            action: action.into(),
+            status: TaskStatus::Running,
+            progress: 0.0,
+            message: String::new(),
+            can_cancel: true,
+            started_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        };
+        self.tasks.lock().await.insert(
+            record.id.clone(),
+            TrackedTask {
+                record: record.clone(),
+                remote_ref: remote_ref.clone(),
+                restore: None,
+                local_cancel: Some(local_cancel.clone()),
+            },
+        );
+        let workspace = self.clone();
+        let task_id = record.id.clone();
+        tokio::spawn(async move {
+            let transfer = active
+                .connection
+                .run_xva_transfer(&request, &remote_ref, &local_cancel);
+            tokio::pin!(transfer);
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            let result = loop {
+                tokio::select! {
+                    result = &mut transfer => break result,
+                    _ = interval.tick() => {
+                        if let Ok(remote) = active.connection.task_record(&remote_ref).await
+                            && let Some(task) = workspace.tasks.lock().await.get_mut(&task_id)
+                        { task.record.progress=remote.progress; task.record.can_cancel=true; }
+                    }
+                }
+            };
+            let (status, message) = match result {
+                Ok(outcome) => {
+                    let message = match outcome {
+                        XvaOutcome::Exported { bytes } => {
+                            format!("Exported {bytes} bytes to the selected XVA file.")
+                        }
+                        XvaOutcome::Imported { uuid } => format!("Imported halted object {uuid}."),
+                    };
+                    match refresh_inventory_cache(&active).await {
+                        Ok(()) => (TaskStatus::Succeeded, message),
+                        Err(error) => (
+                            TaskStatus::Succeeded,
+                            format!("{message} Inventory refresh failed: {error}"),
+                        ),
+                    }
+                }
+                Err(ApiError::XenCode(code, message)) if code == "TASK_CANCELLED" => {
+                    (TaskStatus::Cancelled, message)
+                }
+                Err(error) => (TaskStatus::Failed, error.to_string()),
+            };
+            if let Some(task) = workspace.tasks.lock().await.get_mut(&task_id) {
+                task.record.status = status;
+                task.record.message = message;
+                task.record.progress = 1.0;
+                task.record.can_cancel = false;
+            }
+            active.busy_vms.lock().await.remove(&busy_key);
+            drop(lease);
+        });
+        Ok(record)
+    }
+
     async fn start_clone(
         self: &Arc<Self>,
         connection_id: String,
         vm_uuid: String,
         name: String,
+        mode: CloneMode,
     ) -> Result<Operation, String> {
         let active = self.active(&connection_id).await?;
         let lease = active.lifecycle.clone().read_owned().await;
@@ -1988,7 +2140,13 @@ impl Workspace {
             vm_uuid: vm_uuid.clone(),
             remote_ref: String::new(),
             object_name,
-            action: "Clone".into(),
+            action: match &mode {
+                CloneMode::Clone => "Clone",
+                CloneMode::NewVm(_) => "Create VM",
+                CloneMode::Snapshot { as_template: true } => "Create template from snapshot",
+                CloneMode::Snapshot { as_template: false } => "Create VM from snapshot",
+            }
+            .into(),
             status: TaskStatus::Running,
             progress: 0.0,
             message: String::new(),
@@ -2005,17 +2163,32 @@ impl Workspace {
                 record: record.clone(),
                 remote_ref: String::new(),
                 restore: None,
+                local_cancel: None,
             },
         );
         let workspace = self.clone();
         let active_for_task = active.clone();
         tokio::spawn(async move {
-            let result = active_for_task.connection.clone_vm(&vm_uuid, &name).await;
+            let result = match mode {
+                CloneMode::NewVm(request) => {
+                    active_for_task
+                        .connection
+                        .create_vm_from_template(&request)
+                        .await
+                }
+                CloneMode::Clone => active_for_task.connection.clone_vm(&vm_uuid, &name).await,
+                CloneMode::Snapshot { as_template } => {
+                    active_for_task
+                        .connection
+                        .create_from_snapshot(&vm_uuid, &name, as_template)
+                        .await
+                }
+            };
             let result = match result {
                 Ok(new_uuid) => match refresh_inventory_cache(&active_for_task).await {
-                    Ok(()) => Ok(format!("Created VM {name} ({new_uuid}).")),
+                    Ok(()) => Ok(format!("Created {name} ({new_uuid}).")),
                     Err(error) => Err(format!(
-                        "Clone succeeded, but the inventory refresh failed: {error}"
+                        "The object was created, but the inventory refresh failed: {error}"
                     )),
                 },
                 Err(error) => Err(error.to_string()),
@@ -2095,6 +2268,7 @@ impl Workspace {
                 record: record.clone(),
                 remote_ref: String::new(),
                 restore: None,
+                local_cancel: None,
             },
         );
         let workspace = self.clone();
@@ -2263,14 +2437,22 @@ impl Workspace {
     }
 
     pub async fn cancel_task(&self, id: &str) -> Result<(), String> {
-        let (connection_id, reference) = {
+        let (connection_id, reference, local_cancel) = {
             let tasks = self.tasks.lock().await;
             let task = tasks.get(id).ok_or("Task not found.")?;
             if !task.record.can_cancel || task.record.status != TaskStatus::Running {
                 return Err("The host does not allow cancelling this task.".into());
             }
-            (task.record.connection_id.clone(), task.remote_ref.clone())
+            (
+                task.record.connection_id.clone(),
+                task.remote_ref.clone(),
+                task.local_cancel.clone(),
+            )
         };
+        if let Some(cancel) = local_cancel {
+            cancel.store(true, Ordering::Relaxed);
+            return Ok(());
+        }
         let active = self.active(&connection_id).await?;
         active
             .connection

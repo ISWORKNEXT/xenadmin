@@ -1,0 +1,75 @@
+(Xen Desktop »c=-
+
+EP infrastructure » Pool status
+
+INFRASTRUCTURE wit
+Search infrastructure,
+= Infrastructure wa
+© Activity & tasks
+
+Y © AUTHORIZED DEVHOST/READONLY 80
+
+> = Hosts 1
+> © Virtual machines 14
+> © Templates st
+> & Storage 2
+> A Networks 1
+
+CtrUuK search + F5 refresh + Ctrl! close tab
+
+Home AUTHORIZED DEVHOST/READON... x  Poolstatus x
+
+AUTHORIZED DEV HOST / READ ONLY
+
+HA, workload balancing, PVS, VM snapshot schedules and O#
+
+ons ows fe yssites
+
+Disabled Disabled 0
+
+High availability Enable HA
+Enabled No
+
+Host failures tolerated 0
+
+Planexistsfor  Ohost(s)
+Cluster stack xhad
+Overcommitted No
+
+Allow overcommit No
+Redo log Disabled
+RedologVDI =
+
+Reboot VMs on internal shutdown Yes
+
+NoHa statefiles
+
+Disaster recovery tasks 0
+
+ks are configured
+
+AUTHORIZED DEV HOST / READ ONLY-RO ©
+
+© vss
+
+0
+
+Workload balancing
+Enabled No
+URL _
+Username _
+
+Verify certificate Yes
+Setting
+
+wmax-vn-anti-affinity-groups
+
+0% € - O X
+
+Refresh
+Refresh
+© DReasks
+0
+Manage WLB.
+
+Create DR task.

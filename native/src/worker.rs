@@ -12,6 +12,19 @@ use xen_core::{
 
 /// Commands sent from the UI thread to the background workspace thread.
 pub enum Command {
+    XvaTransfer {
+        connection_id: String,
+        request: xen_core::xva::XvaRequest,
+    },
+    CreateVm {
+        connection_id: String,
+        request: xen_core::provisioning::CreateVmRequest,
+    },
+    WizardTemplate {
+        seq: u64,
+        connection_id: String,
+        template_uuid: String,
+    },
     Connect {
         settings: ConnectionSettings,
         password: String,
@@ -465,6 +478,16 @@ pub enum Command {
 
 /// Results sent back to the UI thread.
 pub enum Event {
+    XvaQueued {
+        result: Result<(), String>,
+    },
+    VmCreationQueued {
+        result: Result<(), String>,
+    },
+    WizardTemplate {
+        seq: u64,
+        result: Result<Box<VmDetails>, String>,
+    },
     Workspace(WorkspaceView),
     Connected(String),
     ActionQueued,
@@ -796,6 +819,37 @@ fn dispatch(
 
     tokio::spawn(async move {
         match command {
+            Command::XvaTransfer {
+                connection_id,
+                request,
+            } => {
+                let result = workspace
+                    .start_xva_transfer(connection_id, request)
+                    .await
+                    .map(|_| ());
+                let _ = events.send(Event::XvaQueued { result });
+            }
+            Command::CreateVm {
+                connection_id,
+                request,
+            } => {
+                let result = workspace
+                    .create_vm_from_template(connection_id, request)
+                    .await
+                    .map(|_| ());
+                let _ = events.send(Event::VmCreationQueued { result });
+            }
+            Command::WizardTemplate {
+                seq,
+                connection_id,
+                template_uuid,
+            } => {
+                let result = workspace
+                    .vm_details(&connection_id, &template_uuid)
+                    .await
+                    .map(Box::new);
+                let _ = events.send(Event::WizardTemplate { seq, result });
+            }
             Command::Connect {
                 settings,
                 password,

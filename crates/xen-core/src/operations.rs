@@ -26,6 +26,10 @@ pub enum VmAction {
     Clone {
         name: String,
     },
+    CreateFromSnapshot {
+        name: String,
+        as_template: bool,
+    },
     Snapshot {
         name: String,
     },
@@ -50,7 +54,7 @@ impl VmAction {
             Self::Suspend => "suspend",
             Self::Resume => "resume",
             Self::ResumeOn { .. } => "resume_on",
-            Self::Clone { .. } => "clone",
+            Self::Clone { .. } | Self::CreateFromSnapshot { .. } => "clone",
             Self::Snapshot { .. } => "snapshot",
             Self::Revert => "revert",
             Self::Destroy { .. } => "destroy",
@@ -71,6 +75,12 @@ impl VmAction {
             Self::Resume => "Resume",
             Self::ResumeOn { .. } => "Resume on host",
             Self::Clone { .. } => "Clone",
+            Self::CreateFromSnapshot {
+                as_template: true, ..
+            } => "Create template from snapshot",
+            Self::CreateFromSnapshot {
+                as_template: false, ..
+            } => "Create VM from snapshot",
             Self::Snapshot { .. } => "Take snapshot",
             Self::Revert => "Revert snapshot",
             Self::Destroy { .. } => "Delete",
@@ -83,7 +93,9 @@ impl VmAction {
             Self::StartOn { host_ref } | Self::ResumeOn { host_ref } => {
                 json!([session, reference, host_ref, false, false])
             }
-            Self::Clone { name } | Self::Snapshot { name } => {
+            Self::Clone { name }
+            | Self::Snapshot { name }
+            | Self::CreateFromSnapshot { name, .. } => {
                 if name.trim().is_empty() || name.chars().count() > 255 {
                     return Err(ApiError::Xen(
                         "Enter a name between 1 and 255 characters.".into(),
@@ -99,6 +111,9 @@ impl VmAction {
 impl Connection {
     /// Re-read the record before submitting. A stale UI cannot grant an operation.
     pub async fn begin_vm_action(&self, uuid: &str, action: &VmAction) -> Result<String, ApiError> {
+        if matches!(action, VmAction::CreateFromSnapshot { .. }) {
+            return Err(ApiError::Xen("Snapshot creation must use create_from_snapshot so disk ownership and object type are configured.".into()));
+        }
         if self.settings.read_only {
             return Err(ApiError::Xen(
                 "This connection is read-only. Changes are blocked by the Rust backend.".into(),
@@ -733,6 +748,23 @@ impl Connection {
     /// Clone a template or VM. Templates are provisioned after cloning so the
     /// new VM receives the disks declared in `other_config.disks`.
     pub async fn clone_vm(&self, uuid: &str, name: &str) -> Result<String, ApiError> {
+        self.clone_vm_impl(uuid, name, true).await
+    }
+
+    pub(crate) async fn clone_vm_unprovisioned(
+        &self,
+        uuid: &str,
+        name: &str,
+    ) -> Result<String, ApiError> {
+        self.clone_vm_impl(uuid, name, false).await
+    }
+
+    async fn clone_vm_impl(
+        &self,
+        uuid: &str,
+        name: &str,
+        provision: bool,
+    ) -> Result<String, ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(
                 "This connection is read-only. Changes are blocked by the Rust backend.".into(),
@@ -777,7 +809,7 @@ impl Connection {
             .map_err(|error| context("The clone task failed", error))?;
         let cloned_ref = decode_ref(&cloned).ok_or(ApiError::Protocol)?;
 
-        if record["is_a_template"].as_bool() == Some(true) {
+        if provision && record["is_a_template"].as_bool() == Some(true) {
             // Provisioning turns the cloned template record into a real VM and
             // materialises any disks declared in `other_config.disks`.
             let task: String = self
@@ -1973,6 +2005,24 @@ impl Connection {
         network_uuid: &str,
         mac: Option<&str>,
     ) -> Result<(), ApiError> {
+        self.add_vif_impl(vm_uuid, network_uuid, mac, false).await
+    }
+
+    pub(crate) async fn add_imported_vif(
+        &self,
+        vm_uuid: &str,
+        network_uuid: &str,
+    ) -> Result<(), ApiError> {
+        self.add_vif_impl(vm_uuid, network_uuid, None, true).await
+    }
+
+    async fn add_vif_impl(
+        &self,
+        vm_uuid: &str,
+        network_uuid: &str,
+        mac: Option<&str>,
+        allow_template: bool,
+    ) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(
                 "This connection is read-only. Changes are blocked by the Rust backend.".into(),
@@ -1986,7 +2036,7 @@ impl Connection {
             .await?;
         if vm["uuid"].as_str() != Some(vm_uuid)
             || vm["is_control_domain"].as_bool() == Some(true)
-            || vm["is_a_template"].as_bool() == Some(true)
+            || (!allow_template && vm["is_a_template"].as_bool() == Some(true))
             || vm["is_a_snapshot"].as_bool() == Some(true)
         {
             return Err(ApiError::Xen(
@@ -2182,6 +2232,23 @@ impl Connection {
 
     pub async fn remove_vif(&self, vm_uuid: &str, vif_uuid: &str) -> Result<(), ApiError> {
         let vif_ref = self.vif_for_vm(vm_uuid, vif_uuid).await?;
+        let vif: Value = self
+            .request("VIF.get_record", json!([self.session, vif_ref]))
+            .await?;
+        if vif["currently_attached"].as_bool() == Some(true)
+            && vif["allowed_operations"]
+                .as_array()
+                .is_some_and(|ops| ops.iter().any(|op| op.as_str() == Some("unplug")))
+        {
+            match self
+                .async_task("Async.VIF.unplug", json!([self.session, vif_ref]))
+                .await
+            {
+                Ok(()) => {}
+                Err(ApiError::XenCode(code, _)) if code == "DEVICE_ALREADY_DETACHED" => {}
+                Err(error) => return Err(error),
+            }
+        }
         self.async_task("Async.VIF.destroy", json!([self.session, vif_ref]))
             .await
     }

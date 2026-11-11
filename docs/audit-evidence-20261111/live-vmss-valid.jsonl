@@ -1,0 +1,5 @@
+{"check":"Create disabled empty VMSS","status":"PASS"}
+{"check":"Edit disabled empty VMSS","status":"PASS"}
+{"check":"Delete temporary VMSS","status":"PASS"}
+{"check":"Services cleanup readback","temporary_pvs_sites":0,"temporary_srs":0,"temporary_vmss":0}
+{"check":"Service sequence finished","status":"PASS"}

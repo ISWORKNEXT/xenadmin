@@ -1,0 +1,17 @@
+{
+  "upstream_commit": "ba43130ffb30d05d1eb40187b8ef9f2de111468a",
+  "local_commit": "bec2480623267555c362ff0b7987ea929ec36050",
+  "counts": {
+    "commands": 157,
+    "actions": 203,
+    "gui_actions": 10,
+    "wizards": 120,
+    "settings": 36,
+    "tabs": 22,
+    "diagnostics": 34,
+    "options": 9,
+    "plugins": 13
+  },
+  "unmentioned_source_files": [],
+  "note": "File inventory only: helpers/base classes included. Review references are lexical filename-stem matches for navigation, not semantic parity proof. Counts are not feature counts. See manually reviewed domain tables."
+}

@@ -1,0 +1,54 @@
+{"baseline":{"hosts":1,"networks":2,"srs":5,"vms":14},"temporary_prefix":"zz-parity-root-01a1c70a-7e81-7388-845e-6132eae922ff"}
+{"check":"Host details live","status":"PASS"}
+{"check":"Host RRD live","metric_series":168,"range_seconds":900,"samples":2520,"status":"PASS"}
+{"check":"Host RRD live","metric_series":168,"range_seconds":3600,"samples":10080,"status":"PASS"}
+{"check":"Host RRD live","metric_series":168,"range_seconds":86400,"samples":4032,"status":"PASS"}
+{"check":"Authentication/RBAC live","status":"PASS"}
+{"check":"Pool services/status live","status":"PASS"}
+{"check":"PIF inventory live","status":"PASS"}
+{"check":"PBD inventory live","status":"PASS"}
+{"check":"PBD inventory live","status":"PASS"}
+{"check":"PBD inventory live","status":"PASS"}
+{"check":"PBD inventory live","status":"PASS"}
+{"check":"PBD inventory live","status":"PASS"}
+{"check":"Create isolated internal network","status":"PASS"}
+{"check":"Create VM from template/provision","status":"PASS"}
+{"temporary_vm_uuid":"fae40f4f-16ef-e5a1-d6a5-20650d615a36"}
+{"check":"VM edit CPU/memory/name/description","status":"PASS"}
+{"check":"VM resource readback","status":"PASS"}
+{"check":"VM tags write","status":"PASS"}
+{"check":"VM tags readback","status":"PASS"}
+{"check":"VM HA property edit","status":"PASS"}
+{"check":"Add 64 MiB VDI/VBD","status":"PASS"}
+{"check":"VDI resize to 128 MiB","status":"PASS"}
+{"check":"VDI resize readback","status":"PASS"}
+{"check":"VBD mode RO","status":"PASS"}
+{"check":"VBD mode RW","status":"PASS"}
+{"check":"VBD bootable flag","status":"PASS"}
+{"check":"Add empty CD drive","status":"PASS"}
+{"check":"Add VIF to isolated network","status":"PASS"}
+{"check":"VIF locking edit","status":"PASS"}
+{"check":"Remove halted VIF","status":"PASS"}
+{"check":"Snapshot halted VM","status":"PASS"}
+{"check":"Revert halted snapshot","status":"PASS"}
+{"check":"Revert power-state readback","status":"PASS"}
+{"check":"Delete snapshot","status":"PASS"}
+{"check":"Clone temporary VM","status":"PASS"}
+{"check":"Delete temporary clone","status":"PASS"}
+{"check":"Start temporary VM","status":"PASS"}
+{"check":"Start readback","status":"PASS"}
+{"check":"Pause VM","status":"PASS"}
+{"check":"Pause readback","status":"PASS"}
+{"check":"Unpause VM","status":"PASS"}
+{"check":"Unpause readback","status":"PASS"}
+{"check":"Suspend VM","error":"The host does not currently allow this operation. Refresh and check the VM state.","status":"FAIL"}
+{"check":"Force reboot temporary VM","status":"PASS"}
+{"check":"Reboot readback","status":"PASS"}
+{"check":"Force shutdown temporary VM","status":"PASS"}
+{"check":"Shutdown readback","status":"PASS"}
+{"check":"Remove temporary disk and delete VDI","status":"PASS"}
+{"check":"Mutation sequence completed","status":"PASS"}
+{"check":"Cleanup delete VM/disks/snapshots","status":"PASS"}
+{"check":"Cleanup isolated network","status":"PASS"}
+{"check":"Final inventory readback","existing_vm_names_and_power_states_unchanged":true,"temporary_network_leftovers":0,"temporary_vm_leftovers":[]}
+{"check":"Audit result","status":"PASS"}

@@ -15,6 +15,12 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
+    if state.xva_dialog.is_some() {
+        super::xva::show(ctx, state, workspace, actions);
+    }
+    if state.new_vm.is_some() {
+        super::new_vm::show(ctx, state, workspace, actions);
+    }
     if state.help {
         help(ctx, state, actions);
     }
@@ -405,12 +411,15 @@ fn intent(
                 ui.add_space(8.0);
                 widgets::field_label(
                     ui,
-                    if intent.kind == crate::state::ActionKind::Clone {
-                        "New machine name"
-                    } else {
-                        "Snapshot name"
+                    match intent.kind {
+                        crate::state::ActionKind::Snapshot => "Snapshot name",
+                        crate::state::ActionKind::SnapshotToTemplate => "New template name",
+                        _ => "New machine name",
                     },
                 );
+                if matches!(intent.kind, crate::state::ActionKind::SnapshotToVm | crate::state::ActionKind::SnapshotToTemplate) {
+                    ui.label("Creates an independent halted object. The source VM and snapshot remain unchanged.");
+                }
                 ui.add(
                     egui::TextEdit::singleline(&mut intent.name)
                         .desired_width(f32::INFINITY)
@@ -2095,17 +2104,20 @@ fn vmss_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAct
                 widgets::field_label(
                     &mut columns[2],
                     if dialog.frequency == "hourly" {
-                        "Minute (0–59)"
+                        "Minute"
                     } else {
-                        "Minute (0–59) · at"
+                        "Minute · at"
                     },
                 );
-                columns[2].add_enabled(
-                    !dialog.submitting,
-                    egui::TextEdit::singleline(&mut dialog.minute)
-                        .char_limit(2)
-                        .margin(egui::Margin::symmetric(8, 5)),
-                );
+                columns[2].add_enabled_ui(!dialog.submitting, |ui| {
+                    egui::ComboBox::from_id_salt("vmss-minute")
+                        .selected_text(&dialog.minute)
+                        .show_ui(ui, |ui| {
+                            for minute in ["0", "15", "30", "45"] {
+                                ui.selectable_value(&mut dialog.minute, minute.to_owned(), minute);
+                            }
+                        });
+                });
             });
             if dialog.frequency == "weekly" {
                 ui.add_space(6.0);

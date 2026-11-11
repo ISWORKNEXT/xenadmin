@@ -1,0 +1,156 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "source"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        425,
+        332
+      ],
+      "wait": 1,
+      "snap": "export-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        656,
+        488
+      ],
+      "key": "Control_L+a",
+      "text": "/tmp/xen-xva-ui-20261111/ui-export.xva",
+      "snap": "export-ready"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1019,
+        570
+      ],
+      "wait": 8,
+      "snap": "export-task"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "export-final"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        114,
+        329
+      ],
+      "wait": 1,
+      "snap": "vm-list"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        423,
+        276
+      ],
+      "wait": 1,
+      "snap": "import-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        649,
+        378
+      ],
+      "text": "/tmp/xen-xva-ui-20261111/ui-export.xva"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        663,
+        445
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-xva-01a1c8ce-326d-71ba-baca-d1b211a18a47-ui"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1031,
+        506
+      ],
+      "snap": "import-storage-options"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        474,
+        546
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1028,
+        566
+      ],
+      "snap": "import-network-options"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        520,
+        644
+      ],
+      "snap": "import-ready"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1019,
+        665
+      ],
+      "wait": 10,
+      "snap": "import-task"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 3,
+      "snap": "import-final"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

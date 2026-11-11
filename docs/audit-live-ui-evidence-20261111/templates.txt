@@ -1,0 +1,114 @@
+(Xen Desktop »c=-
+
+ED infrastructure » Templates
+
+INFRASTRUCTURE wit
+
+Search infrastructure,
+= Infrastructure
+© Activity & tasks
+
+¥ © AUTHORIZED DEV HOST / READ ONLY
+
+Hosts
+
+© Virtual machines
+
+Templates
+> & Storage
+
+> A Networks
+
+CtrUuK search + F5 refresh + Ctrl! close tab
+
+wa
+
+14
+
+SL
+
+Home Templates x
+
+AUTHORIZED DEV HOST READ ONLY
+
+Templates.
+
+Provisioning templates reported by each pool.
+
+Search name:/host:/tag:/memory:/power_sta.
+
+Name
+
+AlmaLinux 10
+
+AlmaLinux 10 (TH) - Guest Agent
+AlmaLinux 8
+
+AlmaLinux 9
+
+CentOS 6.10 Legacy (TH) - Guest Agent
+CentOS 7 (deprecated)
+
+CentOS 7.9 Legacy (TH) - Guest Agent
+CentOS Stream 10
+
+CentOS Stream 8
+
+CentOS Stream 9
+
+No grouping
+
+v
+
+AUTHORIZED DEV HOST / READ ONLY-RO ©
+
+Refresh
+Savedsesrches Allpowerstates. «YS
+Connection / Power state <PUs
+AUTHORIZED DEV HOST/READ ONLY °° @ stopped 4
+Unassig
+AUTHORIZED DEV HOST/ READ ONLY °° stopped 1
+Unassig
+AUTHORIZED DEV HOST/READ ONLY °° @ stopped 4
+Unassigned
+AUTHORIZED DEV HOST/READ ONLY °° g stopped 1
+Unessig
+AUTHORIZED DEV HOST/READ ONLY °° @ stopped 4
+Unassig
+AUTHORIZED DEV HOST/READ ONLY "> @ stopped 1
+Unassig
+AUTHORIZED DEV HOST/READ ONLY °° @ stopped 4
+Unassig
+AUTHORIZED DEV HOST/READ ONLY °° @ stopped 1
+Unassig
+AUTHORIZED DEV HOST/ READ ONLY °° @ stopped 4
+Unassig
+AUTHORIZED DEV HOST/ READ ONLY °° @ stopped 1
+
+110% ©
+
+- a x
+
+Resdonly
+
+Memory
+
+4.0 GiB
+
+2.0 GiB
+
+4.0 GiB
+
+4.0 GiB
+
+1.0 GiB
+
+4.0 GiB
+
+1.0 GiB
+
+4.0 GiB
+
+4.0 GiB
+
+4.0 GiB

@@ -1,0 +1,7 @@
+{"prefix":"zz-parity-snapshot-01a1c8bc-9f18-7002-b095-770f493dcd8c"}
+{"allowed":["create_vtpm","destroy","metadata_export","export","make_into_template","changing_NVRAM","changing_shadow_memory","changing_static_range","changing_dynamic_range","migrate_send","start_on","start","copy","clone","snapshot"],"phase":"source-created","power":"Halted","template":false,"uuid":"4cb30881-9b42-63bf-df91-3760927f0de6"}
+{"phase":"vm-started","uuid":"4cb30881-9b42-63bf-df91-3760927f0de6"}
+{"check":"guest-metrics","os":"Debian GNU/Linux 11 (bullseye)","pv_version":"7.30.0.19"}
+{"check":"remove-attached-vif","removed":true,"vm_power":"Running"}
+{"check":"vmss-quarter-hour","invalid_rejected":true,"valid_created":true}
+{"cleanup":"completed","result":{"Ok":"pass"}}

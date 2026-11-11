@@ -1,0 +1,3 @@
+{"directory":"/tmp/.tmpSkoPZ2","prefix":"zz-parity-xva-01a1c8ce-326d-71ba-baca-d1b211a18a47"}
+{"archive":"/tmp/.tmpSkoPZ2/source.xva","check":"export","result":{"Exported":{"bytes":3172864}},"source_uuid":"5e619f42-de0f-ec30-0989-981e23500cf8"}
+{"check":"roundtrip","halted":true,"imported_disk":"1d3d3130-aa2f-4c13-806b-0871db362fb0","imported_uuid":"9597ddbd-aa48-c275-6076-b46ec8640c23","network_mapped":true,"overwrite_rejected":true,"raw_bytes":16777216,"sha256":"18922f71ac3c9670033d57eae14f38155cd787037b59f85c9b22eea85990e6dc","source_disk":"823b6879-8b85-48b4-96e6-25d24529b968","source_unchanged":true}

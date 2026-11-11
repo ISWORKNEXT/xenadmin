@@ -1,0 +1,6 @@
+{
+  "test_vms": [],
+  "ui_disk_present": false,
+  "iso_present": true,
+  "vdi_refs_match_baseline": true
+}

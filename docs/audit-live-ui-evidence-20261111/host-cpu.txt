@@ -1,0 +1,102 @@
+ifrasructu
+
+Xen Desktop xc
+
+Binks
+
+ucture » OllO-Server
+
+INFRASTRUCTURE
+Search infrastructure.
+= Infrastructure
+© Activity & tasks
+y © AUTHORIZED DEV HOST / READ ONLY
+v = Hosts
+
+ollo-Server
+
+> © Virtual machines
+
+Templates
+
+> @ Storage
+
+> A Networks
+
+CErUuK search + FS
+
+Refresh details
+
+wit
+
+wa
+
+Ro
+
+15
+
+SL
+
+Home  ollO-Server_ x
+
+‘<Back to hosts - AUTHORIZED DEV HOST / READ ONLY
+
+OllO-Server
+
+192.168.8170
+
+s2347tat.
+
+-4d3b-994b-7eb12f860c
+
+General CPU & memory Performance Networking Storage Hardware Updates Certificates Health
+
+Processor topology, host memory and available hardware information
+
+Physical host memory Host memory allocation
+
+Totalmemory —-63.89GIB Avilable For placement
+Freememoryy —-30.30GIB Xen and control domain
+
+Host overhead 930.51 MiB Control domain memory
+Usedmemory 33.58 GIB Resident guest memory
+Memory utlisation 52.6% Resident minimum reservation
+Host live Yes
+
+Metrics updated 20261007720:28:202
+
+Physical CPUs
+
+Logical processors reported by host cpu
+
+Search physical cpus.
+
+ou Model speed (Mts)
+° Intel(R) Core(T™) is-6600... 3312
+© Inventory rafrashed 02:58:56
+
+Host-rOe) 110% € - O X
+
+Refresh
+
+Read-only connection
+
+Refresh details
+
+30.25 GiB
+
+5.38.GiB
+
+42018
+
+28.25 GiB
+
+28.25 GiB
+
+records
+
+Usiisation
+
+© Connected. Loading pool inventory. x
+
+Rust + equi
