@@ -1,0 +1,72 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        410
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        900,
+        650
+      ],
+      "scroll": 20,
+      "snap": "hvm-resources-bottom"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        441,
+        455
+      ],
+      "snap": "hvm-auto-draft",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        871
+      ],
+      "wait": 3,
+      "snap": "hvm-auto-saved"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        410
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        900,
+        650
+      ],
+      "scroll": 20,
+      "snap": "hvm-authoritative-reopen"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

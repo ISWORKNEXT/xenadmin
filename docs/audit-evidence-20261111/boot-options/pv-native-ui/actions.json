@@ -1,0 +1,158 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        410
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        900,
+        650
+      ],
+      "scroll": 20,
+      "snap": "pv-after-controls"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        871
+      ],
+      "wait": 3,
+      "snap": "pv-noop-save-green"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        410
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        900,
+        650
+      ],
+      "scroll": 20,
+      "snap": "pv-reopen-before-edit"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        441,
+        610
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        700,
+        700
+      ],
+      "key": "Control_L+a",
+      "paste": "console=hvc0 root=/dev/xvda1  loglevel=4",
+      "snap": "pv-auto-draft"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        871
+      ],
+      "wait": 3,
+      "snap": "pv-auto-saved"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        410
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        900,
+        650
+      ],
+      "scroll": 20,
+      "snap": "pv-authoritative-reopen"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1000,
+        720
+      ],
+      "wait": 3,
+      "snap": "pv-small-window"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        700,
+        500
+      ],
+      "scroll": 20,
+      "snap": "pv-small-bottom"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        221,
+        458
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        736,
+        651
+      ],
+      "wait": 3,
+      "snap": "pv-small-autostart-off"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

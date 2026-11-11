@@ -1276,6 +1276,10 @@ pub struct VmResourceEditState {
     pub secure_boot: bool,
     pub boot_policy: String,
     pub after_crash: String,
+    pub pv_args: String,
+    pub original_pv_args: String,
+    pub auto_poweron: bool,
+    pub original_auto_poweron: bool,
     pub is_hvm: bool,
     pub running: bool,
     pub can_hotplug_vcpus: bool,
@@ -1345,6 +1349,10 @@ impl VmResourceEditState {
             secure_boot: self.is_hvm.then_some(self.secure_boot),
             boot_policy: self.is_hvm.then(|| self.boot_policy.clone()),
             after_crash: Some(self.after_crash.clone()),
+            pv_args: (!self.is_hvm && self.pv_args != self.original_pv_args)
+                .then(|| self.pv_args.clone()),
+            auto_poweron: (self.auto_poweron != self.original_auto_poweron)
+                .then_some(self.auto_poweron),
             cpu_weight,
             cores_per_socket,
         })

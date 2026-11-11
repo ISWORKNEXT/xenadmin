@@ -80,6 +80,8 @@ async fn exercise(
         c.update_vm_resources(
             vm,
             &xen_core::operations::VmResourceUpdate {
+                pv_args: None,
+                auto_poweron: None,
                 vcpus_max: 1,
                 vcpus_at_startup: 1,
                 memory_static_max_mib: 256,

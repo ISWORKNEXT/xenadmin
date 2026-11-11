@@ -168,6 +168,8 @@ async fn provisioning_descriptions(c: &Connection, prefix: &str) -> Result<(), E
     );
     let before_boot = owned_boot_state(&source, true)?;
     let mut update = xen_core::operations::VmResourceUpdate {
+        pv_args: None,
+        auto_poweron: None,
         vcpus_max: 2,
         vcpus_at_startup: 2,
         memory_static_max_mib: 1024,
@@ -701,6 +703,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
     c.update_vm_resources(
         &uuid,
         &xen_core::operations::VmResourceUpdate {
+            pv_args: None,
+            auto_poweron: None,
             vcpus_max: if input.mode == "verify-resources" {
                 4
             } else {
@@ -760,6 +764,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
             .update_vm_resources(
                 &uuid,
                 &xen_core::operations::VmResourceUpdate {
+                    pv_args: None,
+                    auto_poweron: None,
                     vcpus_max: 2,
                     vcpus_at_startup: 2,
                     memory_static_max_mib: 1024,
@@ -789,6 +795,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
         c.update_vm_resources(
             &uuid,
             &xen_core::operations::VmResourceUpdate {
+                pv_args: None,
+                auto_poweron: None,
                 vcpus_max: 4,
                 vcpus_at_startup: 2,
                 memory_static_max_mib: 1024,
@@ -812,6 +820,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
             .update_vm_resources(
                 &uuid,
                 &xen_core::operations::VmResourceUpdate {
+                    pv_args: None,
+                    auto_poweron: None,
                     vcpus_max: 4,
                     vcpus_at_startup: 1,
                     memory_static_max_mib: 1024,
@@ -831,6 +841,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
             .update_vm_resources(
                 &uuid,
                 &xen_core::operations::VmResourceUpdate {
+                    pv_args: None,
+                    auto_poweron: None,
                     vcpus_max: 3,
                     vcpus_at_startup: 2,
                     memory_static_max_mib: 1024,

@@ -20,6 +20,8 @@ pub struct VmResourceUpdate {
     pub after_crash: Option<String>,
     pub cpu_weight: Option<u16>,
     pub cores_per_socket: Option<u64>,
+    pub pv_args: Option<String>,
+    pub auto_poweron: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -944,6 +946,8 @@ impl Connection {
             after_crash,
             cpu_weight,
             cores_per_socket,
+            pv_args,
+            auto_poweron,
         } = resources.clone();
         if self.settings.read_only {
             return Err(ApiError::Xen(
@@ -967,6 +971,15 @@ impl Connection {
             ));
         }
         let boot_order = boot_order.map(|order| order.trim().to_ascii_lowercase());
+        if pv_args
+            .as_ref()
+            .is_some_and(|value| value.contains('\0') || value.chars().count() > 32_767)
+        {
+            return Err(ApiError::Xen(
+                "PV OS parameters must contain at most 32767 characters and no NUL characters."
+                    .into(),
+            ));
+        }
         let firmware = firmware.map(|value| value.trim().to_ascii_lowercase());
         if let Some(firmware) = &firmware
             && !valid_firmware(firmware)
@@ -1098,6 +1111,17 @@ impl Connection {
         let current_policy = record["HVM_boot_policy"].as_str().unwrap_or("");
         let current_after_crash = record["actions_after_crash"].as_str().unwrap_or("restart");
         let is_hvm = !current_policy.is_empty();
+        let current_pv_args = record["PV_args"].as_str().unwrap_or_default();
+        let pv_args_changed = pv_args
+            .as_ref()
+            .is_some_and(|value| value != current_pv_args);
+        if is_hvm && pv_args_changed {
+            return Err(ApiError::Xen(
+                "PV OS parameters are only available for PV guests.".into(),
+            ));
+        }
+        let current_auto = record["other_config"]["auto_poweron"].as_str() == Some("true");
+        let auto_changed = auto_poweron.is_some_and(|value| value != current_auto);
         if !is_hvm
             && (boot_order.is_some()
                 || firmware.is_some()
@@ -1296,6 +1320,34 @@ impl Connection {
                 json!([self.session, reference, after_crash]),
             )
             .await?;
+        }
+
+        if pv_args_changed && let Some(args) = &pv_args {
+            self.request::<Value>("VM.set_PV_args", json!([self.session, reference, args]))
+                .await?;
+        }
+        if auto_changed && let Some(enabled) = auto_poweron {
+            let mut other: std::collections::BTreeMap<String, String> = self
+                .request("VM.get_other_config", json!([self.session, reference]))
+                .await?;
+            other.insert("auto_poweron".into(), enabled.to_string());
+            self.request::<Value>(
+                "VM.set_other_config",
+                json!([self.session, reference, other]),
+            )
+            .await?;
+        }
+        if pv_args_changed || auto_changed {
+            let actual: Value = self
+                .request("VM.get_record", json!([self.session, reference]))
+                .await?;
+            if (pv_args_changed && actual["PV_args"].as_str() != pv_args.as_deref())
+                || (auto_changed
+                    && actual["other_config"]["auto_poweron"].as_str()
+                        != auto_poweron.map(|v| v.to_string()).as_deref())
+            {
+                return Err(ApiError::Xen("Boot settings changed before readback. Refresh and review the current configuration.".into()));
+            }
         }
 
         Ok(())

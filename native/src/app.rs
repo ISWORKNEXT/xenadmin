@@ -2799,8 +2799,11 @@ impl App {
                         } else {
                             details.after_crash.clone()
                         },
-                        is_hvm: !details.hvm_boot_policy.is_empty()
-                            || !details.hvm_boot_params.is_empty(),
+                        pv_args: details.pv_args.clone(),
+                        original_pv_args: details.pv_args.clone(),
+                        auto_poweron: details.auto_poweron,
+                        original_auto_poweron: details.auto_poweron,
+                        is_hvm: !details.hvm_boot_policy.is_empty(),
                         running: details.power_state != "Halted",
                         can_hotplug_vcpus: details.can_hotplug_vcpus,
                         current_vcpus: details.vcpus_at_startup,

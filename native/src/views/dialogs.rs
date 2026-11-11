@@ -627,6 +627,13 @@ fn vm_resources(
                     !edit.submitting,
                 );
             });
+            ui.add_space(8.0);
+            ui.add_enabled(!edit.submitting, egui::Checkbox::new(&mut edit.auto_poweron, "Auto-start VM when the host starts"));
+            ui.label(RichText::new("Requires host/pool autostart configuration. Review HA restart policies separately.").size(9.0).color(dim_fg()));
+            if !edit.is_hvm {
+                widgets::field_label(ui, "PV OS parameters");
+                ui.add_enabled(!edit.submitting, egui::TextEdit::multiline(&mut edit.pv_args).char_limit(32_767).desired_rows(3).desired_width(f32::INFINITY));
+            }
             if edit.is_hvm {
                 ui.add_space(8.0);
                 widgets::field_label(ui, "Boot order");

@@ -1,0 +1,87 @@
+Typecheck, lint and test	Install native dependencies	﻿2026-11-11T14:13:32.3000675Z ##[group]Run sudo apt-get update
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3000995Z ^[[36;1msudo apt-get update^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3001271Z ^[[36;1msudo apt-get install -y --no-install-recommends \^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3001683Z ^[[36;1m  build-essential pkg-config python3 python3-xlib python3-pil xvfb openssl \^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3002107Z ^[[36;1m  libx11-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev \^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3002488Z ^[[36;1m  libgl1-mesa-dev libegl1-mesa-dev libxrandr-dev \^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3002795Z ^[[36;1m  libxi-dev libxcursor-dev libxinerama-dev^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3021980Z shell: /usr/bin/bash -e {0}
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3022204Z env:
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3022386Z   CARGO_TERM_COLOR: always
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3022596Z   CARGO_HOME: /home/runner/.cargo
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3022809Z   CARGO_INCREMENTAL: 0
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3022995Z   CACHE_ON_FAILURE: false
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.3023189Z ##[endgroup]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.6475136Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.6806109Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.7741385Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [690 kB]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.8812678Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [12.6 kB]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:32.9801487Z Get:9 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [760 kB]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:13:52.6888286Z Ign:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:14:12.7131274Z Ign:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:14:32.7363621Z Ign:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:14:52.7742560Z Ign:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:15:12.7993239Z Ign:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:15:32.8257041Z Ign:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:15:32.8280678Z Ign:2 https://archive.ubuntu.com/ubuntu noble InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:15:52.8484852Z Ign:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:15:52.8543514Z Err:2 https://security.ubuntu.com/ubuntu noble InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:15:52.8544955Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:15:52.8577815Z Ign:3 https://archive.ubuntu.com/ubuntu noble-updates InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:12.8708330Z Ign:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:12.8779449Z Err:3 https://security.ubuntu.com/ubuntu noble-updates InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:12.8779992Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:12.8805367Z Ign:4 https://archive.ubuntu.com/ubuntu noble-backports InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:32.9004040Z Err:4 https://security.ubuntu.com/ubuntu noble-backports InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:32.9004685Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:32.9019726Z Ign:5 https://archive.ubuntu.com/ubuntu noble-security InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:52.9377657Z Err:5 https://security.ubuntu.com/ubuntu noble-security InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:52.9378264Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:55.8632101Z Fetched 1467 kB in 3min 20s (7322 B/s)
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:56.8637316Z Reading package lists...
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:56.8771045Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:56.8771881Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-updates/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:56.8772620Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-backports/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:56.8964084Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-security/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:56.8965351Z W: Some index files failed to download. They have been ignored, or old ones used instead.
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:56.8965716Z Reading package lists...
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.1669348Z Building dependency tree...
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.1675613Z Reading state information...
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3743915Z pkg-config is already the newest version (1.8.1-2build1).
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3744849Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3745497Z xvfb is already the newest version (2:21.1.12-1ubuntu1.9).
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3745871Z openssl is already the newest version (3.0.13-0ubuntu3.16).
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3746192Z The following additional packages will be installed:
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3746552Z   libegl-dev libegl-mesa0 libegl1 libgl-dev libgles-dev libgles1 libgles2
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3747014Z   libglvnd-core-dev libglvnd-dev libglx-dev libimagequant0 libopengl-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3748207Z   libopengl0 libpthread-stubs0-dev libraqm0 libwayland-bin libwayland-server0
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3748653Z   libxau-dev libxcb-xkb1 libxcb1-dev libxdmcp-dev libxext-dev libxfixes-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3751223Z   libxrender-dev x11proto-dev xorg-sgml-doctools xtrans-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3757086Z Suggested packages:
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3757473Z   libwayland-doc libx11-doc libxcb-doc libxext-doc python-pil-doc
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3757918Z Recommended packages:
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3994185Z   python3-olefile
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.3994552Z The following NEW packages will be installed:
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4011316Z   build-essential libegl-dev libegl-mesa0 libegl1 libegl1-mesa-dev libgl-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4012125Z   libgl1-mesa-dev libgles-dev libgles1 libgles2 libglvnd-core-dev libglvnd-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4012834Z   libglx-dev libimagequant0 libopengl-dev libopengl0 libpthread-stubs0-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4013509Z   libraqm0 libwayland-bin libwayland-dev libwayland-server0 libx11-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4014205Z   libxau-dev libxcb-xkb1 libxcb1-dev libxcursor-dev libxdmcp-dev libxext-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4014920Z   libxfixes-dev libxi-dev libxinerama-dev libxkbcommon-dev libxkbcommon-x11-0
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4015585Z   libxrandr-dev libxrender-dev python3-pil python3-xlib x11proto-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4016090Z   xorg-sgml-doctools xtrans-dev
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4221443Z 0 upgraded, 40 newly installed, 0 to remove and 3 not upgraded.
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4221893Z Need to get 3243 kB of archives.
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4222196Z After this operation, 14.5 MB of additional disk space will be used.
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:16:57.4222546Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:17:17.4563664Z Ign:2 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 build-essential amd64 12.10ubuntu1
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:17:37.4812887Z Ign:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libegl-mesa0 amd64 25.2.8-0ubuntu0.24.04.4
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:17:57.5076185Z Ign:4 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libegl1 amd64 1.7.0-1build1
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:18:17.5323260Z Ign:5 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xorg-sgml-doctools all 1:1.11-1.1
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:18:37.5609351Z Ign:6 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 x11proto-dev all 2023.2-1
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:18:57.5892348Z Ign:7 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxau-dev amd64 1:1.0.9-1build6
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:19:17.6136801Z Ign:8 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxdmcp-dev amd64 1:1.1.3-0ubuntu6
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:19:37.5672045Z Ign:9 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xtrans-dev all 1.4.0-1
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:19:56.9725493Z Ign:10 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libpthread-stubs0-dev amd64 0.4-1build3
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:20:17.0059219Z Ign:11 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libxcb1-dev amd64 1.15-1ubuntu2
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:20:20.4092014Z ##[error]The operation was canceled.

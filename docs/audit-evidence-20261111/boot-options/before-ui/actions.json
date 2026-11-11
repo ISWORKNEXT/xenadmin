@@ -1,0 +1,58 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        840,
+        410
+      ],
+      "snap": "pv-resources-before"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        813
+      ],
+      "wait": 3,
+      "snap": "pv-save-before-rejected"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Escape",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "hover": [
+        900,
+        650
+      ],
+      "scroll": 20,
+      "snap": "pv-before-bottom"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        871
+      ],
+      "wait": 4,
+      "snap": "pv-before-actual-save-error"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

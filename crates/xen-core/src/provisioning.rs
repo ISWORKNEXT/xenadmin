@@ -871,6 +871,8 @@ impl Connection {
         self.update_vm_resources(
             uuid,
             &crate::operations::VmResourceUpdate {
+                pv_args: None,
+                auto_poweron: None,
                 vcpus_max: request.vcpus_max,
                 vcpus_at_startup: request.vcpus_at_startup,
                 memory_static_max_mib: request.memory_mib,

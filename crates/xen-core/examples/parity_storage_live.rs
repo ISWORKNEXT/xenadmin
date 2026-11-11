@@ -372,6 +372,8 @@ async fn exercise(
     if input.qualify_cpu_settings {
         let original = cpu_state(&source, prefix, true)?;
         let mut update = xen_core::operations::VmResourceUpdate {
+            pv_args: None,
+            auto_poweron: None,
             vcpus_max: 4,
             vcpus_at_startup: 2,
             memory_static_max_mib: 256,
@@ -538,6 +540,8 @@ async fn exercise(
             c.update_vm_resources(
                 &source,
                 &xen_core::operations::VmResourceUpdate {
+                    pv_args: None,
+                    auto_poweron: None,
                     vcpus_max: 4,
                     vcpus_at_startup: 2,
                     memory_static_max_mib: 256,
