@@ -19,6 +19,8 @@ struct Input {
     pause_for_ui: bool,
     #[serde(default)]
     snapshot_wizard: bool,
+    #[serde(default)]
+    qualify_retained_failure: bool,
 }
 
 fn ssh_json(script: &str) -> Result<Value, Error> {
@@ -372,6 +374,40 @@ async fn exercise(
             "{}",
             json!({"check":"configured-snapshot-vm","source_snapshot_uuid":snapshot.uuid,"uuid":output,"readback":probe,"vcpus":2,"memory_mib":384,"network_uuid":request.network_uuid,"affinity_host_uuid":request.affinity_host_uuid,"wrong_source_kind_rejected":true,"status":"VERIFIED"})
         );
+        if input.qualify_retained_failure {
+            request.name = format!("{prefix}-failed-config");
+            request.vcpus = u64::MAX;
+            let failure = c
+                .create_configured_vm(&request)
+                .await
+                .err()
+                .ok_or("Oversized CPU count unexpectedly accepted")?
+                .to_string();
+            let after = c.inventory().await?;
+            let retained = after
+                .vms
+                .iter()
+                .find(|vm| vm.name == request.name)
+                .ok_or("Failed output was deleted")?;
+            if !failure.contains(&retained.uuid) || !failure.contains("retained") {
+                return Err("Failure did not identify retained VM".into());
+            }
+            let retained_details = c.vm_details(&retained.uuid).await?;
+            let retained_disk = retained_details
+                .disks
+                .iter()
+                .find(|d| !d.is_cd)
+                .ok_or("Failed output lost its disk")?;
+            let retained_probe =
+                disk_probe(&retained.uuid, &retained_disk.vdi_uuid, prefix, false)?;
+            if retained_probe["sha256"] != readback["sha256"] {
+                return Err("Retained output lost data".into());
+            }
+            println!(
+                "{}",
+                json!({"check":"post-clone-failure-retains-output","uuid":retained.uuid,"message":failure,"readback":retained_probe,"status":"VERIFIED"})
+            );
+        }
         snapshot_uuid = Some(snapshot.uuid.clone());
     }
     if input.pause_for_ui {
@@ -479,7 +515,33 @@ async fn main() -> Result<(), Error> {
     let clean = cleanup(&c, &prefix, &location, &baseline, input.snapshot_wizard).await;
     c.logout().await?;
     clean?;
-    let final_inventory = snapshot()?;
+    let mut final_inventory = snapshot()?;
+    // Snapshot GC can briefly leave new, unattached VDI records after destroy.
+    // Only wait for extra VDIs: missing baseline disks or other object drift fails.
+    for attempt in 0..20 {
+        if final_inventory == baseline {
+            break;
+        }
+        let only_extra_vdis = ["vm_uuids", "sr_uuids", "pbd_uuids", "network_uuids"]
+            .iter()
+            .all(|key| final_inventory[key] == baseline[key])
+            && baseline["vdi_uuids"].as_array().is_some_and(|original| {
+                original.iter().all(|id| {
+                    final_inventory["vdi_uuids"]
+                        .as_array()
+                        .is_some_and(|actual| actual.contains(id))
+                })
+            });
+        if !only_extra_vdis {
+            break;
+        }
+        println!(
+            "{}",
+            json!({"phase":"waiting-for-vdi-record-settle","attempt":attempt+1,"actual":final_inventory["vdi_uuids"]})
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        final_inventory = snapshot()?;
+    }
     if final_inventory != baseline {
         println!(
             "{}",

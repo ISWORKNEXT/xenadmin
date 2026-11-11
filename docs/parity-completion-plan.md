@@ -49,4 +49,4 @@ The new Pool options owner uses canonical lowercase `pool` RPC names. Legacy HA/
 
 ## Configured creation recovery follow-up
 
-Template and snapshot creation now share an explicit-source wizard. Their existing post-clone cleanup still treats current nonsource attached disks as disposable. Qualify and correct ownership/retention for concurrent foreign-disk attachment and interrupted configuration before extending the Full-copy recovery guarantees to configured creation. Happy-path small-disk snapshot qualification does not close this recovery gap.
+Template and snapshot creation now share an explicit-source wizard. The [retention follow-up](creation-retention-live-qualification-20261111.md) removes automatic post-clone failure deletion and verifies a retained failed output with intact data. Successful-path disk ownership assignment and interrupted-creation reconciliation still need qualification before extending the Full-copy recovery guarantees to configured creation. Happy-path small-disk snapshot qualification does not close this recovery gap.

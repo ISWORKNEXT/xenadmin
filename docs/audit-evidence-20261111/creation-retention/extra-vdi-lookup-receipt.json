@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-11-11T11:46:56.933Z",
+  "ordinal": 10039,
+  "type": "response_item",
+  "payload": {
+    "type": "custom_tool_call_output",
+    "id": "ctco_01a1ca6e-bb25-7123-abe5-89c2c2dea4bd",
+    "call_id": "call_253c434f264a4c63bac0202f481d7193",
+    "output": [
+      {
+        "type": "input_text",
+        "text": "Script completed\nWall time 1.0 seconds\nOutput:\n"
+      },
+      {
+        "type": "input_text",
+        "text": "{\"chunk_id\":\"607c52\",\"wall_time_seconds\":0.774172072,\"exit_code\":1,\"original_token_count\":137,\"output\":\"Traceback (most recent call last):\\n  File \\\"<stdin>\\\", line 4, in <module>\\n  File \\\"/usr/lib/python3.6/site-packages/XenAPI.py\\\", line 317, in __call__\\n    return self.__send(self.__name, args)\\n  File \\\"/usr/lib/python3.6/site-packages/XenAPI.py\\\", line 198, in xenapi_request\\n    result = _parse_result(getattr(self, methodname)(*full_params))\\n  File \\\"/usr/lib/python3.6/site-packages/XenAPI.py\\\", line 292, in _parse_result\\n    raise Failure(result['ErrorDescription'])\\nXenAPI.Failure: ['UUID_INVALID', 'VDI', '6271c8e9-9c72-47c8-8dd6-e681b28e22a6']\\n\"}"
+      }
+    ],
+    "internal_chat_message_metadata_passthrough": {
+      "turn_id": "01a1c92f-efd7-7b93-87e7-bc82706133d0",
+      "create_time": 1794397616.9337192
+    }
+  },
+  "metadata": {
+    "client_authored": false,
+    "fallback_token_limit_override": 12000
+  }
+}

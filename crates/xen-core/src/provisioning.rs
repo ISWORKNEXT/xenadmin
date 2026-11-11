@@ -539,14 +539,9 @@ impl Connection {
         .await;
         match result {
             Ok(()) => Ok(uuid),
-            Err(error) => match self.cleanup_new_vm(&uuid, &source).await {
-                Ok(()) => Err(ApiError::Xen(format!(
-                    "Snapshot creation failed and the temporary object was removed: {error}"
-                ))),
-                Err(cleanup) => Err(ApiError::Xen(format!(
-                    "Snapshot creation failed: {error}. Review object {uuid} and its disks because cleanup failed: {cleanup}"
-                ))),
-            },
+            Err(error) => Err(ApiError::Xen(format!(
+                "Snapshot output {uuid} was created but configuration failed: {error}. The object and its disks were retained. Review this UUID and its task before creating another."
+            ))),
         }
     }
 
@@ -681,14 +676,9 @@ impl Connection {
             .await?;
         match self.configure_new_vm(&uuid, request, &details).await {
             Ok(()) => Ok(uuid),
-            Err(error) => match self.cleanup_new_vm(&uuid, &details).await {
-                Ok(()) => Err(ApiError::Xen(format!(
-                    "VM creation failed and the temporary VM was removed: {error}"
-                ))),
-                Err(cleanup) => Err(ApiError::Xen(format!(
-                    "VM {uuid} was created but configuration failed: {error}. Cleanup also failed: {cleanup}. Review this VM before creating another."
-                ))),
-            },
+            Err(error) => Err(ApiError::Xen(format!(
+                "VM {uuid} was created but configuration failed: {error}. The VM and its disks were retained. Review this UUID and its task before creating another."
+            ))),
         }
     }
 
@@ -876,60 +866,6 @@ impl Connection {
                 )
                 .await?;
             }
-        }
-        Ok(())
-    }
-    async fn cleanup_new_vm(
-        &self,
-        uuid: &str,
-        template: &crate::vm::VmDetails,
-    ) -> Result<(), ApiError> {
-        let current = self.vm_details(uuid).await?;
-        let owned: Vec<String> = current
-            .disks
-            .iter()
-            .filter(|disk| {
-                !disk.is_cd
-                    && !template
-                        .disks
-                        .iter()
-                        .any(|original| !original.is_cd && original.vdi_uuid == disk.vdi_uuid)
-            })
-            .map(|disk| disk.vdi_uuid.clone())
-            .collect();
-        self.destroy_vm(uuid, false, false).await?;
-        let mut failure = None;
-        for vdi in owned {
-            // VM.provision creates writable `system` disks as well as `user`
-            // disks. These UUIDs came exclusively from this new VM, with all
-            // source-template disks excluded above.
-            let result = async {
-                let reference: String = self
-                    .request("VDI.get_by_uuid", json!([self.session, vdi]))
-                    .await?;
-                let record: Value = self
-                    .request("VDI.get_record", json!([self.session, reference]))
-                    .await?;
-                if record["uuid"].as_str() != Some(vdi.as_str())
-                    || record["read_only"].as_bool() != Some(false)
-                    || !matches!(record["type"].as_str(), Some("user" | "system"))
-                    || !record["VBDs"].as_array().is_some_and(Vec::is_empty)
-                {
-                    return Err(ApiError::Xen(format!(
-                        "Temporary disk {vdi} could not be safely removed."
-                    )));
-                }
-                self.request::<Value>("VDI.destroy", json!([self.session, reference]))
-                    .await?;
-                Ok::<(), ApiError>(())
-            }
-            .await;
-            if let Err(error) = result {
-                failure.get_or_insert(error);
-            }
-        }
-        if let Some(error) = failure {
-            return Err(error);
         }
         Ok(())
     }
