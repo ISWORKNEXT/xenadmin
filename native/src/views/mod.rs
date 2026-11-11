@@ -19,8 +19,6 @@ pub mod xva;
 
 pub mod vm_copy;
 
-pub mod pool_options;
-
 pub mod menubar;
 pub mod shell;
 

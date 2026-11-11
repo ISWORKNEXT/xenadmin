@@ -1,116 +1,541 @@
 use crate::{
     state::{
-        LoadState, UiAction, UiState, connection_name, find_connection, is_online, is_read_only,
+        LoadState, PropertiesDialog, UiAction, UiState, find_connection, is_online, is_read_only,
     },
     theme, widgets,
 };
 use egui::RichText;
+use xen_core::{properties::ObjectKind, workspace::WorkspaceView};
+
+fn pages(dialog: &PropertiesDialog) -> Vec<String> {
+    let mut pages = vec!["General", "Custom Fields"];
+    match dialog.target.kind {
+        ObjectKind::Vm => pages.extend([
+            "CPU",
+            "Boot Options",
+            "High Availability",
+            "Alerts",
+            "Home Server",
+            "GPU",
+            "USB",
+            "Advanced",
+        ]),
+        ObjectKind::Host => {
+            pages.extend([
+                "Alerts",
+                "Multipathing",
+                "Log Destination",
+                "Power On",
+                "Automatic Start",
+            ]);
+            if dialog.pool.is_some() {
+                pages.extend([
+                    "GPU",
+                    "Live Patching",
+                    "Network Options",
+                    "Clustering",
+                    "Advanced",
+                ]);
+            }
+        }
+        ObjectKind::Pool => pages.extend([
+            "Alerts",
+            "Power On",
+            "GPU",
+            "Security",
+            "Live Patching",
+            "Network Options",
+            "Clustering",
+            "Advanced",
+        ]),
+        ObjectKind::Storage => pages.extend(["Alerts", "Read Caching"]),
+        ObjectKind::Disk => pages.push("Size and Location"),
+        ObjectKind::Network => pages.push("Network Settings"),
+    }
+    let mut pages: Vec<String> = pages.into_iter().map(str::to_owned).collect();
+    if let LoadState::Ready(properties) = &dialog.properties
+        && let Some(disk) = &properties.disk
+    {
+        pages.extend(
+            disk.devices
+                .iter()
+                .map(|device| format!("device-{}", device.vbd_uuid)),
+        );
+    }
+    pages
+}
+
+fn page_title(dialog: &PropertiesDialog, page: &str) -> String {
+    dialog
+        .properties
+        .ready()
+        .and_then(|p| p.disk.as_ref())
+        .and_then(|d| {
+            d.devices
+                .iter()
+                .find(|v| page == format!("device-{}", v.vbd_uuid))
+        })
+        .map(|v| v.vm_name.clone())
+        .unwrap_or_else(|| page.to_owned())
+}
+
+fn summary(dialog: &PropertiesDialog, page: &str) -> String {
+    match page {
+        "General" => dialog
+            .properties
+            .ready()
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "Loading…".into()),
+        "CPU" => dialog
+            .vm
+            .as_ref()
+            .map(|v| {
+                format!(
+                    "{} vCPUs · {} MiB",
+                    v.vcpus_at_startup, v.memory_dynamic_max_mib
+                )
+            })
+            .unwrap_or_default(),
+        "Boot Options" => dialog
+            .vm
+            .as_ref()
+            .map(|v| {
+                if v.is_hvm {
+                    format!("{} · {}", v.firmware, v.boot_order)
+                } else {
+                    v.pv_args.clone()
+                }
+            })
+            .unwrap_or_default(),
+        "High Availability" => {
+            if dialog.restart_priority.is_empty() {
+                "Do not restart".into()
+            } else {
+                dialog.restart_priority.clone()
+            }
+        }
+        "Live Patching" => dialog
+            .pool
+            .as_ref()
+            .and_then(|p| p.live_patching_disabled)
+            .map(|v| if v { "Disabled" } else { "Enabled" }.into())
+            .unwrap_or_else(|| "Unavailable".into()),
+        "Advanced" if dialog.pool.is_some() => {
+            if dialog.pool.as_ref().is_some_and(|p| p.vm_autostart) {
+                "VM autostart enabled"
+            } else {
+                "VM autostart disabled"
+            }
+            .into()
+        }
+        "Custom Fields" => "Custom field values".into(),
+        "Size and Location" => dialog
+            .properties
+            .ready()
+            .and_then(|p| p.disk.as_ref())
+            .map(|d| format!("{} · {}", crate::format::bytes(d.size_bytes), d.sr_name))
+            .unwrap_or_default(),
+        _ => "Configuration".into(),
+    }
+}
 
 pub fn show(
     ctx: &egui::Context,
     state: &mut UiState,
-    workspace: &xen_core::workspace::WorkspaceView,
+    workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
-    let sequence = state.properties_seq;
-    let disks = state
-        .vm_state
-        .ready()
-        .map(|vm| vm.disks.clone())
-        .unwrap_or_default();
     let Some(dialog) = state.properties.as_mut() else {
         return;
     };
     let connection = find_connection(workspace, &dialog.connection_id);
-    let read_only = connection.is_none_or(is_read_only);
-    let available = connection.is_some_and(is_online);
-    let writable = available && !read_only;
-    let pool_options = dialog.target.kind == xen_core::properties::ObjectKind::Pool
-        || (dialog.target.kind == xen_core::properties::ObjectKind::Host
-            && connection
-                .and_then(crate::state::connection_inventory)
-                .is_some_and(|inventory| inventory.hosts.len() == 1));
-    let mut close = false;
-    let response = egui::Modal::new(egui::Id::unique("object-properties"))
-        .frame(theme::modal_frame())
+    let writable = connection.is_some_and(|c| is_online(c) && !is_read_only(c));
+    let name = dialog
+        .original
+        .as_ref()
+        .map(|p| p.name.as_str())
+        .unwrap_or("Loading…");
+    let mut open = true;
+    egui::Window::new(format!("'{name}' Properties"))
+        .id(egui::Id::unique(("properties", state.properties_seq)))
+        .open(&mut open)
+        .resizable(true)
+        .collapsible(false)
+        .default_size([720.0, 540.0])
+        .default_pos(ctx.content_rect().center() - egui::vec2(360.0, 270.0))
+        .max_size([
+            ctx.content_rect().width() - 40.0,
+            ctx.content_rect().height() - 80.0,
+        ])
+        .min_size([620.0, 420.0])
         .show(ctx, |ui| {
-            ui.set_width(530.0);
-            ui.label(RichText::new("Properties").size(17.0).strong());
-            ui.label(RichText::new(format!("{} · {} · {}", connection.map(connection_name).unwrap_or_default(), dialog.target.kind.label(), dialog.target.uuid)).size(9.5).color(theme::muted_fg()));
-            ui.add_space(12.0);
-            let reserve = if dialog.error.is_some() { 310.0 } else { 210.0 };
-            egui::ScrollArea::vertical().id_salt(("property-fields", sequence)).max_height((ctx.content_rect().height()-reserve).max(80.0)).show(ui, |ui| {
-                match &mut dialog.properties {
-                    LoadState::Ready(properties) => {
-                        ui.add_enabled_ui(writable && !dialog.submitting, |ui| {
-                            widgets::field_label(ui, if properties.target.kind == xen_core::properties::ObjectKind::Pool { "Name (may be empty for an unnamed pool)" } else { "Name" });
-                            ui.add(egui::TextEdit::singleline(&mut properties.name).desired_width(f32::INFINITY).char_limit(255));
-                            ui.add_space(8.0);
-                            widgets::field_label(ui, "Description");
-                            ui.add(egui::TextEdit::multiline(&mut properties.description).desired_width(f32::INFINITY).desired_rows(4).char_limit(xen_core::properties::MAX_DESCRIPTION_CHARS));
-                            ui.add_space(8.0);
-                            if let Some(disk) = disks.iter().find(|d| d.vdi_uuid == dialog.target.uuid) {
-                                widgets::field_label(ui, "Size and Location");
-                                ui.horizontal(|ui| {
-                                    ui.label(format!("{} · {}", crate::format::bytes(disk.virtual_size), disk.sr_name));
-                                    if ui.button("Resize…").clicked() {
-                                        actions.push(UiAction::CloseProperties);
-                                        actions.push(UiAction::OpenDiskResize {vdi_uuid: disk.vdi_uuid.clone(), name: disk.vdi_name.clone(), current_gib: disk.virtual_size.div_ceil(1024*1024*1024)});
+            let height = (ui.available_height() - 52.0)
+                .clamp(300.0, (ctx.content_rect().height() - 150.0).max(300.0));
+            ui.horizontal_top(|ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(240.0, height),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        egui::ScrollArea::vertical()
+                            .max_height(height - 10.0)
+                            .id_salt("property-tabs")
+                            .show(ui, |ui| {
+                                for page in pages(dialog) {
+                                    let selected = dialog.page == page;
+                                    let subtext = summary(dialog, &page);
+                                    let title = page_title(dialog, &page);
+                                    let response = egui::Frame::new()
+                                        .fill(if selected {
+                                            ui.visuals().selection.bg_fill
+                                        } else {
+                                            egui::Color32::TRANSPARENT
+                                        })
+                                        .inner_margin(8)
+                                        .show(ui, |ui| {
+                                            ui.set_min_width(210.0);
+                                            ui.label(
+                                                RichText::new(format!(
+                                                    "{}  {title}",
+                                                    if page == "General" { "●" } else { "◇" }
+                                                ))
+                                                .strong(),
+                                            );
+                                            ui.add(
+                                                egui::Label::new(
+                                                    RichText::new(subtext)
+                                                        .small()
+                                                        .color(theme::muted_fg()),
+                                                )
+                                                .truncate(),
+                                            );
+                                        })
+                                        .response;
+                                    if ui
+                                        .interact(
+                                            response.rect,
+                                            response.id.with("select"),
+                                            egui::Sense::click(),
+                                        )
+                                        .clicked()
+                                        && !dialog.submitting
+                                    {
+                                        dialog.page = page;
                                     }
-                                });
-                                widgets::field_label(ui, "Device options for this VM");
-                                let mut mode = disk.mode.clone();
-                                egui::ComboBox::from_id_salt("disk-properties-mode").selected_text(if mode == "RO" {"Read-only"} else {"Read/write"}).show_ui(ui,|ui| {
-                                    ui.selectable_value(&mut mode, "RO".into(), "Read-only");
-                                    ui.selectable_value(&mut mode, "RW".into(), "Read/write");
-                                });
-                                if mode != disk.mode {actions.push(UiAction::SetVbdMode {vbd_uuid:disk.vbd_uuid.clone(),mode});}
-                                let mut bootable = disk.bootable;
-                                if ui.checkbox(&mut bootable,"Bootable").changed() {actions.push(UiAction::SetVbdBootable {vbd_uuid:disk.vbd_uuid.clone(),bootable});}
-                                ui.add_enabled(false,egui::Label::new(format!("Position: {}",disk.userdevice))).on_disabled_hover_text("Not implemented yet");
-                                ui.add_space(8.0);
-                            }
-                            widgets::field_label(ui, "Tags");
-                            let mut remove = None;
-                            for (index, tag) in properties.tags.iter_mut().enumerate() {
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::TextEdit::singleline(tag).desired_width(420.0).char_limit(255));
-                                    if ui.small_button("Remove").clicked() { remove = Some(index); }
-                                });
-                            }
-                            if let Some(index) = remove { properties.tags.remove(index); }
-                            ui.horizontal(|ui| {
-                                ui.add(egui::TextEdit::singleline(&mut dialog.new_tag).desired_width(420.0).char_limit(255).hint_text("New tag"));
-                                if ui.add_enabled(!dialog.new_tag.trim().is_empty(), egui::Button::new("Add tag")).clicked() {
-                                    properties.tags.push(std::mem::take(&mut dialog.new_tag));
                                 }
                             });
-                        });
-                        if read_only { ui.label("This connection is read-only."); }
-                        else if !available { ui.label("This connection is offline."); }
-                    }
-                    LoadState::Error(message) => { ui.label(RichText::new(message.as_str()).color(theme::red())); }
-                    _ => { ui.spinner(); ui.label("Reading properties from the host…"); }
+                    },
+                );
+                let (separator, _) =
+                    ui.allocate_exact_size(egui::vec2(1.0, height), egui::Sense::hover());
+                ui.painter().vline(
+                    separator.center().x,
+                    separator.y_range(),
+                    ui.visuals().widgets.noninteractive.bg_stroke,
+                );
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), height),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.heading(page_title(dialog, &dialog.page));
+                        ui.separator();
+                        egui::ScrollArea::vertical()
+                            .max_height(height - 45.0)
+                            .id_salt("property-content")
+                            .show(ui, |ui| {
+                                ui.set_min_width(310.0);
+                                ui.add_enabled_ui(writable && !dialog.submitting, |ui| {
+                                    content(ui, dialog, workspace);
+                                });
+                                if let Some(error) = &dialog.error {
+                                    ui.colored_label(theme::red(), error);
+                                }
+                            });
+                    },
+                );
+            });
+            ui.separator();
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .add_enabled(
+                        writable
+                            && dialog.extras_ready
+                            && dialog.original.is_some()
+                            && !dialog.submitting,
+                        widgets::primary_button(if dialog.submitting { "Saving…" } else { "OK" }),
+                    )
+                    .clicked()
+                {
+                    actions.push(UiAction::SaveProperties);
+                }
+                if ui
+                    .add_enabled(!dialog.submitting, egui::Button::new("Cancel"))
+                    .clicked()
+                {
+                    actions.push(UiAction::CloseProperties);
+                }
+                if !writable {
+                    ui.label("This connection is offline or read-only.");
                 }
             });
-            if let Some(error) = &dialog.error {
-                ui.add_space(8.0);
-                egui::ScrollArea::vertical().id_salt(("property-error", sequence)).max_height(80.0).show(ui, |ui| { ui.label(RichText::new(error).color(theme::red())); });
-            }
-            if pool_options && ui.add_enabled(available && !dialog.submitting, egui::Button::new("Pool options… (VM autostart)")).clicked() {
-                actions.push(UiAction::OpenPoolOptions { connection_id: dialog.connection_id.clone() });
-            }
-            ui.add_space(14.0);
-            ui.horizontal(|ui| {
-                if ui.add_enabled(!dialog.submitting, egui::Button::new("Close")).clicked() { close = true; }
-                if ui.add_enabled(!dialog.submitting, egui::Button::new("Reload")).clicked() { actions.push(UiAction::ReloadProperties); }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let ready = matches!(&dialog.properties, LoadState::Ready(properties) if !properties.name.trim().is_empty() || properties.target.kind == xen_core::properties::ObjectKind::Pool || dialog.original.as_ref().is_some_and(|original| original.name == properties.name));
-                    if ui.add_enabled(writable && ready && !dialog.submitting, widgets::primary_button(if dialog.submitting { "Saving…" } else { "Save changes" })).clicked() { actions.push(UiAction::SaveProperties); }
-                });
-            });
         });
-    if (response.should_close() || close) && !dialog.submitting {
+    if !open && !dialog.submitting {
         actions.push(UiAction::CloseProperties);
     }
+}
+
+fn field(ui: &mut egui::Ui, label: &str, value: &mut String) {
+    widgets::field_label(ui, label);
+    ui.add(egui::TextEdit::singleline(value).desired_width(f32::INFINITY));
+    ui.add_space(6.0);
+}
+
+fn unavailable(ui: &mut egui::Ui, labels: &[&str]) {
+    ui.label(RichText::new("Not implemented yet").color(theme::muted_fg()));
+    ui.add_enabled_ui(false, |ui| {
+        for label in labels {
+            ui.label(*label);
+            ui.add(egui::TextEdit::singleline(&mut String::new()).desired_width(f32::INFINITY));
+        }
+    });
+}
+
+fn content(ui: &mut egui::Ui, dialog: &mut PropertiesDialog, workspace: &WorkspaceView) {
+    let page = dialog.page.clone();
+    if page == "General" {
+        match &mut dialog.properties {
+            LoadState::Ready(p) => {
+                field(ui, "Name", &mut p.name);
+                widgets::field_label(ui, "Description");
+                ui.add(
+                    egui::TextEdit::multiline(&mut p.description)
+                        .desired_width(f32::INFINITY)
+                        .desired_rows(4)
+                        .char_limit(xen_core::properties::MAX_DESCRIPTION_CHARS),
+                );
+                field(ui, "Folder", &mut p.folder);
+                widgets::field_label(ui, "Tags");
+                let mut remove = None;
+                for (i, tag) in p.tags.iter_mut().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.text_edit_singleline(tag);
+                        if ui.small_button("Remove").clicked() {
+                            remove = Some(i);
+                        }
+                    });
+                }
+                if let Some(i) = remove {
+                    p.tags.remove(i);
+                }
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut dialog.new_tag).hint_text("New tag"));
+                    if ui.button("Add").clicked() && !dialog.new_tag.trim().is_empty() {
+                        p.tags.push(std::mem::take(&mut dialog.new_tag));
+                    }
+                });
+            }
+            LoadState::Error(e) => {
+                ui.colored_label(theme::red(), e);
+            }
+            _ => {
+                ui.spinner();
+            }
+        }
+        return;
+    }
+    if let Some(vm) = dialog.vm.as_mut() {
+        match page.as_str() {
+            "CPU" => {
+                ui.add_enabled_ui(!vm.running, |ui| {
+                    field(ui, "Number of vCPUs", &mut vm.vcpus_max);
+                });
+                ui.add_enabled_ui(!vm.running || vm.can_hotplug_vcpus, |ui| {
+                    field(ui, "vCPUs at startup / online", &mut vm.vcpus_at_startup);
+                });
+                ui.add_enabled_ui(!vm.running, |ui| {
+                    field(ui, "Cores per socket", &mut vm.cores_per_socket);
+                    field(ui, "Priority (CPU weight)", &mut vm.cpu_weight);
+                });
+                ui.separator();
+                ui.label("Memory");
+                ui.add_enabled_ui(!vm.running, |ui| {
+                    field(ui, "Static maximum (MiB)", &mut vm.memory_static_max_mib);
+                });
+                field(ui, "Dynamic minimum (MiB)", &mut vm.memory_dynamic_min_mib);
+                field(ui, "Dynamic maximum (MiB)", &mut vm.memory_dynamic_max_mib);
+                if vm.running {
+                    ui.label(
+                        "Stop the VM to change CPU maximum, topology, priority or static memory.",
+                    );
+                }
+                return;
+            }
+            "Boot Options" => {
+                if vm.is_hvm {
+                    widgets::field_label(ui, "Boot order");
+                    egui::ComboBox::from_id_salt("properties-boot")
+                        .selected_text(&vm.boot_order)
+                        .show_ui(ui, |ui| {
+                            for (v, label) in [
+                                ("dc", "Disk first"),
+                                ("cd", "CD first"),
+                                ("ncd", "Network first"),
+                            ] {
+                                ui.selectable_value(&mut vm.boot_order, v.into(), label);
+                            }
+                        });
+                    widgets::field_label(ui, "Firmware");
+                    egui::ComboBox::from_id_salt("properties-firmware")
+                        .selected_text(&vm.firmware)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut vm.firmware, "bios".into(), "BIOS");
+                            ui.selectable_value(&mut vm.firmware, "uefi".into(), "UEFI");
+                        });
+                    ui.add_enabled(
+                        vm.firmware == "uefi",
+                        egui::Checkbox::new(&mut vm.secure_boot, "Secure boot"),
+                    );
+                    field(ui, "Boot policy", &mut vm.boot_policy);
+                } else {
+                    field(ui, "OS boot parameters", &mut vm.pv_args);
+                }
+                field(ui, "After guest crash", &mut vm.after_crash);
+                ui.checkbox(&mut vm.auto_poweron, "Auto-start VM when the host starts");
+                return;
+            }
+            "High Availability" => {
+                egui::ComboBox::from_id_salt("properties-ha")
+                    .selected_text(if dialog.restart_priority.is_empty() {
+                        "Do not restart"
+                    } else {
+                        &dialog.restart_priority
+                    })
+                    .show_ui(ui, |ui| {
+                        for (v, label) in [
+                            ("", "Do not restart"),
+                            ("restart", "Restart"),
+                            ("best-effort", "Restart if possible"),
+                        ] {
+                            ui.selectable_value(&mut dialog.restart_priority, v.into(), label);
+                        }
+                    });
+                ui.label("Start delay (seconds)");
+                ui.add(egui::DragValue::new(&mut dialog.start_delay).range(0..=604800));
+                ui.label("Shutdown delay (seconds)");
+                ui.add(egui::DragValue::new(&mut dialog.shutdown_delay).range(0..=604800));
+                return;
+            }
+            "Home Server" => {
+                let hosts = find_connection(workspace, &dialog.connection_id)
+                    .and_then(crate::state::connection_inventory)
+                    .map(|i| i.hosts.as_slice())
+                    .unwrap_or_default();
+                let label = dialog
+                    .affinity
+                    .as_ref()
+                    .and_then(|id| hosts.iter().find(|h| h.uuid == *id || h.reference == *id))
+                    .map(|h| h.name.as_str())
+                    .unwrap_or("No preference");
+                egui::ComboBox::from_id_salt("properties-affinity")
+                    .selected_text(label)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut dialog.affinity, None, "No preference");
+                        for host in hosts {
+                            ui.selectable_value(
+                                &mut dialog.affinity,
+                                Some(host.uuid.clone()),
+                                &host.name,
+                            );
+                        }
+                    });
+                return;
+            }
+            _ => {}
+        }
+    }
+    if let Some(pool) = dialog.pool.as_mut() {
+        match page.as_str() {
+            "Live Patching" => {
+                if let Some(disabled) = pool.live_patching_disabled.as_mut() {
+                    let mut enabled = !*disabled;
+                    if ui.checkbox(&mut enabled, "Enable live patching").changed() {
+                        *disabled = !enabled;
+                    }
+                } else {
+                    unavailable(ui, &["Enable live patching"]);
+                }
+                return;
+            }
+            "Network Options" => {
+                if let Some(enabled) = pool.igmp_snooping_enabled.as_mut() {
+                    ui.checkbox(enabled, "Enable IGMP snooping");
+                } else {
+                    unavailable(ui, &["Enable IGMP snooping"]);
+                }
+                return;
+            }
+            "Advanced" | "Automatic Start" => {
+                if let Some(enabled) = pool.migration_compression.as_mut() {
+                    ui.checkbox(enabled, "Compress migration traffic");
+                }
+                ui.checkbox(&mut pool.vm_autostart, "Enable VM autostart for this pool");
+                return;
+            }
+            _ => {}
+        }
+    }
+    if let LoadState::Ready(p) = &mut dialog.properties
+        && let Some(disk) = &mut p.disk
+    {
+        if page == "Size and Location" {
+            ui.label(format!("Storage repository: {}", disk.sr_name));
+            ui.label("Size (GiB)");
+            let mut gib = disk.size_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+            if ui
+                .add_enabled(
+                    !disk.devices.is_empty(),
+                    egui::DragValue::new(&mut gib).range(0.001..=1_048_576.0),
+                )
+                .changed()
+            {
+                disk.size_bytes = (gib * 1024.0 * 1024.0 * 1024.0) as u64;
+            }
+            return;
+        }
+        if let Some(device) = disk
+            .devices
+            .iter_mut()
+            .find(|d| format!("device-{}", d.vbd_uuid) == page)
+        {
+            widgets::field_label(ui, "Mode");
+            egui::ComboBox::from_id_salt(("properties-mode", &device.vbd_uuid))
+                .selected_text(&device.mode)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut device.mode, "RW".into(), "Read/write");
+                    ui.selectable_value(&mut device.mode, "RO".into(), "Read-only");
+                });
+            ui.checkbox(&mut device.bootable, "Bootable");
+            ui.add_enabled(
+                false,
+                egui::Label::new(format!("Position: {}", device.position)),
+            )
+            .on_disabled_hover_text("Not implemented yet");
+            return;
+        }
+    }
+    let labels: &[&str] = match page.as_str() {
+        "Custom Fields" => &["Custom fields"],
+        "Alerts" => &["CPU usage", "Memory usage", "Disk usage"],
+        "Multipathing" => &["Enable multipathing"],
+        "Log Destination" => &["System log server"],
+        "Power On" => &["Power-on mode"],
+        "GPU" => &["GPU assignment"],
+        "USB" => &["USB devices"],
+        "Advanced" => &["Optimization", "Shadow memory multiplier"],
+        "Clustering" => &["Enable clustering"],
+        "Security" => &["SSL legacy policy"],
+        "Read Caching" => &["Enable read caching"],
+        "Network Settings" => &["MTU", "Automatically add to new servers"],
+        _ => &["Settings"],
+    };
+    unavailable(ui, labels);
 }

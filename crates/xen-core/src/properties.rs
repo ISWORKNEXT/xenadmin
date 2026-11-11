@@ -52,6 +52,25 @@ pub struct ObjectProperties {
     pub name: String,
     pub description: String,
     pub tags: Vec<String>,
+    pub folder: String,
+    pub disk: Option<DiskProperties>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DiskProperties {
+    pub size_bytes: u64,
+    pub sr_name: String,
+    pub devices: Vec<DiskDevice>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DiskDevice {
+    pub vbd_uuid: String,
+    pub vm_uuid: String,
+    pub vm_name: String,
+    pub mode: String,
+    pub bootable: bool,
+    pub position: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -94,7 +113,44 @@ impl Connection {
         target: &ObjectTarget,
     ) -> Result<ObjectProperties, ApiError> {
         let (_, record) = self.property_record(target).await?;
-        Ok(properties_from_record(target, &record))
+        let mut properties = properties_from_record(target, &record);
+        if target.kind == ObjectKind::Disk {
+            let mut devices = Vec::new();
+            for reference in record["VBDs"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+            {
+                let vbd: Value = self
+                    .request("VBD.get_record", json!([self.session, reference]))
+                    .await?;
+                let vm: Value = self
+                    .request("VM.get_record", json!([self.session, vbd["VM"]]))
+                    .await?;
+                devices.push(DiskDevice {
+                    vbd_uuid: vbd["uuid"].as_str().unwrap_or_default().into(),
+                    vm_uuid: vm["uuid"].as_str().unwrap_or_default().into(),
+                    vm_name: vm["name_label"].as_str().unwrap_or_default().into(),
+                    mode: vbd["mode"].as_str().unwrap_or("RW").into(),
+                    bootable: vbd["bootable"].as_bool().unwrap_or(false),
+                    position: vbd["userdevice"].as_str().unwrap_or_default().into(),
+                });
+            }
+            let sr: Value = self
+                .request("SR.get_record", json!([self.session, record["SR"]]))
+                .await?;
+            properties.disk = Some(DiskProperties {
+                size_bytes: record["virtual_size"]
+                    .as_str()
+                    .and_then(|v| v.parse().ok())
+                    .or_else(|| record["virtual_size"].as_u64())
+                    .unwrap_or_default(),
+                sr_name: sr["name_label"].as_str().unwrap_or_default().into(),
+                devices,
+            });
+        }
+        Ok(properties)
     }
 
     pub async fn update_object_properties(
@@ -190,6 +246,30 @@ impl Connection {
                 .await?;
             }
         }
+        if edited.folder != original.folder {
+            let actual = record["other_config"]["folder"]
+                .as_str()
+                .unwrap_or_default();
+            if actual != original.folder && actual != edited.folder {
+                return Err(ApiError::Xen(
+                    "The folder changed on the host. Reopen Properties.".into(),
+                ));
+            }
+            let mut other = record["other_config"]
+                .as_object()
+                .cloned()
+                .unwrap_or_default();
+            if edited.folder.is_empty() {
+                other.remove("folder");
+            } else {
+                other.insert("folder".into(), json!(edited.folder));
+            }
+            self.request::<Value>(
+                &format!("{class}.set_other_config"),
+                json!([self.session, reference, other]),
+            )
+            .await?;
+        }
         self.object_properties(&edited.target).await
     }
 }
@@ -197,6 +277,11 @@ impl Connection {
 fn properties_from_record(target: &ObjectTarget, record: &Value) -> ObjectProperties {
     ObjectProperties {
         target: target.clone(),
+        folder: record["other_config"]["folder"]
+            .as_str()
+            .unwrap_or_default()
+            .into(),
+        disk: None,
         name: record["name_label"].as_str().unwrap_or_default().to_owned(),
         description: record["name_description"]
             .as_str()

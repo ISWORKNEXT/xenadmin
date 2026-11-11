@@ -47,6 +47,9 @@ pub fn storage(
     match state.object_tab {
         VmTab::Search => super::search_page::show(ui, state, workspace, actions),
         VmTab::General => {
+            if ui.button("Properties").clicked() {
+                properties(actions, &id, ObjectKind::Storage, &sr_uuid);
+            }
             section(ui, "General", |ui| {
                 value_row(ui, "Name", &sr.name);
                 value_row(ui, "Description", &sr.description);

@@ -1,0 +1,12 @@
+[
+  {
+    "pool_uuid": "366d4165-4bdd-84e8-3e5e-84542311b5c3",
+    "auto_poweron": "true",
+    "enabled": true
+  },
+  {
+    "pool_uuid": "366d4165-4bdd-84e8-3e5e-84542311b5c3",
+    "auto_poweron": "false",
+    "enabled": false
+  }
+]

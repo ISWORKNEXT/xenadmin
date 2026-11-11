@@ -647,7 +647,18 @@ pub struct RecordDialog {
     pub groups: Vec<InfoGroup>,
 }
 
+#[derive(Clone)]
 pub struct PropertiesDialog {
+    pub page: String,
+    pub vm: Option<VmResourceEditState>,
+    pub original_vm: Option<xen_core::vm::VmDetails>,
+    pub pool: Option<xen_core::pool_options::PoolOptions>,
+    pub original_pool: Option<xen_core::pool_options::PoolOptions>,
+    pub extras_ready: bool,
+    pub restart_priority: String,
+    pub start_delay: u64,
+    pub shutdown_delay: u64,
+    pub affinity: Option<String>,
     pub connection_id: String,
     pub target: xen_core::properties::ObjectTarget,
     pub properties: LoadState<xen_core::properties::ObjectProperties>,
@@ -1146,18 +1157,6 @@ pub struct VdiDeleteConfirm {
     pub error: Option<String>,
 }
 
-pub struct HaEditDialog {
-    pub connection_id: String,
-    pub vm_uuid: String,
-    pub hosts: Vec<(String, String)>,
-    pub restart_priority: String,
-    pub start_delay: String,
-    pub shutdown_delay: String,
-    pub affinity_host_uuid: Option<String>,
-    pub submitting: bool,
-    pub error: Option<String>,
-}
-
 pub struct AttachVdiDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -1181,17 +1180,6 @@ pub struct DiskAddDialog {
     pub error: Option<String>,
 }
 
-pub struct DiskResizeDialog {
-    pub connection_id: String,
-    pub vm_uuid: String,
-    pub vdi_uuid: String,
-    pub name: String,
-    pub current_gib: u64,
-    pub size_gib: String,
-    pub submitting: bool,
-    pub error: Option<String>,
-}
-
 pub struct DiskRemoveDialog {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -1205,7 +1193,6 @@ pub struct DiskRemoveDialog {
 
 pub enum DiskDialog {
     Add(DiskAddDialog),
-    Resize(DiskResizeDialog),
     Remove(DiskRemoveDialog),
 }
 
@@ -1240,24 +1227,14 @@ pub struct IsoDialog {
     pub error: Option<String>,
 }
 
-pub struct PoolOptionsDialog {
-    pub connection_id: String,
-    pub uuid: String,
-    pub original: Option<xen_core::pool_options::PoolOptions>,
-    pub data: LoadState<xen_core::pool_options::PoolOptions>,
-    pub error: Option<String>,
-    pub submitting: bool,
-}
-
 pub struct VmCopyDialog {
     pub connection_id: String,
     pub vm_uuid: String,
     pub request: xen_core::provisioning::CopyVmRequest,
 }
 
+#[derive(Clone)]
 pub struct VmResourceEditState {
-    pub connection_id: String,
-    pub vm_uuid: String,
     pub vcpus_max: String,
     pub vcpus_at_startup: String,
     pub cpu_weight: String,
@@ -1281,12 +1258,53 @@ pub struct VmResourceEditState {
     pub is_hvm: bool,
     pub running: bool,
     pub can_hotplug_vcpus: bool,
-    pub current_vcpus: u64,
-    pub error: Option<String>,
-    pub submitting: bool,
 }
 
 impl VmResourceEditState {
+    pub fn from_details(details: &xen_core::vm::VmDetails) -> Self {
+        crate::state::VmResourceEditState {
+            vcpus_max: details.vcpus_max.to_string(),
+            vcpus_at_startup: details.vcpus_at_startup.to_string(),
+            cpu_weight: details.cpu_weight.clone(),
+            original_cpu_weight: details.cpu_weight.clone(),
+            cores_per_socket: details.cores_per_socket.clone(),
+            original_cores_per_socket: details.cores_per_socket.clone(),
+            original_vcpus_max: details.vcpus_max,
+            max_cores_per_socket: details.max_cores_per_socket,
+            memory_static_max_mib: (details.memory_static_max / (1024 * 1024)).to_string(),
+            memory_dynamic_min_mib: (details.memory_dynamic_min / (1024 * 1024)).to_string(),
+            memory_dynamic_max_mib: (details.memory_dynamic_max / (1024 * 1024)).to_string(),
+            boot_order: details
+                .hvm_boot_params
+                .get("order")
+                .cloned()
+                .unwrap_or_else(|| "cd".into()),
+            firmware: if details.firmware.is_empty() {
+                "bios".into()
+            } else {
+                details.firmware.clone()
+            },
+            secure_boot: details.secure_boot.eq_ignore_ascii_case("true"),
+            boot_policy: if details.hvm_boot_policy.is_empty() {
+                "BIOS order".into()
+            } else {
+                details.hvm_boot_policy.clone()
+            },
+            after_crash: if details.after_crash.is_empty() {
+                "restart".into()
+            } else {
+                details.after_crash.clone()
+            },
+            pv_args: details.pv_args.clone(),
+            original_pv_args: details.pv_args.clone(),
+            auto_poweron: details.auto_poweron,
+            original_auto_poweron: details.auto_poweron,
+            is_hvm: !details.hvm_boot_policy.is_empty(),
+            running: details.power_state != "Halted",
+            can_hotplug_vcpus: details.can_hotplug_vcpus,
+        }
+    }
+
     pub fn parse_resources(&self) -> Result<xen_core::operations::VmResourceUpdate, String> {
         let parse = |value: &str, label: &str| {
             value
@@ -1410,16 +1428,12 @@ pub struct UiState {
     pub console: Option<ConsoleState>,
     pub console_seq: u64,
     pub console_focus: bool,
-    pub vm_resource_edit: Option<VmResourceEditState>,
     pub vm_copy: Option<VmCopyDialog>,
-    pub pool_options: Option<PoolOptionsDialog>,
-    pub pool_options_seq: u64,
     pub iso_dialog: Option<IsoDialog>,
     pub vif_dialog: Option<VifDialog>,
     pub vif_confirm: Option<VifConfirm>,
     pub disk_dialog: Option<DiskDialog>,
     pub attach_vdi_dialog: Option<AttachVdiDialog>,
-    pub ha_edit_dialog: Option<HaEditDialog>,
     pub sr_vdis: Vec<SrVdi>,
     pub sr_vdis_sr: Option<String>,
     pub sr_vdis_loading: bool,
@@ -1549,16 +1563,12 @@ impl Default for UiState {
             console: None,
             console_seq: 0,
             console_focus: false,
-            vm_resource_edit: None,
             vm_copy: None,
-            pool_options: None,
-            pool_options_seq: 0,
             iso_dialog: None,
             vif_dialog: None,
             vif_confirm: None,
             disk_dialog: None,
             attach_vdi_dialog: None,
-            ha_edit_dialog: None,
             sr_vdis: Vec::new(),
             sr_vdis_sr: None,
             sr_vdis_loading: false,
@@ -1654,11 +1664,11 @@ impl Default for UiState {
 }
 
 pub enum UiAction {
+    SelectPropertyPage(&'static str),
     OpenProperties {
         connection_id: String,
         target: xen_core::properties::ObjectTarget,
     },
-    ReloadProperties,
     SaveProperties,
     CloseProperties,
     OpenXvaExportMany(Vec<(String, String, String)>),
@@ -1737,15 +1747,7 @@ pub enum UiAction {
     },
     CloseVmCopy,
     SubmitVmCopy,
-    OpenPoolOptions {
-        connection_id: String,
-    },
-    ReloadPoolOptions,
-    SavePoolOptions,
-    ClosePoolOptions,
     OpenVmResources,
-    CloseVmResources,
-    SaveVmResources,
     SetDvdMedia {
         vbd_uuid: String,
         iso_uuid: Option<String>,
@@ -1936,15 +1938,9 @@ pub enum UiAction {
     LoadAuth,
     LoadPoolStatus,
     OpenHaEdit,
-    CloseHaEdit,
-    SaveHaEdit,
     OpenAttachVdi,
     CloseAttachVdi,
     SaveAttachVdi,
-    SetVbdBootable {
-        vbd_uuid: String,
-        bootable: bool,
-    },
     OpenMoveDisk {
         vbd_uuid: String,
         name: String,
@@ -1953,10 +1949,6 @@ pub enum UiAction {
     },
     CloseMoveDisk,
     SaveMoveDisk,
-    SetVbdMode {
-        vbd_uuid: String,
-        mode: String,
-    },
     SetVbdPlugged {
         vbd_uuid: String,
         plugged: bool,
@@ -1968,11 +1960,6 @@ pub enum UiAction {
     CloseSaveSearch,
     SaveCurrentSearch,
     AddCdDrive,
-    OpenDiskResize {
-        vdi_uuid: String,
-        name: String,
-        current_gib: u64,
-    },
     PromptRemoveDisk {
         vbd_uuid: String,
         name: String,

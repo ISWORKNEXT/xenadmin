@@ -141,6 +141,12 @@ pub fn show(
     }
     match tab {
         VmTab::General => {
+            if ui.button("Properties").clicked() {
+                let (kind, uuid) = host.map_or((ObjectKind::Pool, inv.pool_id.as_str()), |host| {
+                    (ObjectKind::Host, host.uuid.as_str())
+                });
+                properties(actions, id, kind, uuid);
+            }
             if let Some(host) = host {
                 if let Some(details) = details.first() {
                     host_general(ui, details);

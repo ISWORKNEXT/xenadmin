@@ -497,50 +497,43 @@ impl App {
     fn drain_events(&mut self) {
         while let Ok(event) = self.worker.events.try_recv() {
             match event {
-                Event::PoolOptions { seq, result } => {
-                    if seq != self.state.pool_options_seq {
-                        continue;
-                    }
-                    if let Some(dialog) = self.state.pool_options.as_mut() {
+                Event::PropertyExtras { seq, result } => {
+                    if seq == self.state.properties_seq
+                        && let Some(dialog) = self.state.properties.as_mut()
+                    {
                         match result {
-                            Ok(data) => {
-                                dialog.original = Some(data.clone());
-                                dialog.data = LoadState::Ready(data);
+                            Ok((vm, pool)) => {
+                                if let Some(mut vm) = vm {
+                                    if let Some(host) =
+                                        find_connection(&self.workspace, &dialog.connection_id)
+                                            .and_then(crate::state::connection_inventory)
+                                            .and_then(|inventory| {
+                                                inventory
+                                                    .hosts
+                                                    .iter()
+                                                    .find(|host| host.reference == vm.affinity_ref)
+                                            })
+                                    {
+                                        vm.affinity_ref = host.uuid.clone();
+                                    }
+                                    dialog.vm =
+                                        Some(crate::state::VmResourceEditState::from_details(&vm));
+                                    dialog.restart_priority = vm.ha_restart_priority.clone();
+                                    dialog.start_delay = vm.start_delay;
+                                    dialog.shutdown_delay = vm.shutdown_delay;
+                                    dialog.affinity = (!vm.affinity_ref.is_empty()
+                                        && vm.affinity_ref != "OpaqueRef:NULL")
+                                        .then(|| vm.affinity_ref.clone());
+                                    dialog.original_vm = Some(*vm);
+                                }
+                                dialog.original_pool = pool.clone();
+                                dialog.pool = pool;
+                                dialog.extras_ready = true;
                             }
-                            Err(message) => dialog.data = LoadState::Error(message),
+                            Err(message) => dialog.error = Some(message),
                         }
                     }
                 }
-                Event::PoolOptionsSaved { seq, result } => {
-                    if seq != self.state.pool_options_seq {
-                        continue;
-                    }
-                    match result {
-                        Ok(_) => {
-                            let saved_connection = self
-                                .state
-                                .pool_options
-                                .as_ref()
-                                .map(|dialog| dialog.connection_id.clone());
-                            self.state.pool_options = None;
-                            self.state
-                                .toasts
-                                .push(Toast::new("Saved pool options.", ToastKind::Success));
-                            if self.state.host_route.as_ref().is_some_and(|route| {
-                                Some(&route.connection_id) == saved_connection.as_ref()
-                            }) {
-                                self.apply(vec![UiAction::ReloadHostDetails]);
-                            }
-                        }
-                        Err(message) => {
-                            if let Some(dialog) = self.state.pool_options.as_mut() {
-                                dialog.submitting = false;
-                                dialog.error = Some(message);
-                            }
-                        }
-                    }
-                }
-
                 Event::ObjectProperties { seq, result } => {
                     if seq == self.state.properties_seq
                         && let Some(dialog) = self.state.properties.as_mut()
@@ -583,6 +576,9 @@ impl App {
                         Err(message) => {
                             if let Some(dialog) = self.state.properties.as_mut() {
                                 dialog.submitting = false;
+                                if let Some((page, _)) = message.split_once(": ") {
+                                    dialog.page = page.to_owned();
+                                }
                                 dialog.error = Some(format!("Save failed: {message}"));
                             }
                         }
@@ -1658,34 +1654,6 @@ impl App {
                         }
                     }
                 },
-                Event::VmHaUpdated { vm_uuid, result } => match result {
-                    Ok(()) => {
-                        if self
-                            .state
-                            .ha_edit_dialog
-                            .as_ref()
-                            .is_some_and(|dialog| dialog.vm_uuid == vm_uuid)
-                        {
-                            self.state.ha_edit_dialog = None;
-                        }
-                        self.state
-                            .toasts
-                            .push(Toast::new("HA settings updated.", ToastKind::Success));
-                        self.apply(vec![UiAction::ReloadVmDetails]);
-                    }
-                    Err(message) => {
-                        if let Some(dialog) = self.state.ha_edit_dialog.as_mut()
-                            && dialog.vm_uuid == vm_uuid
-                        {
-                            dialog.submitting = false;
-                            dialog.error = Some(message);
-                        } else {
-                            self.state
-                                .toasts
-                                .push(Toast::new(message, ToastKind::Error));
-                        }
-                    }
-                },
                 Event::VdiCatalog { seq, result } => {
                     if seq == self.state.vdi_catalog_seq
                         && let Some(dialog) = self.state.attach_vdi_dialog.as_mut()
@@ -1789,32 +1757,6 @@ impl App {
                             Ok(performance) => LoadState::Ready(*performance),
                             Err(message) => LoadState::Error(message),
                         };
-                    }
-                }
-                Event::VmResourcesUpdated { vm_uuid, result } => {
-                    if !self
-                        .state
-                        .vm_resource_edit
-                        .as_ref()
-                        .is_some_and(|edit| edit.vm_uuid == vm_uuid)
-                    {
-                        continue;
-                    }
-                    match result {
-                        Ok(()) => {
-                            self.state.vm_resource_edit = None;
-                            self.state.toasts.push(Toast::new(
-                                "Saved VM resource settings.",
-                                ToastKind::Success,
-                            ));
-                            self.apply(vec![UiAction::ReloadVmDetails]);
-                        }
-                        Err(message) => {
-                            if let Some(edit) = self.state.vm_resource_edit.as_mut() {
-                                edit.submitting = false;
-                                edit.error = Some(message);
-                            }
-                        }
                     }
                 }
                 Event::CdChanged { vm_uuid, result } => {
@@ -2109,6 +2051,11 @@ impl App {
     fn apply(&mut self, actions: Vec<UiAction>) {
         for action in actions {
             match action {
+                UiAction::SelectPropertyPage(page) => {
+                    if let Some(dialog) = self.state.properties.as_mut() {
+                        dialog.page = page.into();
+                    }
+                }
                 UiAction::OpenProperties {
                     connection_id,
                     target,
@@ -2117,31 +2064,41 @@ impl App {
                     self.state.properties = Some(crate::state::PropertiesDialog {
                         connection_id: connection_id.clone(),
                         target: target.clone(),
+                        page: "General".into(),
+                        vm: None,
+                        original_vm: None,
+                        pool: None,
+                        original_pool: None,
+                        extras_ready: false,
+                        restart_priority: String::new(),
+                        start_delay: 0,
+                        shutdown_delay: 0,
+                        affinity: None,
                         properties: LoadState::Loading,
                         original: None,
                         new_tag: String::new(),
                         submitting: false,
                         error: None,
                     });
+                    let pool_uuid = find_connection(&self.workspace, &connection_id)
+                        .and_then(crate::state::connection_inventory)
+                        .filter(|inventory| {
+                            target.kind == xen_core::properties::ObjectKind::Pool
+                                || (target.kind == xen_core::properties::ObjectKind::Host
+                                    && inventory.hosts.len() == 1)
+                        })
+                        .map(|inventory| inventory.pool_id.clone());
+                    self.worker.send(Command::PropertyExtras {
+                        seq: self.state.properties_seq,
+                        connection_id: connection_id.clone(),
+                        target: target.clone(),
+                        pool_uuid,
+                    });
                     self.worker.send(Command::ObjectProperties {
                         seq: self.state.properties_seq,
                         connection_id,
                         target,
                     });
-                }
-                UiAction::ReloadProperties => {
-                    if let Some(dialog) = self.state.properties.as_mut()
-                        && !dialog.submitting
-                    {
-                        self.state.properties_seq += 1;
-                        dialog.properties = LoadState::Loading;
-                        dialog.error = None;
-                        self.worker.send(Command::ObjectProperties {
-                            seq: self.state.properties_seq,
-                            connection_id: dialog.connection_id.clone(),
-                            target: dialog.target.clone(),
-                        });
-                    }
                 }
                 UiAction::CloseProperties => {
                     if !self
@@ -2159,7 +2116,7 @@ impl App {
                         && !dialog.submitting
                         && let LoadState::Ready(properties) = &mut dialog.properties
                     {
-                        let Some(original) = dialog.original.clone() else {
+                        let Some(_) = dialog.original.as_ref() else {
                             continue;
                         };
                         if !dialog.new_tag.trim().is_empty() {
@@ -2167,13 +2124,9 @@ impl App {
                         }
                         dialog.submitting = true;
                         dialog.error = None;
-                        self.worker.send(Command::SaveObjectProperties {
+                        self.worker.send(Command::SavePropertiesDialog {
                             seq: self.state.properties_seq,
-                            connection_id: dialog.connection_id.clone(),
-                            properties: xen_core::properties::ObjectPropertiesEdit {
-                                original,
-                                edited: properties.clone(),
-                            },
+                            dialog: Box::new(dialog.clone()),
                         });
                     }
                 }
@@ -2764,169 +2717,24 @@ impl App {
                     self.open_object(ObjectKey::Tasks, None);
                 }
 
-                UiAction::OpenPoolOptions { connection_id } => {
-                    let Some(inventory) = find_connection(&self.workspace, &connection_id)
-                        .and_then(crate::state::connection_inventory)
-                    else {
-                        continue;
-                    };
-                    let uuid = inventory.pool_id.clone();
-                    self.state.pool_options = Some(crate::state::PoolOptionsDialog {
-                        connection_id,
-                        uuid,
-                        original: None,
-                        data: LoadState::Loading,
-                        error: None,
-                        submitting: false,
-                    });
-                    self.apply(vec![UiAction::ReloadPoolOptions]);
-                }
-                UiAction::ReloadPoolOptions => {
-                    let Some(dialog) = self.state.pool_options.as_mut() else {
-                        continue;
-                    };
-                    if dialog.submitting {
-                        continue;
-                    }
-                    dialog.original = None;
-                    dialog.data = LoadState::Loading;
-                    dialog.error = None;
-                    self.state.pool_options_seq += 1;
-                    self.worker.send(Command::PoolOptions {
-                        seq: self.state.pool_options_seq,
-                        connection_id: dialog.connection_id.clone(),
-                        uuid: dialog.uuid.clone(),
-                    });
-                }
-                UiAction::SavePoolOptions => {
-                    let Some(dialog) = self.state.pool_options.as_mut() else {
-                        continue;
-                    };
-                    if dialog.submitting {
-                        continue;
-                    }
-                    let (Some(original), LoadState::Ready(edited)) =
-                        (&dialog.original, &dialog.data)
-                    else {
-                        continue;
-                    };
-                    let edit = xen_core::pool_options::PoolOptionsEdit {
-                        original: original.clone(),
-                        edited: edited.clone(),
-                    };
-                    dialog.submitting = true;
-                    dialog.error = None;
-                    self.worker.send(Command::SavePoolOptions {
-                        seq: self.state.pool_options_seq,
-                        connection_id: dialog.connection_id.clone(),
-                        edit,
-                    });
-                }
-                UiAction::ClosePoolOptions => {
-                    if !self
-                        .state
-                        .pool_options
-                        .as_ref()
-                        .is_some_and(|d| d.submitting)
-                    {
-                        self.state.pool_options = None;
-                    }
-                }
                 UiAction::OpenVmResources => {
-                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
-                        continue;
-                    };
-                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
-                        continue;
-                    };
-                    let LoadState::Ready(details) = &self.state.vm_state else {
-                        self.state.toasts.push(Toast::new(
-                            "Wait for the virtual machine details to load.",
-                            ToastKind::Info,
-                        ));
-                        continue;
-                    };
-                    if details.is_template || details.is_snapshot {
-                        continue;
-                    }
-                    self.state.vm_resource_edit = Some(crate::state::VmResourceEditState {
-                        connection_id,
-                        vm_uuid,
-                        vcpus_max: details.vcpus_max.to_string(),
-                        vcpus_at_startup: details.vcpus_at_startup.to_string(),
-                        cpu_weight: details.cpu_weight.clone(),
-                        original_cpu_weight: details.cpu_weight.clone(),
-                        cores_per_socket: details.cores_per_socket.clone(),
-                        original_cores_per_socket: details.cores_per_socket.clone(),
-                        original_vcpus_max: details.vcpus_max,
-                        max_cores_per_socket: details.max_cores_per_socket,
-                        memory_static_max_mib: (details.memory_static_max / (1024 * 1024))
-                            .to_string(),
-                        memory_dynamic_min_mib: (details.memory_dynamic_min / (1024 * 1024))
-                            .to_string(),
-                        memory_dynamic_max_mib: (details.memory_dynamic_max / (1024 * 1024))
-                            .to_string(),
-                        boot_order: details
-                            .hvm_boot_params
-                            .get("order")
-                            .cloned()
-                            .unwrap_or_else(|| "cd".into()),
-                        firmware: if details.firmware.is_empty() {
-                            "bios".into()
-                        } else {
-                            details.firmware.clone()
-                        },
-                        secure_boot: details.secure_boot.eq_ignore_ascii_case("true"),
-                        boot_policy: if details.hvm_boot_policy.is_empty() {
-                            "BIOS order".into()
-                        } else {
-                            details.hvm_boot_policy.clone()
-                        },
-                        after_crash: if details.after_crash.is_empty() {
-                            "restart".into()
-                        } else {
-                            details.after_crash.clone()
-                        },
-                        pv_args: details.pv_args.clone(),
-                        original_pv_args: details.pv_args.clone(),
-                        auto_poweron: details.auto_poweron,
-                        original_auto_poweron: details.auto_poweron,
-                        is_hvm: !details.hvm_boot_policy.is_empty(),
-                        running: details.power_state != "Halted",
-                        can_hotplug_vcpus: details.can_hotplug_vcpus,
-                        current_vcpus: details.vcpus_at_startup,
-                        error: None,
-                        submitting: false,
-                    });
-                }
-                UiAction::CloseVmResources => {
-                    if !self
+                    if let Some((connection_id, vm_uuid)) = self
                         .state
-                        .vm_resource_edit
+                        .selection
                         .as_ref()
-                        .is_some_and(|edit| edit.submitting)
+                        .and_then(|tab| vm_key(&tab.key))
                     {
-                        self.state.vm_resource_edit = None;
-                    }
-                }
-                UiAction::SaveVmResources => {
-                    let Some(edit) = self.state.vm_resource_edit.as_mut() else {
-                        continue;
-                    };
-                    let resources = match edit.parse_resources() {
-                        Ok(resources) => resources,
-                        Err(message) => {
-                            edit.error = Some(message);
-                            continue;
+                        self.apply(vec![UiAction::OpenProperties {
+                            connection_id,
+                            target: xen_core::properties::ObjectTarget {
+                                kind: xen_core::properties::ObjectKind::Vm,
+                                uuid: vm_uuid,
+                            },
+                        }]);
+                        if let Some(dialog) = self.state.properties.as_mut() {
+                            dialog.page = "CPU".into();
                         }
-                    };
-                    edit.submitting = true;
-                    edit.error = None;
-                    self.worker.send(Command::UpdateVmResources {
-                        connection_id: edit.connection_id.clone(),
-                        vm_uuid: edit.vm_uuid.clone(),
-                        resources,
-                    });
+                    }
                 }
                 UiAction::SetDvdMedia { vbd_uuid, iso_uuid } => {
                     if let Some(key) = self.state.selection.as_ref().map(|s| &s.key)
@@ -5179,79 +4987,10 @@ impl App {
                     });
                 }
                 UiAction::OpenHaEdit => {
-                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
-                        continue;
-                    };
-                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
-                        continue;
-                    };
-                    let Some(details) = self.state.vm_state.ready() else {
-                        continue;
-                    };
-                    let hosts: Vec<(String, String)> =
-                        find_connection(&self.workspace, &connection_id)
-                            .and_then(crate::state::connection_inventory)
-                            .map(|inventory| {
-                                inventory
-                                    .hosts
-                                    .iter()
-                                    .map(|host| (host.uuid.clone(), host.name.clone()))
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                    self.state.ha_edit_dialog = Some(crate::state::HaEditDialog {
-                        connection_id,
-                        vm_uuid,
-                        hosts,
-                        restart_priority: details.ha_restart_priority.clone(),
-                        start_delay: details.start_delay.to_string(),
-                        shutdown_delay: details.shutdown_delay.to_string(),
-                        affinity_host_uuid: (!details.affinity_ref.is_empty()
-                            && details.affinity_ref != "OpaqueRef:NULL")
-                            .then(|| details.affinity_ref.clone()),
-                        submitting: false,
-                        error: None,
-                    });
-                }
-                UiAction::CloseHaEdit => {
-                    if !self
-                        .state
-                        .ha_edit_dialog
-                        .as_ref()
-                        .is_some_and(|dialog| dialog.submitting)
-                    {
-                        self.state.ha_edit_dialog = None;
+                    self.apply(vec![UiAction::OpenVmResources]);
+                    if let Some(dialog) = self.state.properties.as_mut() {
+                        dialog.page = "High Availability".into();
                     }
-                }
-                UiAction::SaveHaEdit => {
-                    let Some(dialog) = self.state.ha_edit_dialog.as_mut() else {
-                        continue;
-                    };
-                    let Some(start_delay) = dialog.start_delay.trim().parse::<u64>().ok() else {
-                        dialog.error =
-                            Some("Start delay must be a whole number of seconds.".into());
-                        continue;
-                    };
-                    let Some(shutdown_delay) = dialog.shutdown_delay.trim().parse::<u64>().ok()
-                    else {
-                        dialog.error =
-                            Some("Shutdown delay must be a whole number of seconds.".into());
-                        continue;
-                    };
-                    if start_delay > 7 * 24 * 60 * 60 || shutdown_delay > 7 * 24 * 60 * 60 {
-                        dialog.error = Some("Delays must be 7 days or fewer.".into());
-                        continue;
-                    }
-                    dialog.submitting = true;
-                    dialog.error = None;
-                    self.worker.send(Command::UpdateVmHa {
-                        connection_id: dialog.connection_id.clone(),
-                        vm_uuid: dialog.vm_uuid.clone(),
-                        restart_priority: dialog.restart_priority.clone(),
-                        start_delay,
-                        shutdown_delay,
-                        affinity_host_uuid: dialog.affinity_host_uuid.clone(),
-                    });
                 }
                 UiAction::OpenAttachVdi => {
                     let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
@@ -5390,20 +5129,6 @@ impl App {
                         sr_uuid,
                     });
                 }
-                UiAction::SetVbdMode { vbd_uuid, mode } => {
-                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
-                        continue;
-                    };
-                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
-                        continue;
-                    };
-                    self.worker.send(Command::SetVbdMode {
-                        connection_id,
-                        vm_uuid,
-                        vbd_uuid,
-                        mode,
-                    });
-                }
                 UiAction::SetVbdPlugged { vbd_uuid, plugged } => {
                     let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
@@ -5416,20 +5141,6 @@ impl App {
                         vm_uuid,
                         vbd_uuid,
                         plugged,
-                    });
-                }
-                UiAction::SetVbdBootable { vbd_uuid, bootable } => {
-                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
-                        continue;
-                    };
-                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
-                        continue;
-                    };
-                    self.worker.send(Command::SetVbdBootable {
-                        connection_id,
-                        vm_uuid,
-                        vbd_uuid,
-                        bootable,
                     });
                 }
                 UiAction::ApplySavedSearch(index) => {
@@ -5546,30 +5257,6 @@ impl App {
                             error: None,
                         }));
                 }
-                UiAction::OpenDiskResize {
-                    vdi_uuid,
-                    name,
-                    current_gib,
-                } => {
-                    let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
-                        continue;
-                    };
-                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
-                        continue;
-                    };
-                    self.state.disk_dialog = Some(crate::state::DiskDialog::Resize(
-                        crate::state::DiskResizeDialog {
-                            connection_id,
-                            vm_uuid,
-                            vdi_uuid,
-                            name,
-                            current_gib,
-                            size_gib: current_gib.saturating_add(1).to_string(),
-                            submitting: false,
-                            error: None,
-                        },
-                    ));
-                }
                 UiAction::PromptRemoveDisk {
                     vbd_uuid,
                     name,
@@ -5637,28 +5324,6 @@ impl App {
                                 size_bytes,
                                 name: (!dialog.name.trim().is_empty())
                                     .then(|| dialog.name.trim().to_owned()),
-                            });
-                        }
-                        crate::state::DiskDialog::Resize(dialog) => {
-                            let Some(size_gib) = dialog.size_gib.trim().parse::<u64>().ok() else {
-                                dialog.error = Some("Enter a whole number of GiB.".into());
-                                continue;
-                            };
-                            let Some(size_bytes) = size_gib.checked_mul(GIB) else {
-                                dialog.error = Some("The disk size is too large.".into());
-                                continue;
-                            };
-                            if size_gib <= dialog.current_gib {
-                                dialog.error = Some("A disk can only be increased in size.".into());
-                                continue;
-                            }
-                            dialog.submitting = true;
-                            dialog.error = None;
-                            self.worker.send(Command::ResizeDisk {
-                                connection_id: dialog.connection_id.clone(),
-                                vm_uuid: dialog.vm_uuid.clone(),
-                                vdi_uuid: dialog.vdi_uuid.clone(),
-                                size_bytes,
                             });
                         }
                         crate::state::DiskDialog::Remove(dialog) => {
@@ -6074,7 +5739,7 @@ fn vm_key(key: &ObjectKey) -> Option<(String, String)> {
 fn disk_dialog_vm(dialog: &crate::state::DiskDialog) -> &str {
     match dialog {
         crate::state::DiskDialog::Add(dialog) => &dialog.vm_uuid,
-        crate::state::DiskDialog::Resize(dialog) => &dialog.vm_uuid,
+
         crate::state::DiskDialog::Remove(dialog) => &dialog.vm_uuid,
     }
 }
@@ -6082,7 +5747,7 @@ fn disk_dialog_vm(dialog: &crate::state::DiskDialog) -> &str {
 fn disk_dialog_is_submitting(dialog: &crate::state::DiskDialog) -> bool {
     match dialog {
         crate::state::DiskDialog::Add(dialog) => dialog.submitting,
-        crate::state::DiskDialog::Resize(dialog) => dialog.submitting,
+
         crate::state::DiskDialog::Remove(dialog) => dialog.submitting,
     }
 }
@@ -6090,10 +5755,6 @@ fn disk_dialog_is_submitting(dialog: &crate::state::DiskDialog) -> bool {
 fn disk_dialog_error(dialog: &mut crate::state::DiskDialog, message: String) {
     match dialog {
         crate::state::DiskDialog::Add(dialog) => {
-            dialog.submitting = false;
-            dialog.error = Some(message);
-        }
-        crate::state::DiskDialog::Resize(dialog) => {
             dialog.submitting = false;
             dialog.error = Some(message);
         }

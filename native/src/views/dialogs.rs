@@ -15,13 +15,10 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
-    if state.pool_options.is_some() {
-        super::pool_options::show(ctx, state, workspace, actions);
-    }
     if state.vm_copy.is_some() {
         super::vm_copy::show(ctx, state, workspace, actions);
     }
-    if state.properties.is_some() && state.pool_options.is_none() {
+    if state.properties.is_some() {
         super::properties::show(ctx, state, workspace, actions);
     }
     if state.xva_dialog.is_some() {
@@ -39,9 +36,6 @@ pub fn show(
     if state.record_dialog.is_some() {
         record(ctx, state);
     }
-    if state.vm_resource_edit.is_some() {
-        vm_resources(ctx, state, workspace, actions);
-    }
     if state.iso_dialog.is_some() {
         iso_dialog(ctx, state, actions);
     }
@@ -50,9 +44,6 @@ pub fn show(
     }
     if state.attach_vdi_dialog.is_some() {
         attach_vdi_dialog(ctx, state, actions);
-    }
-    if state.ha_edit_dialog.is_some() {
-        ha_edit_dialog(ctx, state, actions);
     }
     if state.vdi_delete_confirm.is_some() {
         vdi_delete_confirm(ctx, state, actions);
@@ -541,285 +532,6 @@ fn intent(
     }
     if close {
         actions.push(UiAction::CloseIntent);
-    }
-}
-
-fn vm_resources(
-    ctx: &egui::Context,
-    state: &mut UiState,
-    workspace: &WorkspaceView,
-    actions: &mut Vec<UiAction>,
-) {
-    let mut close = false;
-    let mut save = false;
-    let Some(edit) = state.vm_resource_edit.as_mut() else {
-        return;
-    };
-    let response = egui::Modal::new(egui::Id::unique("vm-resources-modal"))
-        .frame(theme::modal_frame())
-        .show(ctx, |ui| {
-            ui.set_width(520.0);
-            modal_title(
-                ui,
-                "Edit VM resources",
-                "Change CPU, memory and boot settings.",
-            );
-            let display_name = find_vm(workspace, &edit.connection_id, &edit.vm_uuid).map(|(_, vm)| vm.name.as_str()).unwrap_or(&edit.vm_uuid);
-            ui.add(egui::Label::new(RichText::new(display_name).size(11.0)).truncate()).on_hover_text(&edit.vm_uuid);
-            ui.add_space(8.0);
-            egui::ScrollArea::vertical()
-                .max_height((ctx.content_rect().height() - 230.0).max(100.0))
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-            ui.columns(2, |columns| {
-                resources_slider(
-                    &mut columns[0],
-                    "vCPUs maximum",
-                    &mut edit.vcpus_max,
-                    1..=64,
-                    " vCPU",
-                    !edit.running && !edit.submitting,
-                );
-                resources_slider(
-                    &mut columns[1],
-                    if edit.running { "vCPUs online" } else { "vCPUs at startup" },
-                    &mut edit.vcpus_at_startup,
-                    if edit.running { edit.current_vcpus..=edit.vcpus_max.parse().unwrap_or(edit.current_vcpus) } else { 1..=64 },
-                    " vCPU",
-                    (!edit.running || edit.can_hotplug_vcpus) && !edit.submitting,
-                );
-            });
-            ui.add_space(8.0);
-            ui.columns(2,|columns| {
-                resources_slider(&mut columns[0],"CPU scheduling weight",&mut edit.cpu_weight,1..=65535,"",!edit.running && !edit.submitting);
-                resources_slider(&mut columns[1],"Cores per socket",&mut edit.cores_per_socket,1..=edit.max_cores_per_socket.clamp(1,64),"",!edit.running && !edit.submitting);
-            });
-            ui.label(RichText::new("Topology must divide the vCPU maximum and use at most 16 sockets. Stop the VM to change topology or scheduling weight.").size(9.0).color(dim_fg()));
-            ui.add_space(8.0);
-            resources_slider(
-                ui,
-                "Static memory maximum (MiB)",
-                &mut edit.memory_static_max_mib,
-                256..=1_048_576,
-                " MiB",
-                !edit.running && !edit.submitting,
-            );
-            if edit.running {
-                ui.label(
-                    RichText::new(
-                        "Supported running guests can add vCPUs up to the configured maximum. Shut down to reduce CPUs, change the maximum or change static memory.",
-                    )
-                    .size(9.0)
-                    .color(amber()),
-                );
-            }
-            ui.add_space(8.0);
-            ui.columns(2, |columns| {
-                resources_slider(
-                    &mut columns[0],
-                    "Dynamic memory minimum (MiB)",
-                    &mut edit.memory_dynamic_min_mib,
-                    256..=1_048_576,
-                    " MiB",
-                    !edit.submitting,
-                );
-                resources_slider(
-                    &mut columns[1],
-                    "Dynamic memory maximum (MiB)",
-                    &mut edit.memory_dynamic_max_mib,
-                    256..=1_048_576,
-                    " MiB",
-                    !edit.submitting,
-                );
-            });
-            ui.add_space(8.0);
-            ui.add_enabled(!edit.submitting, egui::Checkbox::new(&mut edit.auto_poweron, "Auto-start VM when the host starts"));
-            ui.label(RichText::new("Requires host/pool autostart configuration. Review HA restart policies separately.").size(9.0).color(dim_fg()));
-            if !edit.is_hvm {
-                widgets::field_label(ui, "PV OS parameters");
-                ui.add_enabled(!edit.submitting, egui::TextEdit::multiline(&mut edit.pv_args).char_limit(32_767).desired_rows(3).desired_width(f32::INFINITY));
-            }
-            if edit.is_hvm {
-                ui.add_space(8.0);
-                widgets::field_label(ui, "Boot order");
-                let current = edit.boot_order.clone();
-                let label = match current.as_str() {
-                    "dc" => "Disk first",
-                    "cd" => "CD first",
-                    "ncd" => "Network first",
-                    _ => "Custom",
-                };
-                ui.add_enabled_ui(!edit.submitting, |ui| {
-                    egui::ComboBox::from_id_salt("vm-edit-boot-order")
-                        .selected_text(RichText::new(label).size(11.0))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for (value, text) in [
-                                ("dc", "Disk first"),
-                                ("cd", "CD first"),
-                                ("ncd", "Network first"),
-                            ] {
-                                if ui
-                                    .selectable_label(
-                                        edit.boot_order == value,
-                                        RichText::new(text).size(11.0),
-                                    )
-                                    .clicked()
-                                {
-                                    edit.boot_order = value.into();
-                                }
-                            }
-                            if !matches!(edit.boot_order.as_str(), "dc" | "cd" | "ncd") {
-                                ui.label(
-                                    RichText::new(format!("Custom: {}", edit.boot_order))
-                                        .size(10.0)
-                                        .color(muted_fg()),
-                                );
-                            }
-                        });
-                });
-                ui.add_space(8.0);
-                widgets::field_label(ui, "Firmware");
-                let firmware_label = if edit.firmware.eq_ignore_ascii_case("uefi") {
-                    "UEFI"
-                } else {
-                    "BIOS"
-                };
-                ui.add_enabled_ui(!edit.submitting, |ui| {
-                    egui::ComboBox::from_id_salt("vm-edit-firmware")
-                        .selected_text(RichText::new(firmware_label).size(11.0))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for (value, label) in [("bios", "BIOS"), ("uefi", "UEFI")] {
-                                if ui
-                                    .selectable_label(
-                                        edit.firmware.eq_ignore_ascii_case(value),
-                                        RichText::new(label).size(11.0),
-                                    )
-                                    .clicked()
-                                {
-                                    edit.firmware = value.into();
-                                    if value == "bios" {
-                                        edit.secure_boot = false;
-                                    }
-                                }
-                            }
-                        });
-                });
-                ui.add_enabled(
-                    !edit.submitting
-                        && edit.firmware.eq_ignore_ascii_case("uefi"),
-                    egui::Checkbox::new(
-                        &mut edit.secure_boot,
-                        RichText::new("Secure boot (requires UEFI)").size(10.5),
-                    ),
-                );
-                ui.add_space(8.0);
-                widgets::field_label(ui, "Boot policy");
-                let policy_label = if edit.boot_policy.is_empty() {
-                    "Default (empty)".to_owned()
-                } else {
-                    edit.boot_policy.clone()
-                };
-                ui.add_enabled_ui(!edit.submitting, |ui| {
-                    egui::ComboBox::from_id_salt("vm-edit-boot-policy")
-                        .selected_text(RichText::new(policy_label).size(11.0))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for (value, label) in [
-                                ("BIOS order", "BIOS order"),
-                                ("", "Default (empty)"),
-                            ] {
-                                if ui
-                                    .selectable_label(
-                                        edit.boot_policy == value,
-                                        RichText::new(label).size(11.0),
-                                    )
-                                    .clicked()
-                                {
-                                    edit.boot_policy = value.into();
-                                }
-                            }
-                        });
-                });
-                ui.add_space(8.0);
-                widgets::field_label(ui, "After guest crash");
-                let crash_label = match edit.after_crash.as_str() {
-                    "destroy" => "Destroy",
-                    "preserve" => "Preserve",
-                    "rename_restart" => "Rename and restart",
-                    _ => "Restart",
-                };
-                ui.add_enabled_ui(!edit.submitting, |ui| {
-                    egui::ComboBox::from_id_salt("vm-edit-after-crash")
-                        .selected_text(RichText::new(crash_label).size(11.0))
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for (value, label) in [
-                                ("restart", "Restart"),
-                                ("destroy", "Destroy"),
-                                ("preserve", "Preserve"),
-                                ("rename_restart", "Rename and restart"),
-                            ] {
-                                if ui
-                                    .selectable_label(
-                                        edit.after_crash == value,
-                                        RichText::new(label).size(11.0),
-                                    )
-                                    .clicked()
-                                {
-                                    edit.after_crash = value.into();
-                                }
-                            }
-                        });
-                });
-            }
-            ui.label(
-                RichText::new("Maximum CPU and static memory changes require shutdown. Supported running guests can add vCPUs and change dynamic memory when the host allows it. Boot options take effect on the next start.")
-                    .size(9.0)
-                    .color(if edit.running { amber() } else { dim_fg() }),
-            );
-                });
-            if let Some(error) = &edit.error {
-                ui.add_space(8.0);
-                ui.label(RichText::new(error).size(10.0).color(red()));
-            }
-            ui.add_space(14.0);
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(
-                        !edit.submitting,
-                        egui::Button::new(RichText::new("Cancel").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    close = true;
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui
-                        .add_enabled(
-                            !edit.submitting,
-                            widgets::primary_button(if edit.submitting {
-                                "Saving…"
-                            } else {
-                                "Save changes"
-                            }),
-                        )
-                        .clicked()
-                    {
-                        save = true;
-                    }
-                });
-            });
-        });
-    if response.should_close() && !edit.submitting {
-        close = true;
-    }
-    if save {
-        actions.push(UiAction::SaveVmResources);
-    }
-    if close {
-        actions.push(UiAction::CloseVmResources);
     }
 }
 
@@ -4463,151 +4175,6 @@ fn vdi_delete_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
     }
 }
 
-fn ha_edit_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
-    let mut close = false;
-    let mut save = false;
-    let Some(dialog) = state.ha_edit_dialog.as_mut() else {
-        return;
-    };
-    let response = egui::Modal::new(egui::Id::unique("vm-ha-modal"))
-        .frame(theme::modal_frame())
-        .show(ctx, |ui| {
-            ui.set_width(540.0);
-            modal_title(
-                ui,
-                "HA and startup settings",
-                "Restart priority is used when the pool must recover guests.",
-            );
-            widgets::field_label(ui, "Restart priority");
-            let priority_label = match dialog.restart_priority.as_str() {
-                "restart" => "Restart if possible".to_owned(),
-                "best-effort" => "Always restart".to_owned(),
-                "" => "Never restart".to_owned(),
-                other => other.to_owned(),
-            };
-            ui.add_enabled_ui(!dialog.submitting, |ui| {
-                egui::ComboBox::from_id_salt("vm-ha-priority")
-                    .selected_text(RichText::new(priority_label).size(11.0))
-                    .width(ui.available_width())
-                    .show_ui(ui, |ui| {
-                        for (value, label) in [
-                            ("", "Never restart"),
-                            ("restart", "Restart if possible"),
-                            ("best-effort", "Always restart"),
-                        ] {
-                            if ui
-                                .selectable_label(
-                                    dialog.restart_priority == value,
-                                    RichText::new(label).size(11.0),
-                                )
-                                .clicked()
-                            {
-                                dialog.restart_priority = value.into();
-                            }
-                        }
-                    });
-            });
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Start delay (seconds)");
-            ui.add_enabled(
-                !dialog.submitting,
-                egui::TextEdit::singleline(&mut dialog.start_delay)
-                    .desired_width(f32::INFINITY)
-                    .char_limit(7)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Shutdown delay (seconds)");
-            ui.add_enabled(
-                !dialog.submitting,
-                egui::TextEdit::singleline(&mut dialog.shutdown_delay)
-                    .desired_width(f32::INFINITY)
-                    .char_limit(7)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Affinity host");
-            let affinity_label = dialog
-                .affinity_host_uuid
-                .as_ref()
-                .and_then(|uuid| {
-                    dialog
-                        .hosts
-                        .iter()
-                        .find(|(host_uuid, _)| host_uuid == uuid)
-                        .map(|(_, name)| name.clone())
-                })
-                .unwrap_or_else(|| "No affinity".into());
-            ui.add_enabled_ui(!dialog.submitting, |ui| {
-                egui::ComboBox::from_id_salt("vm-ha-affinity")
-                    .selected_text(RichText::new(affinity_label).size(11.0))
-                    .width(ui.available_width())
-                    .show_ui(ui, |ui| {
-                        if ui
-                            .selectable_label(
-                                dialog.affinity_host_uuid.is_none(),
-                                RichText::new("No affinity").size(11.0),
-                            )
-                            .clicked()
-                        {
-                            dialog.affinity_host_uuid = None;
-                        }
-                        for (uuid, name) in &dialog.hosts {
-                            if ui
-                                .selectable_label(
-                                    dialog.affinity_host_uuid.as_deref() == Some(uuid.as_str()),
-                                    RichText::new(name).size(11.0),
-                                )
-                                .clicked()
-                            {
-                                dialog.affinity_host_uuid = Some(uuid.clone());
-                            }
-                        }
-                    });
-            });
-            if let Some(error) = &dialog.error {
-                ui.add_space(8.0);
-                ui.label(RichText::new(error).size(10.0).color(red()));
-            }
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(
-                        !dialog.submitting,
-                        egui::Button::new(RichText::new("Cancel").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    close = true;
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui
-                        .add_enabled(
-                            !dialog.submitting,
-                            widgets::primary_button(if dialog.submitting {
-                                "Saving…"
-                            } else {
-                                "Save HA settings"
-                            }),
-                        )
-                        .clicked()
-                    {
-                        save = true;
-                    }
-                });
-            });
-        });
-    if response.should_close() && !dialog.submitting {
-        close = true;
-    }
-    if save {
-        actions.push(UiAction::SaveHaEdit);
-    }
-    if close {
-        actions.push(UiAction::CloseHaEdit);
-    }
-}
-
 fn attach_vdi_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
     let mut close = false;
     let mut attach = false;
@@ -4834,51 +4401,6 @@ fn disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAct
                     }
                     dialog_footer(ui, dialog.submitting, "Add disk", &mut close, &mut save);
                 }
-                crate::state::DiskDialog::Resize(dialog) => {
-                    modal_title(
-                        ui,
-                        "Resize virtual disk",
-                        "Increase the disk size. Running VMs use online resize when the storage backend supports it. Extend the partition and filesystem inside the guest afterwards.",
-                    );
-                    ui.label(
-                        RichText::new(format!(
-                            "{} · current size {} GiB",
-                            dialog.name, dialog.current_gib
-                        ))
-                        .size(11.0)
-                        .color(muted_fg()),
-                    );
-                    ui.add_space(8.0);
-                    let current = dialog.current_gib.max(1);
-                    let max = current.saturating_mul(4).clamp(64, 65536);
-                    let mut slider_value = dialog
-                        .size_gib
-                        .trim()
-                        .parse::<u64>()
-                        .unwrap_or(current.saturating_add(1))
-                        .clamp(current, max);
-                    if ui
-                        .add_enabled(
-                            !dialog.submitting,
-                            egui::Slider::new(&mut slider_value, current..=max).suffix(" GiB"),
-                        )
-                        .changed()
-                    {
-                        dialog.size_gib = slider_value.to_string();
-                    }
-                    ui.add_space(4.0);
-                    disk_size_field(
-                        ui,
-                        "New size (GiB)",
-                        &mut dialog.size_gib,
-                        !dialog.submitting,
-                    );
-                    if let Some(error) = &dialog.error {
-                        ui.add_space(8.0);
-                        ui.label(RichText::new(error).size(10.0).color(red()));
-                    }
-                    dialog_footer(ui, dialog.submitting, "Resize disk", &mut close, &mut save);
-                }
                 crate::state::DiskDialog::Remove(dialog) => {
                     modal_title(
                         ui,
@@ -4947,7 +4469,7 @@ fn disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAct
         });
     let submitting = match dialog {
         crate::state::DiskDialog::Add(dialog) => dialog.submitting,
-        crate::state::DiskDialog::Resize(dialog) => dialog.submitting,
+
         crate::state::DiskDialog::Remove(dialog) => dialog.submitting,
     };
     if response.should_close() && !submitting {
@@ -5337,39 +4859,6 @@ fn iso_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiActi
     if close {
         actions.push(UiAction::CloseIsoDialog);
     }
-}
-
-fn resources_slider(
-    ui: &mut Ui,
-    label: &str,
-    value: &mut String,
-    range: std::ops::RangeInclusive<u64>,
-    suffix: &str,
-    enabled: bool,
-) {
-    widgets::field_label(ui, label);
-    let (min, max) = (*range.start(), *range.end());
-    let current = value.trim().parse::<u64>().unwrap_or(min).clamp(min, max);
-    let mut slider_value = current;
-    let logarithmic = min.saturating_mul(8) < max;
-    if ui
-        .add_enabled(
-            enabled,
-            egui::Slider::new(&mut slider_value, range)
-                .suffix(suffix)
-                .logarithmic(logarithmic),
-        )
-        .changed()
-    {
-        *value = slider_value.to_string();
-    }
-    ui.add_enabled(
-        enabled,
-        egui::TextEdit::singleline(value)
-            .desired_width(f32::INFINITY)
-            .char_limit(8)
-            .margin(egui::Margin::symmetric(8, 5)),
-    );
 }
 
 fn help(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {

@@ -1,0 +1,14 @@
+{
+  "device_readback_before_cleanup": {
+    "uuid": "c6b53981-950b-e28b-cb4c-f30923611196",
+    "mode": "RW",
+    "bootable": false,
+    "userdevice": "0"
+  },
+  "vm_removed": true,
+  "disk_removed": true,
+  "remaining_prefix_vms": [],
+  "remaining_prefix_disks": [],
+  "pool_autostart_baseline_restored": true,
+  "xenapi_available": true
+}

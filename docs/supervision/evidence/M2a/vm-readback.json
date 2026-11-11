@@ -1,0 +1,11 @@
+{
+  "uuid": "ce08665b-1740-67d8-b2f2-d67d50cd7dec",
+  "name_label": "zz-parity-M2a-saved",
+  "VCPUs_max": 2,
+  "VCPUs_at_startup": 2,
+  "HVM_boot_params": {
+    "firmware": "bios",
+    "order": "dc"
+  },
+  "folder": "zz-parity-M2a-folder"
+}

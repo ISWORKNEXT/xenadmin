@@ -1,0 +1,812 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        410,
+        207
+      ],
+      "wait": 2,
+      "snap": "vm-general"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        771,
+        290
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+a"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "BackSpace"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1092,
+        748
+      ],
+      "wait": 2,
+      "snap": "rejected",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "ce08665b-1740-67d8-b2f2-d67d50cd7dec",
+        "name_label": "zz-parity-M2a-properties",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "HVM_boot_params": {
+          "firmware": "bios",
+          "order": "cd"
+        }
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        777,
+        292
+      ],
+      "text": "zz-parity-M2a-saved"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        403,
+        351
+      ],
+      "wait": 1,
+      "snap": "vm-cpu-before"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        754,
+        293
+      ],
+      "key": "Control_L+a",
+      "text": "2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        758,
+        368
+      ],
+      "key": "Control_L+a",
+      "text": "2",
+      "snap": "vm-cpu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        416,
+        417
+      ],
+      "snap": "vm-boot-before"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        653,
+        293
+      ],
+      "snap": "boot-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "boot-menu2",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        643,
+        330
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "vm-boot"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1093,
+        748
+      ],
+      "wait": 4,
+      "readback": true,
+      "snap": "combined-save"
+    },
+    "readback": [
+      {
+        "uuid": "ce08665b-1740-67d8-b2f2-d67d50cd7dec",
+        "name_label": "zz-parity-M2a-saved",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "HVM_boot_params": {
+          "firmware": "bios",
+          "order": "dc"
+        }
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        105,
+        170
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        105,
+        170,
+        3
+      ],
+      "snap": "pool-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "pool-menu2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        151,
+        517
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ],
+      "snap": "host-properties-tabs"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "host-tabs2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        423,
+        611
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "pool-live"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "advanced-tabs"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        418,
+        673
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "pool-advanced-off"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "pool-advanced-final",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        604,
+        308
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "pool-advanced-on"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1092,
+        748
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        105,
+        170,
+        3
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        151,
+        517
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        637,
+        5
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        418,
+        673
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "pool-on-read"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        604,
+        308
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1092,
+        748
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        410,
+        207
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "general"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        403,
+        351
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "cpu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        416,
+        417
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "boot"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        403,
+        224
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        766,
+        467
+      ],
+      "text": "zz-parity-M2a-folder",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "folder"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1093,
+        748
+      ],
+      "wait": 3,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "ce08665b-1740-67d8-b2f2-d67d50cd7dec",
+        "name_label": "zz-parity-M2a-saved",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 2,
+        "VCPUs_at_startup": 2,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "HVM_boot_params": {
+          "firmware": "bios",
+          "order": "dc"
+        }
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        533,
+        165
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "now"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1310,
+        300
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        533,
+        165
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "storage2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1030,
+        747
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        534,
+        164
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "storage3"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        615,
+        287
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        945,
+        323
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "vdi-general"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        422,
+        417
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "vdi-device"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "vdi-final"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        607,
+        286,
+        3
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "disk-context"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1361,
+        287
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "row-selected"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        944,
+        322
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "disk-open"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        944,
+        322
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "disk-open2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        432,
+        417
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "device-page"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        603,
+        331
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1093,
+        748
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

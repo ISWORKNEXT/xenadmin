@@ -128,9 +128,13 @@ Tree / Search	New VM from Snapshot…	NewVMFromSnapshotCommand	wired	Propose Sna
 Tree / Search	New Template from Snapshot…	NewTemplateFromSnapshotCommand	wired	Propose SnapshotToTemplate
 Tree / Search	Export Snapshot as Template…	ExportSnapshotAsTemplateCommand	wired	OpenXvaExport
 Tree / Search	Network / VDI Properties	PropertiesCommand	wired	OpenProperties
-VM Storage	Properties / Resize…	OpenDiskResize	wired	OpenProperties > OpenDiskResize
-VM Storage	Properties / Mode	SetVbdMode	wired	SetVbdMode
-VM Storage	Properties / Bootable	SetVbdBootable	wired	SetVbdBootable
+VM Storage	Properties / Resize…	PropertiesCommand	wired	OpenProperties > Size and Location (apply on OK)
+VM Storage	Properties / Mode	PropertiesCommand	wired	OpenProperties > VM device page (apply on OK)
+VM Storage	Properties / Bootable	PropertiesCommand	wired	OpenProperties > VM device page (apply on OK)
 VM Storage	Properties / Position		disabled-not-implemented	No existing position setter
 VM Storage / Networking / Snapshots	Row context menus		wired	Same actions as table buttons
 Host Networking / NICs / SR Storage	Row context menus		wired	Same actions as table buttons; NIC Delete Bond and Copy
+VM General	Section Edit…	PropertiesCommand	wired	OpenProperties on CPU / Boot Options / High Availability / Home Server
+Pool / standalone host	Properties pages	PoolPropertiesCommand	wired	OpenProperties > Live Patching / Network Options / Advanced
+VM Networking	Properties	PropertiesCommand	wired	OpenProperties > Network Settings
+Host / Pool / SR General	Properties	PropertiesCommand	wired	OpenProperties

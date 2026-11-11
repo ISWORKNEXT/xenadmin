@@ -12,25 +12,20 @@ use xen_core::{
 
 /// Commands sent from the UI thread to the background workspace thread.
 pub enum Command {
-    PoolOptions {
+    PropertyExtras {
         seq: u64,
         connection_id: String,
-        uuid: String,
+        target: xen_core::properties::ObjectTarget,
+        pool_uuid: Option<String>,
     },
-    SavePoolOptions {
+    SavePropertiesDialog {
         seq: u64,
-        connection_id: String,
-        edit: xen_core::pool_options::PoolOptionsEdit,
+        dialog: Box<crate::state::PropertiesDialog>,
     },
     ObjectProperties {
         seq: u64,
         connection_id: String,
         target: xen_core::properties::ObjectTarget,
-    },
-    SaveObjectProperties {
-        seq: u64,
-        connection_id: String,
-        properties: xen_core::properties::ObjectPropertiesEdit,
     },
     XvaBatch {
         requests: Vec<(String, xen_core::xva::XvaRequest)>,
@@ -343,11 +338,6 @@ pub enum Command {
         vm_uuid: String,
         range_seconds: u64,
     },
-    UpdateVmResources {
-        connection_id: String,
-        vm_uuid: String,
-        resources: xen_core::operations::VmResourceUpdate,
-    },
     ChangeCd {
         connection_id: String,
         vm_uuid: String,
@@ -377,18 +367,6 @@ pub enum Command {
         vdi_uuid: String,
         bootable: bool,
     },
-    SetVbdBootable {
-        connection_id: String,
-        vm_uuid: String,
-        vbd_uuid: String,
-        bootable: bool,
-    },
-    SetVbdMode {
-        connection_id: String,
-        vm_uuid: String,
-        vbd_uuid: String,
-        mode: String,
-    },
     MoveDisk {
         connection_id: String,
         vm_uuid: String,
@@ -401,26 +379,12 @@ pub enum Command {
         vbd_uuid: String,
         plugged: bool,
     },
-    UpdateVmHa {
-        connection_id: String,
-        vm_uuid: String,
-        restart_priority: String,
-        start_delay: u64,
-        shutdown_delay: u64,
-        affinity_host_uuid: Option<String>,
-    },
     AddDisk {
         connection_id: String,
         vm_uuid: String,
         sr_uuid: String,
         size_bytes: u64,
         name: Option<String>,
-    },
-    ResizeDisk {
-        connection_id: String,
-        vm_uuid: String,
-        vdi_uuid: String,
-        size_bytes: u64,
     },
     RemoveDisk {
         connection_id: String,
@@ -500,13 +464,15 @@ pub enum Command {
 
 /// Results sent back to the UI thread.
 pub enum Event {
-    PoolOptions {
+    PropertyExtras {
         seq: u64,
-        result: Result<xen_core::pool_options::PoolOptions, String>,
-    },
-    PoolOptionsSaved {
-        seq: u64,
-        result: Result<xen_core::pool_options::PoolOptions, String>,
+        result: Result<
+            (
+                Option<Box<VmDetails>>,
+                Option<xen_core::pool_options::PoolOptions>,
+            ),
+            String,
+        >,
     },
     ObjectProperties {
         seq: u64,
@@ -634,10 +600,6 @@ pub enum Event {
         seq: u64,
         result: Result<Box<HostPerformance>, String>,
     },
-    VmResourcesUpdated {
-        vm_uuid: String,
-        result: Result<(), String>,
-    },
     VdiCatalog {
         seq: u64,
         result: Result<Vec<xen_core::vm::VdiSummary>, String>,
@@ -648,10 +610,6 @@ pub enum Event {
     },
     VdiDeleted {
         vdi_uuid: String,
-        result: Result<(), String>,
-    },
-    VmHaUpdated {
-        vm_uuid: String,
         result: Result<(), String>,
     },
     CdChanged {
@@ -859,23 +817,34 @@ fn dispatch(
 
     tokio::spawn(async move {
         match command {
-            Command::PoolOptions {
+            Command::PropertyExtras {
                 seq,
                 connection_id,
-                uuid,
+                target,
+                pool_uuid,
             } => {
-                let result = workspace.pool_options(&connection_id, &uuid).await;
-                let _ = events.send(Event::PoolOptions { seq, result });
+                let result = async {
+                    let vm = if target.kind == xen_core::properties::ObjectKind::Vm {
+                        Some(Box::new(
+                            workspace.vm_details(&connection_id, &target.uuid).await?,
+                        ))
+                    } else {
+                        None
+                    };
+                    let pool = if let Some(uuid) = pool_uuid {
+                        Some(workspace.pool_options(&connection_id, &uuid).await?)
+                    } else {
+                        None
+                    };
+                    Ok((vm, pool))
+                }
+                .await;
+                let _ = events.send(Event::PropertyExtras { seq, result });
             }
-            Command::SavePoolOptions {
-                seq,
-                connection_id,
-                edit,
-            } => {
-                let result = workspace.update_pool_options(&connection_id, &edit).await;
-                let _ = events.send(Event::PoolOptionsSaved { seq, result });
+            Command::SavePropertiesDialog { seq, dialog } => {
+                let result = save_properties_dialog(&workspace, &dialog).await;
+                let _ = events.send(Event::ObjectPropertiesSaved { seq, result });
             }
-
             Command::ObjectProperties {
                 seq,
                 connection_id,
@@ -883,16 +852,6 @@ fn dispatch(
             } => {
                 let result = workspace.object_properties(&connection_id, &target).await;
                 let _ = events.send(Event::ObjectProperties { seq, result });
-            }
-            Command::SaveObjectProperties {
-                seq,
-                connection_id,
-                properties,
-            } => {
-                let result = workspace
-                    .update_object_properties(&connection_id, &properties)
-                    .await;
-                let _ = events.send(Event::ObjectPropertiesSaved { seq, result });
             }
             Command::XvaBatch { requests } => {
                 let workspace = workspace.clone();
@@ -1660,16 +1619,6 @@ fn dispatch(
                     .map(Box::new);
                 let _ = events.send(Event::VmPerformance { seq, result });
             }
-            Command::UpdateVmResources {
-                connection_id,
-                vm_uuid,
-                resources,
-            } => {
-                let result = workspace
-                    .update_vm_resources(&connection_id, &vm_uuid, resources)
-                    .await;
-                let _ = events.send(Event::VmResourcesUpdated { vm_uuid, result });
-            }
             Command::ChangeCd {
                 connection_id,
                 vm_uuid,
@@ -1715,26 +1664,6 @@ fn dispatch(
                     result,
                 });
             }
-            Command::UpdateVmHa {
-                connection_id,
-                vm_uuid,
-                restart_priority,
-                start_delay,
-                shutdown_delay,
-                affinity_host_uuid,
-            } => {
-                let result = workspace
-                    .update_vm_ha(
-                        &connection_id,
-                        &vm_uuid,
-                        restart_priority,
-                        start_delay,
-                        shutdown_delay,
-                        affinity_host_uuid,
-                    )
-                    .await;
-                let _ = events.send(Event::VmHaUpdated { vm_uuid, result });
-            }
             Command::MoveDisk {
                 connection_id,
                 vm_uuid,
@@ -1750,21 +1679,6 @@ fn dispatch(
                     result,
                 });
             }
-            Command::SetVbdMode {
-                connection_id,
-                vm_uuid,
-                vbd_uuid,
-                mode,
-            } => {
-                let result = workspace
-                    .set_vbd_mode(&connection_id, &vm_uuid, &vbd_uuid, &mode)
-                    .await;
-                let _ = events.send(Event::DiskChanged {
-                    vm_uuid,
-                    action: "mode".into(),
-                    result,
-                });
-            }
             Command::SetVbdPlugged {
                 connection_id,
                 vm_uuid,
@@ -1777,21 +1691,6 @@ fn dispatch(
                 let _ = events.send(Event::DiskChanged {
                     vm_uuid,
                     action: if plugged { "plug" } else { "unplug" }.into(),
-                    result,
-                });
-            }
-            Command::SetVbdBootable {
-                connection_id,
-                vm_uuid,
-                vbd_uuid,
-                bootable,
-            } => {
-                let result = workspace
-                    .set_vbd_bootable(&connection_id, &vm_uuid, &vbd_uuid, bootable)
-                    .await;
-                let _ = events.send(Event::DiskChanged {
-                    vm_uuid,
-                    action: "bootable".into(),
                     result,
                 });
             }
@@ -1819,21 +1718,6 @@ fn dispatch(
                 let _ = events.send(Event::DiskChanged {
                     vm_uuid,
                     action: "add".into(),
-                    result,
-                });
-            }
-            Command::ResizeDisk {
-                connection_id,
-                vm_uuid,
-                vdi_uuid,
-                size_bytes,
-            } => {
-                let result = workspace
-                    .resize_disk(&connection_id, &vm_uuid, &vdi_uuid, size_bytes)
-                    .await;
-                let _ = events.send(Event::DiskChanged {
-                    vm_uuid,
-                    action: "resize".into(),
                     result,
                 });
             }
@@ -2029,4 +1913,149 @@ async fn save_profiles(workspace: &Workspace, path: &Path) {
     if std::fs::write(&temporary, bytes).is_ok() {
         let _ = std::fs::rename(&temporary, path);
     }
+}
+
+async fn save_properties_dialog(
+    workspace: &Workspace,
+    dialog: &crate::state::PropertiesDialog,
+) -> Result<xen_core::properties::ObjectProperties, String> {
+    let crate::state::LoadState::Ready(edited) = &dialog.properties else {
+        return Err("General: Properties are not loaded.".into());
+    };
+    let original = dialog
+        .original
+        .as_ref()
+        .ok_or("General: Properties are not loaded.")?;
+    let id = &dialog.connection_id;
+    let uuid = &dialog.target.uuid;
+    let resources = dialog
+        .vm
+        .as_ref()
+        .map(|vm| vm.parse_resources())
+        .transpose()
+        .map_err(|e| format!("CPU: {e}"))?;
+    workspace
+        .update_object_properties(
+            id,
+            &xen_core::properties::ObjectPropertiesEdit {
+                original: original.clone(),
+                edited: edited.clone(),
+            },
+        )
+        .await
+        .map_err(|e| format!("General: {e}"))?;
+    if let (Some(resources), Some(before)) = (resources, &dialog.original_vm) {
+        let baseline = crate::state::VmResourceEditState::from_details(before).parse_resources()?;
+        let cpu_only = |mut value: xen_core::operations::VmResourceUpdate| {
+            value.boot_order = None;
+            value.firmware = None;
+            value.secure_boot = None;
+            value.boot_policy = None;
+            value.after_crash = None;
+            value.pv_args = None;
+            value.auto_poweron = None;
+            value
+        };
+        let cpu = cpu_only(resources.clone());
+        if cpu != cpu_only(baseline.clone()) {
+            workspace
+                .update_vm_resources(id, uuid, cpu)
+                .await
+                .map_err(|e| format!("CPU: {e}"))?;
+        }
+        let boot_changed = resources.boot_order != baseline.boot_order
+            || resources.firmware != baseline.firmware
+            || resources.secure_boot != baseline.secure_boot
+            || resources.boot_policy != baseline.boot_policy
+            || resources.after_crash != baseline.after_crash
+            || resources.pv_args != baseline.pv_args
+            || resources.auto_poweron != baseline.auto_poweron;
+        if boot_changed {
+            let mut boot = resources;
+            boot.cpu_weight = None;
+            boot.cores_per_socket = None;
+            workspace
+                .update_vm_resources(id, uuid, boot)
+                .await
+                .map_err(|e| format!("Boot Options: {e}"))?;
+        }
+        let before_affinity = (!before.affinity_ref.is_empty()
+            && before.affinity_ref != "OpaqueRef:NULL")
+            .then(|| before.affinity_ref.clone());
+        if dialog.restart_priority != before.ha_restart_priority
+            || dialog.start_delay != before.start_delay
+            || dialog.shutdown_delay != before.shutdown_delay
+            || dialog.affinity != before_affinity
+        {
+            workspace
+                .update_vm_ha(
+                    id,
+                    uuid,
+                    dialog.restart_priority.clone(),
+                    dialog.start_delay,
+                    dialog.shutdown_delay,
+                    dialog.affinity.clone(),
+                )
+                .await
+                .map_err(|e| format!("High Availability: {e}"))?;
+        }
+    }
+    if let (Some(original), Some(edited)) = (&dialog.original_pool, &dialog.pool) {
+        let mut current = original.clone();
+        for page in ["Live Patching", "Network Options", "Advanced"] {
+            let mut next = current.clone();
+            match page {
+                "Live Patching" => next.live_patching_disabled = edited.live_patching_disabled,
+                "Network Options" => next.igmp_snooping_enabled = edited.igmp_snooping_enabled,
+                _ => {
+                    next.vm_autostart = edited.vm_autostart;
+                    next.migration_compression = edited.migration_compression;
+                }
+            }
+            if next != current {
+                current = workspace
+                    .update_pool_options(
+                        id,
+                        &xen_core::pool_options::PoolOptionsEdit {
+                            original: current,
+                            edited: next,
+                        },
+                    )
+                    .await
+                    .map_err(|e| format!("{page}: {e}"))?;
+            }
+        }
+    }
+    if let (Some(before), Some(after)) = (&original.disk, &edited.disk) {
+        if before.size_bytes != after.size_bytes {
+            let device = after
+                .devices
+                .first()
+                .ok_or("Size and Location: Attach this disk to a VM before resizing.")?;
+            workspace
+                .resize_disk(id, &device.vm_uuid, uuid, after.size_bytes)
+                .await
+                .map_err(|e| format!("Size and Location: {e}"))?;
+        }
+        for device in &after.devices {
+            let before = before
+                .devices
+                .iter()
+                .find(|v| v.vbd_uuid == device.vbd_uuid)
+                .ok_or("General: Disk attachments changed. Reopen Properties.")?;
+            if before.mode != device.mode {
+                workspace
+                    .set_vbd_mode(id, &device.vm_uuid, &device.vbd_uuid, &device.mode)
+                    .await
+                    .map_err(|e| format!("device-{}: {e}", device.vbd_uuid))?;
+            }
+            if before.bootable != device.bootable {
+                workspace
+                    .set_vbd_bootable(id, &device.vm_uuid, &device.vbd_uuid, device.bootable)
+                    .await
+                    .map_err(|e| format!("device-{}: {e}", device.vbd_uuid))?;
+            }
+        }
+    }
+    workspace.object_properties(id, &dialog.target).await
 }

@@ -113,7 +113,7 @@ pub fn show(
         VmTab::Network => {
             if let Some(details) = details_state(ui, state, actions) {
                 let editable = !read_only && !is_template && !is_snapshot;
-                network(ui, &details.interfaces, editable, actions);
+                network(ui, &connection_id, &details.interfaces, editable, actions);
             }
         }
         VmTab::Memory => {
@@ -243,6 +243,13 @@ fn general(
         if details.hvm_boot_policy.is_empty() {
             row(ui, "OS boot parameters", &details.pv_args);
         }
+        if ui
+            .add_enabled(!read_only && !is_snapshot, egui::Button::new("Edit…"))
+            .clicked()
+        {
+            actions.push(UiAction::OpenVmResources);
+            actions.push(UiAction::SelectPropertyPage("Boot Options"));
+        }
     });
     section(ui, "CPUs", &mut |ui| {
         row(ui, "vCPUs", &details.vcpus_max.to_string());
@@ -292,6 +299,13 @@ fn general(
     if !is_template && !is_snapshot {
         section(ui, "Home Server", &mut |ui| {
             row(ui, "Home server", &details.affinity);
+            if ui
+                .add_enabled(!read_only && !is_snapshot, egui::Button::new("Edit…"))
+                .clicked()
+            {
+                actions.push(UiAction::OpenVmResources);
+                actions.push(UiAction::SelectPropertyPage("Home Server"));
+            }
         });
     }
 }
@@ -1858,7 +1872,13 @@ fn dvd_drives(
     ui.add_space(8.0);
 }
 
-fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mut Vec<UiAction>) {
+fn network(
+    ui: &mut Ui,
+    connection_id: &str,
+    interfaces: &[VmInterface],
+    editable: bool,
+    actions: &mut Vec<UiAction>,
+) {
     let selection_id = ui.scope_id().with("vif-selection");
     let mut selected = ui
         .ctx()
@@ -1907,8 +1927,9 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
                 if row.response().clicked() || row.response().secondary_clicked() {
                     selected = interface.uuid.clone();
                 }
-                row.response()
-                    .context_menu(|ui| network_commands(ui, editable, Some(interface), actions));
+                row.response().context_menu(|ui| {
+                    network_commands(ui, connection_id, editable, Some(interface), actions)
+                });
             });
         });
     ui.ctx()
@@ -1916,11 +1937,12 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
     let interface = interfaces
         .iter()
         .find(|interface| interface.uuid == selected);
-    network_commands(ui, editable, interface, actions);
+    network_commands(ui, connection_id, editable, interface, actions);
 }
 
 fn network_commands(
     ui: &mut Ui,
+    connection_id: &str,
     editable: bool,
     interface: Option<&VmInterface>,
     actions: &mut Vec<UiAction>,
@@ -1941,9 +1963,14 @@ fn network_commands(
             .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
-            actions.push(UiAction::OpenVifDialog(Some(
-                interface.unwrap().uuid.clone(),
-            )));
+            actions.push(UiAction::OpenProperties {
+                connection_id: connection_id.into(),
+                target: xen_core::properties::ObjectTarget {
+                    kind: xen_core::properties::ObjectKind::Network,
+                    uuid: interface.unwrap().network_uuid.clone(),
+                },
+            });
+            actions.push(UiAction::SelectPropertyPage("Network Settings"));
         }
         if ui
             .add_enabled(editable && interface.is_some(), egui::Button::new("Remove"))

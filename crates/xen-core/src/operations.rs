@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use crate::xapi::{ApiError, Connection};
 
 /// CPU, memory and boot values. Absent optional fields retain their current values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VmResourceUpdate {
     pub vcpus_max: u64,
     pub vcpus_at_startup: u64,
