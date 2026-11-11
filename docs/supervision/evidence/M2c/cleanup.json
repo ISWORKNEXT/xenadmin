@@ -1,0 +1,11 @@
+{
+  "vm_uuid": "fe91b8c2-455f-bc11-12a9-e94891da1ff9",
+  "destroyed_disk_uuids": [
+    "4a64d573-16a2-4837-bea2-5ab00ca6e227"
+  ],
+  "vm_and_disks_absent": true,
+  "source_template_unchanged": true,
+  "temporary_directory": "/tmp/xen-M2c-5j33t3as",
+  "artifact_secret_scan_passed": true,
+  "temporary_directory_removed": true
+}

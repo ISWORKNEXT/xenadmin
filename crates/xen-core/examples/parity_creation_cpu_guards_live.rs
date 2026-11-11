@@ -34,6 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let error = c
         .create_configured_vm(&CreateVmRequest {
+            guest_setup: None,
+            start_automatically: false,
             source: VmCreationSource::Template(source.uuid.clone()),
             name: "zz-parity-cpu-guard-must-not-exist".into(),
             description: before.description.clone(),

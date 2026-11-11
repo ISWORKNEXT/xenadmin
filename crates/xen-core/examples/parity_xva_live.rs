@@ -114,6 +114,8 @@ async fn exercise(
         .ok_or("Network missing")?;
     let source = c
         .create_configured_vm(&CreateVmRequest {
+            guest_setup: None,
+            start_automatically: false,
             source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-source"),
             description: "Temporary XVA qualification VM".into(),

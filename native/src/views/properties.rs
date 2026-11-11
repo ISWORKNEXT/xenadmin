@@ -52,6 +52,9 @@ fn pages(dialog: &PropertiesDialog) -> Vec<String> {
         ObjectKind::Disk => pages.push("Size and Location"),
         ObjectKind::Network => pages.push("Network Settings"),
     }
+    if dialog.guest_setup.is_some() {
+        pages.push("Guest Setup");
+    }
     let mut pages: Vec<String> = pages.into_iter().map(str::to_owned).collect();
     if let LoadState::Ready(properties) = &dialog.properties
         && let Some(disk) = &properties.disk
@@ -387,6 +390,31 @@ fn content(ui: &mut egui::Ui, dialog: &mut PropertiesDialog, workspace: &Workspa
             _ => {
                 ui.spinner();
             }
+        }
+        return;
+    }
+    if page == "Guest Setup" {
+        if let (Some(setup), Some(before)) = (&mut dialog.guest_setup, &dialog.original_vm) {
+            let editable =
+                before.power_state == "Halted" && !before.is_template && !before.is_snapshot;
+            if !editable {
+                ui.label("Halt the VM to edit Guest Setup.");
+            }
+            ui.add_enabled_ui(editable, |ui| {
+                ui.checkbox(&mut dialog.reset_password, "Reset password…");
+                if dialog.reset_password {
+                    super::guest_setup::password(ui, setup);
+                    ui.label("The guest applies the new password on next boot.");
+                    if let Err(e) = setup.validate_password() {
+                        ui.colored_label(theme::red(), e);
+                    }
+                } else {
+                    super::guest_setup::fields(ui, setup, &before.guest_support);
+                    if let Err(e) = setup.validate(&before.guest_support) {
+                        ui.colored_label(theme::red(), e);
+                    }
+                }
+            });
         }
         return;
     }

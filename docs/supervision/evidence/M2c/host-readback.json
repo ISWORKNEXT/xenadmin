@@ -1,0 +1,20 @@
+{
+  "uuid": "fe91b8c2-455f-bc11-12a9-e94891da1ff9",
+  "xapi_key_map_matches": true,
+  "stale_keys_absent": true,
+  "power_state": "Running",
+  "ssh_returncode": 0,
+  "ssh_stdout": "paritytester\nGUEST_ACK_OK\n",
+  "within_five_minutes": true,
+  "guest_edit_halted_readback": true,
+  "reset_password_halted_readback": true,
+  "tools_missing_cd_rejected": true,
+  "tools_iso_uuid": "85a2a9c0-bcfd-48c5-95b4-740309ea0187",
+  "tools_iso_readback": true,
+  "reset_new_password_accepted": true,
+  "reset_old_password_rejected": true,
+  "reset_xpwd_consumed": true,
+  "reset_setup_status": "ok",
+  "guest_edit_running_disabled": true,
+  "reset_live_guest_ack": true
+}

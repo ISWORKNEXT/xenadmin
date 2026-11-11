@@ -1973,6 +1973,14 @@ async fn save_properties_dialog(
         .map(|vm| vm.parse_resources())
         .transpose()
         .map_err(|e| format!("CPU: {e}"))?;
+    if let (Some(setup), Some(before)) = (&dialog.guest_setup, &dialog.original_vm)
+        && setup != &xen_core::guest_setup::GuestSetup::from_data(&before.guest_data)
+    {
+        workspace
+            .update_guest_setup(id, uuid, setup, dialog.reset_password)
+            .await
+            .map_err(|e| format!("Guest Setup: {e}"))?;
+    }
     workspace
         .update_object_properties(
             id,

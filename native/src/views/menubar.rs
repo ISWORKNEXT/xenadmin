@@ -61,6 +61,7 @@ pub fn selection(state: &UiState) -> &ObjectKey {
 
 pub fn vm_kind(command: &str) -> Option<ActionKind> {
     Some(match command {
+        "Install Guest Tools..." => ActionKind::InstallGuestTools,
         "StartVMCommand" => ActionKind::Start,
         "StartPausedVMCommand" => ActionKind::StartPaused,
         "CheckpointVMCommand" => ActionKind::Checkpoint,

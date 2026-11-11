@@ -214,6 +214,8 @@ async fn exercise(
         .ok_or("Blank template missing")?;
     let source = c
         .create_configured_vm(&CreateVmRequest {
+            guest_setup: None,
+            start_automatically: false,
             source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-source"),
             description: "Owned storage qualification VM".into(),
@@ -577,6 +579,8 @@ async fn exercise(
             .find(|vm| vm.name == format!("{prefix}-snapshot"))
             .ok_or("Snapshot missing")?;
         let mut request = CreateVmRequest {
+            guest_setup: None,
+            start_automatically: false,
             source: xen_core::provisioning::VmCreationSource::Snapshot(snapshot.uuid.clone()),
             name: format!("{prefix}-configured"),
             description: "Configured from an owned snapshot".into(),

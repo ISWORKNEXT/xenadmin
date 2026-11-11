@@ -268,6 +268,7 @@ impl VmTab {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ActionKind {
+    InstallGuestTools,
     Start,
     StartPaused,
     Checkpoint,
@@ -318,6 +319,7 @@ impl ActionKind {
 
     pub fn operation(self) -> &'static str {
         match self {
+            ActionKind::InstallGuestTools => "install_guest_tools",
             ActionKind::Start => "start",
             ActionKind::StartPaused => "start",
             ActionKind::Checkpoint => "checkpoint",
@@ -341,6 +343,7 @@ impl ActionKind {
 
     pub fn label(self) -> &'static str {
         match self {
+            ActionKind::InstallGuestTools => "Install Guest Tools…",
             ActionKind::Start => "Start",
             ActionKind::StartPaused => "Start paused",
             ActionKind::Checkpoint => "Take checkpoint",
@@ -394,6 +397,7 @@ impl ActionKind {
         host_ref: Option<&str>,
     ) -> VmAction {
         match self {
+            ActionKind::InstallGuestTools => VmAction::InstallGuestTools,
             ActionKind::StartPaused => match host_ref {
                 Some(host_ref) => VmAction::StartPausedOn {
                     host_ref: host_ref.to_owned(),
@@ -660,6 +664,8 @@ pub struct RecordDialog {
 
 #[derive(Clone)]
 pub struct PropertiesDialog {
+    pub guest_setup: Option<xen_core::guest_setup::GuestSetup>,
+    pub reset_password: bool,
     pub page: String,
     pub vm: Option<VmResourceEditState>,
     pub original_vm: Option<xen_core::vm::VmDetails>,
@@ -2230,7 +2236,11 @@ pub fn action_allowed(
     };
     is_online(connection)
         && !is_read_only(connection)
-        && vm.allowed_operations.iter().any(|value| value == operation)
+        && (if operation == "install_guest_tools" {
+            vm.kind == "vm" && matches!(vm.power_state.as_str(), "Running" | "Halted")
+        } else {
+            vm.allowed_operations.iter().any(|value| value == operation)
+        })
         && !running_task(workspace, connection_id, &vm.uuid)
 }
 

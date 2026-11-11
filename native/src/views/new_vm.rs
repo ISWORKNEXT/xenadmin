@@ -9,7 +9,7 @@ const STEPS: [&str; 6] = [
     "Name",
     "Resources",
     "Storage & media",
-    "Network",
+    "Networking",
     "Review",
 ];
 
@@ -33,6 +33,14 @@ pub fn show(
         });
         return;
     };
+    let guest = wizard
+        .template
+        .ready()
+        .is_some_and(|vm| vm.guest_support.enabled);
+    let mut steps = STEPS.to_vec();
+    if guest {
+        steps.insert(5, "Guest Setup");
+    }
     let mut close = false;
     let response = egui::Modal::new(egui::Id::unique("new-vm-wizard"))
         .frame(theme::modal_frame())
@@ -41,7 +49,7 @@ pub fn show(
             ui.heading("New virtual machine");
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                for (index, label) in STEPS.iter().enumerate() {
+                for (index, label) in steps.iter().enumerate() {
                     if index > 0 {
                         ui.label("›");
                     }
@@ -77,7 +85,7 @@ pub fn show(
                     close = true;
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if wizard.step == STEPS.len() - 1 {
+                    if wizard.step == steps.len() - 1 {
                         if ui
                             .add_enabled(!wizard.submitting, widgets::primary_button("Create VM"))
                             .clicked()
@@ -424,7 +432,21 @@ fn page(
             ui.add_space(12.0);
             ui.label("Choose one guest network or create the VM without network interfaces. This selection replaces the source's interfaces.");
         }
+        5 if wizard
+            .template
+            .ready()
+            .is_some_and(|vm| vm.guest_support.enabled) =>
+        {
+            let support = &wizard.template.ready().unwrap().guest_support;
+            let setup = draft.guest_setup.get_or_insert_with(Default::default);
+            super::guest_setup::fields(ui, setup, support);
+            error = setup.validate(support).err();
+        }
         _ => {
+            ui.checkbox(
+                &mut draft.start_automatically,
+                "Start the new VM automatically",
+            );
             let template = wizard.template.ready();
             let disk_count =
                 template.map_or(0, |vm| vm.disks.iter().filter(|disk| !disk.is_cd).count());
@@ -472,7 +494,7 @@ fn page(
                 ),
                 ("Disks", disks),
                 (
-                    "Network",
+                    "Networking",
                     draft
                         .network_uuid
                         .as_ref()
@@ -505,7 +527,15 @@ fn page(
                         .and_then(|uuid| inventory.hosts.iter().find(|host| &host.uuid == uuid))
                         .map_or_else(|| "Automatic placement".into(), |host| host.name.clone()),
                 ),
-                ("Power state after creation", "Halted".into()),
+                (
+                    "Power state after creation",
+                    if draft.start_automatically {
+                        "Running"
+                    } else {
+                        "Halted"
+                    }
+                    .into(),
+                ),
             ] {
                 widgets::kv(ui, label, &value, false);
             }

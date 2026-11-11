@@ -12,6 +12,8 @@ type Records = HashMap<String, Value>;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct VmDetails {
+    pub guest_support: crate::guest_setup::GuestSupport,
+    pub guest_data: BTreeMap<String, String>,
     pub uuid: String,
     pub name: String,
     pub description: String,
@@ -470,7 +472,28 @@ impl Connection {
             }
         };
 
+        let guest_data = vm["xenstore_data"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter(|(k, _)| k.starts_with("vm-data/"))
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    if matches!(
+                        k.as_str(),
+                        "vm-data/xpwd" | "vm-data/password" | "vm-data/root-password"
+                    ) {
+                        "•••• (pending guest pickup)".into()
+                    } else {
+                        v.as_str().unwrap_or_default().to_owned()
+                    },
+                )
+            })
+            .collect();
         Ok(VmDetails {
+            guest_support: crate::guest_setup::GuestSupport::from_record(&vm),
+            guest_data,
             uuid: vm_uuid.into(),
             name: text(&vm, "name_label"),
             description: text(&vm, "name_description"),

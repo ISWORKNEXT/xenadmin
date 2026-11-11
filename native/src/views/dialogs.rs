@@ -453,6 +453,9 @@ fn intent(
                     ui.label(RichText::new(if enabled { help } else if running_required && !running { if kind == crate::state::ActionKind::Checkpoint { "Disk and memory snapshots need the VM to be running" } else { "Quiesced snapshots need the VM to be running" } } else { unavailable }).small().color(dim_fg()));
                 }
             }
+            if intent.kind == crate::state::ActionKind::InstallGuestTools {
+                ui.label("This will insert the Guest Tools CD into the virtual machine's DVD drive, replacing any disc currently inserted. Continue the installation inside the guest operating system.");
+            }
             if intent.kind == crate::state::ActionKind::Revert {
                 ui.add_space(8.0);
                 ui.label(

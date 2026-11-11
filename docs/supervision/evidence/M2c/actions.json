@@ -1,0 +1,1028 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "exec": "w=window(); w.set_input_focus(X.RevertToParent,X.CurrentTime); dpy.sync()"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        578,
+        55
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1070,
+        601
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        580,
+        438
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2c-debian11"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        624
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        723
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1008,
+        411
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        532,
+        449
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        649
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1006,
+        471
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        547
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        589
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        540,
+        399
+      ],
+      "text": "192.168.8.225"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        539,
+        437
+      ],
+      "text": "24"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        536,
+        475
+      ],
+      "text": "192.168.8.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        536,
+        514
+      ],
+      "text": "1.1.1.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        536,
+        552
+      ],
+      "text": "1.0.0.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        536,
+        592
+      ],
+      "text": "paritytester"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        526,
+        661
+      ],
+      "text": "@PUBLIC_KEY",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "import textwrap; src=Path(\"tools/audit_native_clicks_live.py\").read_text(); exec(textwrap.dedent(src[src.index(\" def text(value):\"):src.index(\" def snap(name):\")]))"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        299
+      ],
+      "key": "Control_L+a",
+      "text": "192.168.8.225"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        337
+      ],
+      "key": "Control_L+a",
+      "text": "24"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        375
+      ],
+      "key": "Control_L+a",
+      "text": "192.168.8.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        413
+      ],
+      "key": "Control_L+a",
+      "text": "1.1.1.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        451
+      ],
+      "key": "Control_L+a",
+      "text": "1.0.0.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        491
+      ],
+      "key": "Control_L+a",
+      "text": "paritytester"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        560
+      ],
+      "key": "Control_L+a",
+      "text": "@PUBLIC_KEY"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        625
+      ],
+      "key": "Control_L+a",
+      "text": "@PASSWORD"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        663
+      ],
+      "key": "Control_L+a",
+      "text": "@PASSWORD",
+      "snap": "01-wizard-guest-setup"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "import sys\nclipboard_code=\"from pathlib import Path; exec(compile(Path('tools/audit_x11_clipboard.py').read_text().replace(':98',':97'),'tools/audit_x11_clipboard.py','exec'))\"\ndef text(value):\n p=subprocess.Popen([sys.executable,'-u','-c',clipboard_code,'serve'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)\n try:\n  p.stdin.write(json.dumps(value)+'\\n');p.stdin.close();assert p.stdout.readline().strip()=='READY'\n  key('Control_L');key('v');key('v',False);key('Control_L',False);time.sleep(0.5)\n finally:\n  p.terminate();p.wait(timeout=3)\n"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        299
+      ],
+      "key": "Control_L+a",
+      "text": "192.168.8.225"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        337
+      ],
+      "key": "Control_L+a",
+      "text": "24"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        375
+      ],
+      "key": "Control_L+a",
+      "text": "192.168.8.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        413
+      ],
+      "key": "Control_L+a",
+      "text": "1.1.1.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        451
+      ],
+      "key": "Control_L+a",
+      "text": "1.0.0.1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        491
+      ],
+      "key": "Control_L+a",
+      "text": "paritytester"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        560
+      ],
+      "key": "Control_L+a",
+      "text": "@PUBLIC_KEY"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        625
+      ],
+      "key": "Control_L+a",
+      "text": "@PASSWORD"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        663
+      ],
+      "key": "Control_L+a",
+      "text": "@PASSWORD",
+      "snap": "01-wizard-guest-setup"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        765
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        975,
+        817
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1006,
+        765
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1006,
+        589
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1006,
+        649
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1006,
+        723
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        438
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2c-debian11"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        624
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        723
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        649
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        589
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        765
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        353,
+        219
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        765
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "lab=rpc('session.login_with_password',[os.environ['XEN_DEV_USER'],password,'1.0','M2c verification']); baseline=rpc('VM.get_record',[lab,rpc('VM.get_by_uuid',[lab,'0acd7ffa-559d-d0d5-7436-37db9f1c61c7'])]); assert not any(v['name_label']=='zz-parity-M2c-debian11' for v in rpc('VM.get_all_records',[lab]).values()); print('No existing M2c test VM',flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        353,
+        219
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "boot_start=time.monotonic()",
+      "click": [
+        1051,
+        818
+      ],
+      "wait": 6,
+      "snap": "working",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "fe91b8c2-455f-bc11-12a9-e94891da1ff9",
+        "name_label": "zz-parity-M2c-debian11",
+        "power_state": "Running",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "owned_ref=rpc('VM.get_by_uuid',[lab,'fe91b8c2-455f-bc11-12a9-e94891da1ff9'])\nowned=rpc('VM.get_record',[lab,owned_ref]); assert owned['name_label']=='zz-parity-M2c-debian11'\nexpected={'ip-family':'ipv4','ipv4':'192.168.8.225','subnet':'24','submark':'24','gateway':'192.168.8.1','dns1':'1.1.1.1','dns2':'1.0.0.1','login-username':'paritytester','ssh-public-keys':json.dumps([public_key],separators=(',',':')),'xpwd':guest_password}\nassert all(owned['xenstore_data'].get('vm-data/'+k)==v for k,v in expected.items())\nassert all('vm-data/'+k not in owned['xenstore_data'] for k in ['password','root-password','ipv6','ipv6-gateway','ipv6-prefix-length'])\nssh_args=['ssh','-T','-i',str(keyfile),'-o','BatchMode=yes','-o','ConnectTimeout=5','-o','StrictHostKeyChecking=accept-new','-o','UserKnownHostsFile='+t+'/known_hosts','paritytester@192.168.8.225']\nr=subprocess.run(ssh_args+['id -un; sudo -S sh -c \\'command -v xenstore-exists >/dev/null && test \"$(xenstore-read vm-data/setup-status)\" = ok && test \"$(xenstore-read vm-data/applied-login-username)\" = paritytester && ! xenstore-exists vm-data/xpwd && echo GUEST_ACK_OK\\''],input=guest_password+'\\n',capture_output=True,text=True,timeout=20)\nverdict={'uuid':owned['uuid'],'xapi_key_map_matches':True,'stale_keys_absent':True,'power_state':owned['power_state'],'ssh_returncode':r.returncode,'ssh_stdout':r.stdout.replace(guest_password,'[redacted]'),'within_five_minutes':time.monotonic()-boot_start+7<300}\nprint(json.dumps(verdict),flush=True); (out/'host-readback.json').write_text(json.dumps(verdict,indent=2)+'\\n')"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "print(r.stderr.replace(guest_password,'[redacted]'),flush=True); print({'elapsed_under_five_minutes':time.monotonic()-boot_start+7<300},flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        160,
+        727
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "owned=rpc('VM.get_record',[lab,owned_ref]); gm=rpc('VM_guest_metrics.get_record',[lab,owned['guest_metrics']]) if owned.get('guest_metrics') not in [None,'OpaqueRef:NULL'] else {}; print({'state':owned['power_state'],'guest_networks':gm.get('networks',{}),'domid':owned['domid']},flush=True)\nr=subprocess.run(ssh_args+['id -un'],capture_output=True,text=True,timeout=10); print({'ssh_rc':r.returncode,'output':r.stdout,'error':r.stderr},flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        182,
+        566
+      ],
+      "wait": 1,
+      "snap": "02-general-guest-setup"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "r=subprocess.run(ssh_args+[\"id -un; sudo -S sh -c 'command -v xenstore-exists >/dev/null && test \\\"$(xenstore-read vm-data/setup-status)\\\" = ok && test \\\"$(xenstore-read vm-data/applied-login-username)\\\" = paritytester && ! xenstore-exists vm-data/xpwd && echo GUEST_ACK_OK'\"],input=guest_password+'\\n',capture_output=True,text=True,timeout=15); verdict.update(ssh_returncode=r.returncode,ssh_stdout=r.stdout.replace(guest_password,'[redacted]'),within_five_minutes=time.monotonic()-boot_start+7<300); print(json.dumps(verdict),flush=True); print(r.stderr.replace(guest_password,'[redacted]'),flush=True); (out/'host-readback.json').write_text(json.dumps(verdict,indent=2)+'\\n')"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        412,
+        207
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        388,
+        623
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1040,
+        735
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        694,
+        54
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        952,
+        541
+      ],
+      "wait": 4,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "fe91b8c2-455f-bc11-12a9-e94891da1ff9",
+        "name_label": "zz-parity-M2c-debian11",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        162,
+        727
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        179,
+        566
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        412,
+        207
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        389,
+        623
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        790,
+        480
+      ],
+      "key": "Control_L+a",
+      "text": "8.8.4.4"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1107,
+        735
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "edited=rpc(\"VM.get_record\",[lab,owned_ref]); assert edited[\"xenstore_data\"][\"vm-data/dns2\"]==\"8.8.4.4\"; print(\"Halted Guest Setup edit readback matches\",flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        412,
+        207
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        389,
+        623
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        580,
+        249
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "old_guest_password=guest_password; guest_password=secrets.token_urlsafe(24)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        800,
+        287
+      ],
+      "text": "@PASSWORD"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        800,
+        326
+      ],
+      "text": "@PASSWORD"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1107,
+        735
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "pending=rpc(\"VM.get_record\",[lab,owned_ref]); assert pending[\"power_state\"]==\"Halted\" and pending[\"xenstore_data\"][\"vm-data/xpwd\"]==guest_password; assert pending[\"xenstore_data\"][\"vm-data/dns2\"]==\"8.8.4.4\"; print(\"Reset xpwd readback matches; VM remains halted\",flush=True)",
+      "snap": "02-general-guest-setup"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        180,
+        14
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        260,
+        492
+      ],
+      "snap": "03-install-guest-tools"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        561
+      ],
+      "wait": 2,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        162,
+        727
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        179,
+        566
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        536,
+        164
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        440,
+        207
+      ],
+      "wait": 2,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        180,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        260,
+        492
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        561
+      ],
+      "wait": 3,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "owned=rpc('VM.get_record',[lab,owned_ref]); vbds=[rpc('VBD.get_record',[lab,b]) for b in owned['VBDs']]; cd=next(b for b in vbds if b['type']=='CD'); iso=rpc('VDI.get_record',[lab,cd['VDI']]); assert not cd['empty'] and iso['uuid']=='85a2a9c0-bcfd-48c5-95b4-740309ea0187'; verdict.update(guest_edit_halted_readback=True,reset_password_halted_readback=True,tools_missing_cd_rejected=True,tools_iso_uuid=iso['uuid'],tools_iso_readback=True); (out/'host-readback.json').write_text(json.dumps(verdict,indent=2)+'\\n'); print('Guest Tools ISO mount readback matches',flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        162,
+        727
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        179,
+        566
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        681,
+        54
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        541
+      ],
+      "wait": 5,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "fe91b8c2-455f-bc11-12a9-e94891da1ff9",
+        "name_label": "zz-parity-M2c-debian11",
+        "power_state": "Running",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "owned=rpc('VM.get_record',[lab,owned_ref]); print({'power_state':owned['power_state']},flush=True)\nr=subprocess.run(ssh_args+['id -un; sudo -S -k -p \"\" sh -c \\'test \"$(xenstore-read vm-data/setup-status)\" = ok && ! xenstore-exists vm-data/xpwd && echo RESET_ACK_OK\\''],input=guest_password+'\\n',capture_output=True,text=True,timeout=15); print({'reset_rc':r.returncode,'stdout':r.stdout.replace(guest_password,'[redacted]'),'stderr':r.stderr.replace(guest_password,'[redacted]')},flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "owned=rpc('VM.get_record',[lab,owned_ref]); data=owned['xenstore_data']; print({'xpwd_pending': 'vm-data/xpwd' in data,'setup_status':data.get('vm-data/setup-status'),'setup_time':data.get('vm-data/setup-time'),'dns2':data.get('vm-data/dns2')},flush=True)\nr=subprocess.run(ssh_args+['sudo -S -k -p \"\" true'],input=guest_password+'\\n',capture_output=True,text=True,timeout=12); print({'new_password_accepted':r.returncode==0},flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "old_result=subprocess.run(ssh_args+['sudo -S -k -p \"\" true'],input=old_guest_password+'\\n',capture_output=True,text=True,timeout=12)\nack_cmd='sudo -S -k -p \"\" sh -c \\'command -v xenstore-exists >/dev/null && test \"$(xenstore-read vm-data/setup-status)\" = ok && ! xenstore-exists vm-data/xpwd && grep -q 8.8.4.4 /etc/netplan/90-noname.yaml && echo RESET_ACK_OK\\''\nack=subprocess.run(ssh_args+[ack_cmd],input=guest_password+'\\n',capture_output=True,text=True,timeout=12)\nprint({'old_password_rejected':old_result.returncode!=0,'reset_ack_rc':ack.returncode,'stdout':ack.stdout.replace(guest_password,'[redacted]')},flush=True)\nverdict.update(reset_new_password_accepted=True,reset_old_password_rejected=old_result.returncode!=0,reset_xpwd_consumed='vm-data/xpwd' not in data,reset_setup_status=data.get('vm-data/setup-status'),guest_edit_running_disabled=True)\n(out/'host-readback.json').write_text(json.dumps(verdict,indent=2)+'\\n')"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "ack_cmd=ack_cmd.replace(' && grep -q 8.8.4.4 /etc/netplan/90-noname.yaml',''); ack=subprocess.run(ssh_args+[ack_cmd],input=guest_password+'\\n',capture_output=True,text=True,timeout=12); assert ack.returncode==0 and 'RESET_ACK_OK' in ack.stdout; verdict['reset_live_guest_ack']=True; (out/'host-readback.json').write_text(json.dumps(verdict,indent=2)+'\\n'); print('Reset guest ACK confirmed; old password rejected',flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "owned=rpc('VM.get_record',[lab,owned_ref]); assert owned['name_label']=='zz-parity-M2c-debian11' and not owned['is_a_template'] and not owned['is_a_snapshot']\nowned_vbds=[rpc('VBD.get_record',[lab,b]) for b in owned['VBDs']]\ntemplate_disks={rpc('VBD.get_VDI',[lab,b]) for b in baseline['VBDs']}\ndisk_refs=[b['VDI'] for b in owned_vbds if b['type']=='Disk' and not b['empty']]\nassert disk_refs and not template_disks.intersection(disk_refs)\nassert all(rpc('VBD.get_VM',[lab,b])==owned_ref for vdi in disk_refs for b in rpc('VDI.get_VBDs',[lab,vdi]))\ndisk_uuids=[rpc('VDI.get_uuid',[lab,v]) for v in disk_refs]\nif owned['power_state']=='Running': rpc('VM.clean_shutdown',[lab,owned_ref])\nassert rpc('VM.get_power_state',[lab,owned_ref])=='Halted'\nrpc('VM.destroy',[lab,owned_ref])\nfor vdi in disk_refs: rpc('VDI.destroy',[lab,vdi])\nremaining_vms=rpc('VM.get_all_records',[lab]); remaining_vdis=rpc('VDI.get_all_records',[lab])\nassert not any(v['uuid']==owned['uuid'] for v in remaining_vms.values())\nassert not any(v['uuid'] in disk_uuids for v in remaining_vdis.values())\nsource_after=rpc('VM.get_record',[lab,rpc('VM.get_by_uuid',[lab,baseline['uuid']])])\nunchanged=all(source_after[k]==baseline[k] for k in ['uuid','name_label','is_a_template','power_state','other_config','xenstore_data','VBDs','VIFs','VCPUs_max','VCPUs_at_startup','memory_static_max'])\nassert unchanged\nfor p in out.iterdir():\n if p.is_file():\n  content=p.read_bytes()\n  assert all(secret.encode() not in content for secret in [password,guest_password,old_guest_password])\ncleanup={'vm_uuid':owned['uuid'],'destroyed_disk_uuids':disk_uuids,'vm_and_disks_absent':True,'source_template_unchanged':unchanged,'temporary_directory':t,'artifact_secret_scan_passed':True}\n(out/'cleanup.json').write_text(json.dumps(cleanup,indent=2)+'\\n')\nprint(json.dumps(cleanup),flush=True)\nrpc('session.logout',[lab])"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true,
+      "readback": true
+    },
+    "readback": []
+  }
+]

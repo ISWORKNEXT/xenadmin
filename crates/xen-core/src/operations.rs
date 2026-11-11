@@ -27,6 +27,7 @@ pub struct VmResourceUpdate {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum VmAction {
+    InstallGuestTools,
     Start,
     StartPaused,
     StartPausedOn {
@@ -87,6 +88,7 @@ pub enum VmAction {
 impl VmAction {
     pub fn allowed_operation(&self) -> &'static str {
         match self {
+            Self::InstallGuestTools => "install_guest_tools",
             Self::Start | Self::StartPaused => "start",
             Self::StartOn { .. } | Self::StartPausedOn { .. } => "start_on",
             Self::Shutdown => "clean_shutdown",
@@ -113,6 +115,7 @@ impl VmAction {
 
     pub fn title(&self) -> &'static str {
         match self {
+            Self::InstallGuestTools => "Install Guest Tools",
             Self::Start => "Start",
             Self::StartPaused | Self::StartPausedOn { .. } => "Start paused",
             Self::StartOn { .. } => "Start on host",
@@ -174,7 +177,8 @@ impl Connection {
     pub async fn begin_vm_action(&self, uuid: &str, action: &VmAction) -> Result<String, ApiError> {
         if matches!(
             action,
-            VmAction::CreateFromSnapshot { .. }
+            VmAction::InstallGuestTools
+                | VmAction::CreateFromSnapshot { .. }
                 | VmAction::ConvertToTemplate
                 | VmAction::Copy { .. }
                 | VmAction::WithDescription { .. }
@@ -2441,7 +2445,7 @@ impl Connection {
 
     /// Reject a start when a configured disk or CD media points at a missing
     /// VDI or an unavailable storage repository.
-    async fn preflight_boot(&self, vm_ref: &str) -> Result<(), ApiError> {
+    pub(crate) async fn preflight_boot(&self, vm_ref: &str) -> Result<(), ApiError> {
         let Ok(vbds) = self.records("VBD").await else {
             return Ok(());
         };

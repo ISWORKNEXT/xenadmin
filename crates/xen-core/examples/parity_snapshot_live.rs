@@ -53,6 +53,8 @@ async fn exercise(
     let source = c.vm_details(&template.uuid).await?;
     let uuid = c
         .create_configured_vm(&CreateVmRequest {
+            guest_setup: None,
+            start_automatically: false,
             source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-source"),
             description: "Temporary real-host snapshot qualification".into(),

@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod console;
 pub mod dr;
+pub mod guest_setup;
 pub mod health;
 pub mod host;
 pub mod network;

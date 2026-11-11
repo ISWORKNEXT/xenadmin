@@ -524,6 +524,9 @@ impl App {
                                     dialog.affinity = (!vm.affinity_ref.is_empty()
                                         && vm.affinity_ref != "OpaqueRef:NULL")
                                         .then(|| vm.affinity_ref.clone());
+                                    dialog.guest_setup = vm.guest_support.enabled.then(|| {
+                                        xen_core::guest_setup::GuestSetup::from_data(&vm.guest_data)
+                                    });
                                     dialog.original_vm = Some(*vm);
                                 }
                                 dialog.original_pool = pool.clone();
@@ -875,6 +878,15 @@ impl App {
                     {
                         wizard.template = match result {
                             Ok(details) => {
+                                wizard.draft.guest_setup = details
+                                    .guest_support
+                                    .enabled
+                                    .then(|| {
+                                        xen_core::guest_setup::GuestSetup::from_data(
+                                            &details.guest_data,
+                                        )
+                                    })
+                                    .map(Box::new);
                                 wizard.draft.vcpus_max = if details.supports_vcpu_hotplug {
                                     details.vcpus_max.max(1)
                                 } else {
@@ -2078,6 +2090,8 @@ impl App {
                         page: "General".into(),
                         vm: None,
                         original_vm: None,
+                        guest_setup: None,
+                        reset_password: false,
                         pool: None,
                         original_pool: None,
                         extras_ready: false,
@@ -2290,6 +2304,8 @@ impl App {
                     self.state.new_vm = Some(crate::state::NewVmWizard {
                         connection_id,
                         draft: xen_core::provisioning::CreateVmRequest {
+                            guest_setup: None,
+                            start_automatically: false,
                             source: source.clone(),
                             name: String::new(),
                             description: String::new(),

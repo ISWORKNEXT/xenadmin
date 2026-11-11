@@ -24,6 +24,8 @@ impl VmCreationSource {
 
 #[derive(Clone)]
 pub struct CreateVmRequest {
+    pub guest_setup: Option<Box<crate::guest_setup::GuestSetup>>,
+    pub start_automatically: bool,
     pub source: VmCreationSource,
     pub name: String,
     pub description: String,
@@ -601,6 +603,11 @@ impl Connection {
                 "The creation source type changed. Select the source again.".into(),
             ));
         }
+        if let Some(setup) = &request.guest_setup {
+            setup
+                .validate(&details.guest_support)
+                .map_err(|e| ApiError::Xen(e.into()))?;
+        }
         crate::properties::validate_description_change(&details.description, &request.description)?;
         if request.vcpus_at_startup != request.vcpus_max && !details.supports_vcpu_hotplug {
             return Err(ApiError::Xen("This source or host does not support separate initial and maximum vCPU counts. Use equal counts.".into()));
@@ -888,6 +895,17 @@ impl Connection {
             },
         )
         .await?;
+        if let Some(setup) = &request.guest_setup {
+            self.update_guest_setup(uuid, setup, false).await?;
+        }
+        if request.start_automatically {
+            self.preflight_boot(&reference).await?;
+            self.async_task(
+                "Async.VM.start",
+                json!([self.session, reference, false, false]),
+            )
+            .await?;
+        }
         Ok(())
     }
 }

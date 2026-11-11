@@ -30,3 +30,5 @@ pub mod search_page;
 pub mod context_menu;
 
 mod alert_titles;
+
+pub mod guest_setup;

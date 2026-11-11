@@ -144,6 +144,8 @@ async fn provisioning_descriptions(c: &Connection, prefix: &str) -> Result<(), E
         .find(|sr| sr.name == "Local storage")
         .ok_or("Local storage missing")?;
     let mut request = CreateVmRequest {
+        guest_setup: None,
+        start_automatically: false,
         source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
         name: format!("{prefix}-source"),
         description: "D".repeat(2000),
@@ -462,6 +464,8 @@ async fn full_copy(c: &Connection, prefix: &str, input: &Input) -> Result<(), Er
         .ok_or("Local storage missing")?;
     let source = c
         .create_configured_vm(&CreateVmRequest {
+            guest_setup: None,
+            start_automatically: false,
             source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-copy-source"),
             description: "Full copy source description".into(),
@@ -686,6 +690,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
         .ok_or("Local storage missing")?;
     let uuid = c
         .create_configured_vm(&CreateVmRequest {
+            guest_setup: None,
+            start_automatically: false,
             source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-vm"),
             description: "Temporary advanced VM qualification".into(),
@@ -1005,6 +1011,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
         if input.pause_for_ui {
             let ui_uuid = c
                 .create_configured_vm(&CreateVmRequest {
+                    guest_setup: None,
+                    start_automatically: false,
                     source: xen_core::provisioning::VmCreationSource::Template(uuid.clone()),
                     name: format!("{prefix}-ui"),
                     description: "Temporary UI qualification VM".into(),

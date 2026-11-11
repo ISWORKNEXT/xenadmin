@@ -231,6 +231,16 @@ fn general(
         }
         row(ui, "UUID", &details.uuid);
     });
+    if details.guest_support.enabled {
+        section(ui, "Guest Setup", &mut |ui| {
+            for (key, value) in &details.guest_data {
+                row(ui, key, value);
+            }
+            if details.guest_data.is_empty() {
+                ui.label("No pending guest configuration.");
+            }
+        });
+    }
     section(ui, "Boot Options", &mut |ui| {
         row(
             ui,

@@ -20,6 +20,7 @@ use crate::{
 };
 
 enum VmPreparation {
+    InstallGuestTools,
     Clone,
     Described {
         action: Box<VmAction>,
@@ -1317,6 +1318,26 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn update_guest_setup(
+        &self,
+        connection_id: &str,
+        vm_uuid: &str,
+        setup: &crate::guest_setup::GuestSetup,
+        password_only: bool,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+            return Err("VM is not part of this connection.".into());
+        }
+        active
+            .connection
+            .update_guest_setup(vm_uuid, setup, password_only)
+            .await
+            .map_err(|e| e.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn update_vm_ha(
         &self,
         connection_id: &str,
@@ -1947,6 +1968,16 @@ impl Workspace {
                 )
                 .await;
         }
+        if matches!(action, VmAction::InstallGuestTools) {
+            return self
+                .start_vm_preparation(
+                    connection_id,
+                    vm_uuid,
+                    String::new(),
+                    VmPreparation::InstallGuestTools,
+                )
+                .await;
+        }
         if let VmAction::Move { sr_uuid } = action {
             return self
                 .start_vm_preparation(
@@ -2238,7 +2269,8 @@ impl Workspace {
             );
         }
         let converting = matches!(&mode, VmPreparation::ConvertToTemplate);
-        let name = if converting {
+        let installing_tools = matches!(&mode, VmPreparation::InstallGuestTools);
+        let name = if converting || installing_tools {
             object_name.clone()
         } else {
             name
@@ -2251,6 +2283,7 @@ impl Workspace {
             remote_ref: String::new(),
             object_name,
             action: match &mode {
+                VmPreparation::InstallGuestTools => "Install Guest Tools",
                 VmPreparation::Clone => "Clone",
                 VmPreparation::Described { action, .. } => action.title(),
                 VmPreparation::Move { .. } => "Move VM",
@@ -2311,6 +2344,11 @@ impl Workspace {
                         .create_configured_vm(&request)
                         .await
                 }
+                VmPreparation::InstallGuestTools => active_for_task
+                    .connection
+                    .install_guest_tools(&vm_uuid)
+                    .await
+                    .map(|()| vm_uuid.clone()),
                 VmPreparation::Clone => active_for_task.connection.clone_vm(&vm_uuid, &name).await,
                 VmPreparation::Copy(request) => {
                     active_for_task.connection.copy_vm(&vm_uuid, &request).await
@@ -2335,7 +2373,11 @@ impl Workspace {
             }
             let result = match result {
                 Ok(new_uuid) => match refresh_inventory_cache(&active_for_task).await {
-                    Ok(()) => Ok(if converting {
+                    Ok(()) => Ok(if installing_tools {
+                        format!(
+                            "Guest Tools CD inserted into {name} ({new_uuid}). Continue installation inside the guest."
+                        )
+                    } else if converting {
                         format!("Converted {name} ({new_uuid}) to a template.")
                     } else {
                         format!("Created {name} ({new_uuid}).")
