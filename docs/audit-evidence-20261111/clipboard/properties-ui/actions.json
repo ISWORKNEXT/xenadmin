@@ -1,0 +1,93 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        562,
+        77
+      ],
+      "wait": 2,
+      "snap": "properties-before-paste"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "properties-before-paste-settled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        675,
+        391
+      ],
+      "key": "Control_L+a",
+      "paste": "zz-parity-clipboard-5d7d3d15-4bc8-4fd8-bd28-f5b43329ccdc-\u0e17\u0e14\u0e2a\u0e2d\u0e1a-\u0394",
+      "wait": 2,
+      "snap": "properties-name-pasted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+a",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+c",
+      "wait": 1,
+      "snap": "properties-name-copied"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        667,
+        480
+      ],
+      "key": "Control_L+a",
+      "paste": "\u0e17\u0e14\u0e2a\u0e2d\u0e1a clipboard \u0e08\u0e23\u0e34\u0e07\n\u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e17\u0e35\u0e48 2: caf\u00e9 \u0394",
+      "wait": 2,
+      "snap": "properties-unicode-draft"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        961,
+        633
+      ],
+      "wait": 4,
+      "snap": "properties-unicode-saved",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "81f16e0a-d773-b296-d467-cf5b1aba2cfa",
+        "name_label": "zz-parity-clipboard-5d7d3d15-4bc8-4fd8-bd28-f5b43329ccdc-\u0e17\u0e14\u0e2a\u0e2d\u0e1a-\u0394",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

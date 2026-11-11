@@ -1,0 +1,11 @@
+{
+  "eframe_features": [
+    "clipboard",
+    "default_fonts",
+    "system_fonts",
+    "glow",
+    "wayland",
+    "x11"
+  ],
+  "default_features": false
+}

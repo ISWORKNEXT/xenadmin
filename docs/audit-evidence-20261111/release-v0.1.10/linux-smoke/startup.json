@@ -1,0 +1,15 @@
+{
+  "started_at_utc": "2026-11-11T13:26:33.350760+00:00",
+  "binary": "/tmp/xen-release-v0.1.10-20261111/xen-desktop-v0.1.10-linux-x86_64/xen-desktop",
+  "binary_sha256": "3101d6fcbc64fe1391d9761ccc476d47906fe3f00f245e23922976bf8b7e06c4",
+  "args": [
+    "/tmp/xen-release-v0.1.10-20261111/xen-desktop-v0.1.10-linux-x86_64/xen-desktop",
+    "--connect-stdin",
+    "--vm",
+    "81f16e0a-d773-b296-d467-cf5b1aba2cfa"
+  ],
+  "pid": 3648580,
+  "host": "192.168.8.170",
+  "display": ":98",
+  "owner_prefix": "zz-parity-clipboard-5d7d3d15-4bc8-4fd8-bd28-f5b43329ccdc"
+}

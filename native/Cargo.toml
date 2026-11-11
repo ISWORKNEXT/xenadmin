@@ -11,7 +11,9 @@ vnc-rs = "0.6"
 russh = { version = "0.54.1", default-features = false, features = ["ring", "rsa"] }
 ironrdp = { version = "0.17", features = ["client", "connector", "graphics", "input", "pdu", "session", "rustls"] }
 eframe = { version = "0.37", default-features = false, features = [
+    "clipboard",
     "default_fonts",
+    "system_fonts",
     "glow",
     "wayland",
     "x11",

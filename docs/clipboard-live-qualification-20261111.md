@@ -1,0 +1,25 @@
+# Native clipboard and Thai text qualification
+
+The native build disabled eframe default features and omitted `clipboard` and `system_fonts`. Actual OS Copy/Paste failed in its text fields; Thai text also appeared as missing-glyph boxes. Both integrations are now enabled through eframe. Product widget code is unchanged.
+
+## Reproduction and isolated changes
+
+[The credential-free probe](../tools/audit_clipboard_live.py) opens the actual Add connection dialog on private X11 display `:98`. It validates an independent clipboard provider/consumer, pastes `clipboard-ทดสอบ-café-Δ` into the real Host field, replaces the OS clipboard with a sentinel, then copies the field back and reads the OS selection independently. It never submits a connection or uses credentials.
+
+The original binary failed twice: [first verdict](audit-evidence-20261111/clipboard/before-1/verdict.json), [second verdict](audit-evidence-20261111/clipboard/before-2/verdict.json). The independent provider worked, while the copied value remained the sentinel. Its SHA256 was `0dbe6bc589ed1e9504e6a22c8d68f028e620d2193b8367d2b3603273868e65b7`.
+
+Enabling only `clipboard` made the exact Unicode roundtrip pass, while [Thai still rendered as boxes](audit-evidence-20261111/clipboard/after-1/after-paste.png). Enabling `system_fonts` separately kept the roundtrip passing and [rendered Thai](audit-evidence-20261111/clipboard/after-system-fonts/after-paste.png) using this machine's installed Noto Sans Thai. The final binary SHA256 was `77856b780fa432b26c0efe604a622c0b8fbca2eaf160857eb8d5019c566ad3d3`.
+
+The final shared clipboard helper has a three-second READY deadline and reaps owned child processes even if app shutdown fails. The [final red rerun](audit-evidence-20261111/clipboard/bounded-before/verdict.json) still failed against the original binary; its [cleanup receipt](audit-evidence-20261111/clipboard/bounded-before/process-cleanup.json) proves the remaining provider was terminated. The [final green rerun](audit-evidence-20261111/clipboard/final-regression/verdict.json) and cleanup receipt passed against the corrected binary. Early inherited-Wayland and premature-focus probe setup failures preceded these real red runs and are not treated as product regressions.
+
+## Real Properties and Full copy actions
+
+The test cloned one unprovisioned Other install media template under unique prefix `zz-parity-clipboard-5d7d3d15-4bc8-4fd8-bd28-f5b43329ccdc`. It had no data VDI. Through actual native input, Properties pasted a Thai/Greek name, copied that name back through the OS clipboard, pasted a two-line Thai/café description and clicked Save. [Independent XenAPI readback](audit-evidence-20261111/clipboard/properties-independent-readback.json) confirms exact strings, unchanged tags and template classification. [The saved screen](audit-evidence-20261111/clipboard/properties-ui/properties-unicode-saved.png) renders Thai. [The separately read copied name](audit-evidence-20261111/clipboard/properties-name-copied.json) matches.
+
+Full copy then pasted a distinct `-copy-ไทย-Δ` name, selected Local storage and clicked Create full copy. [Independent readback](audit-evidence-20261111/clipboard/copy-independent-readback.json) confirms a new halted template UUID, the exact name and inherited multiline description. [The actual click sequence](audit-evidence-20261111/clipboard/copy-ui/actions.json) and screenshots are retained. This is a no-data template clipboard workflow; it does not extend the separate cross-SR data-copy qualification.
+
+[The cleanup helper](../tools/audit_clipboard_object.py) admits only the exact owned UUID, halted state, no snapshots/suspend image/current operation and no data VDI; it never calls VDI.destroy. After both UI writers stopped, [child cleanup](audit-evidence-20261111/clipboard/copy-cleanup.json) restored the parent's baseline and [parent cleanup](audit-evidence-20261111/clipboard/parent-cleanup.json) restored all five original UUID sets: 68 VMs, 81 VDIs, 5 SRs, 5 PBDs and 2 networks. Both UI drivers' process receipts show clipboard children stopped.
+
+## Verification limits
+
+Format, all-target Clippy, native build and Python compilation passed locally. The GitHub checks workflow now runs the real credential-free X11 regression with a two-minute step limit and uploads its evidence; its first CI execution is pending at this document revision. Local green results do not claim a completed CI run. Windows and native Wayland clipboard behavior, other machines' installed fonts and IME composition are not runtime-qualified. System font fallback requires an installed font covering the requested script.

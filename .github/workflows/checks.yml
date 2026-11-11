@@ -34,7 +34,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential pkg-config python3 openssl \
+            build-essential pkg-config python3 python3-xlib python3-pil xvfb openssl \
             libx11-dev libxkbcommon-dev libwayland-dev \
             libgl1-mesa-dev libegl1-mesa-dev libxrandr-dev \
             libxi-dev libxcursor-dev libxinerama-dev
@@ -50,3 +50,27 @@ jobs:
 
       - name: Build
         run: cargo build -p xen-native --locked
+
+      - name: Native clipboard regression (X11)
+        id: clipboard_check
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          Xvfb :98 -screen 0 1600x1000x24 -nolisten tcp -ac -noreset >/tmp/xen-clipboard-xvfb.log 2>&1 &
+          clipboard_xvfb_pid=$!
+          trap 'kill "$clipboard_xvfb_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..50}; do
+            if [ -S /tmp/.X11-unix/X98 ]; then break; fi
+            sleep 0.1
+          done
+          DISPLAY=:98 LIBGL_ALWAYS_SOFTWARE=1 python3 tools/audit_clipboard_live.py \
+            --binary target/debug/xen-native \
+            --output artifacts/native-clipboard --host-point 700 378
+
+      - name: Upload native clipboard evidence
+        if: always() && steps.clipboard_check.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-clipboard-linux
+          path: artifacts/native-clipboard
+          if-no-files-found: warn

@@ -8,6 +8,7 @@ The [baseline audit](audit-parity-20261111.md) remains the complete source compa
 
 | Capability | Current behavior | Evidence and remaining limits |
 | --- | --- | --- |
+| Native text Copy/Paste and Thai display | eframe OS clipboard and installed-system-font integrations are enabled. | [Clipboard qualification](clipboard-live-qualification-20261111.md): real red/green Host textbox roundtrip, actual Properties Unicode Save/copy, no-data Full copy name and exact live inventory restoration passed on X11. Windows/Wayland runtime and IME remain unqualified. |
 | New VM from template | Six-step creation wizard supports resources, SR, disk, guest network, ISO, and home-server selection. | [New VM qualification](new-vm-live-qualification-20261111.md). Actual wizard creation and both installation and installed-template paths passed. Multi-host placement and OS installation remain unqualified. |
 | Host details from the tree | Host UUID identifies the object. Host references are resolved separately for inventory scope. | Follow-up to the routing failure in the baseline live UI audit. |
 | Guest-network selection | New VIFs exclude the internal `xenapi` network and require a selection. | Follow-up to the default-network failure in the baseline live UI audit. |

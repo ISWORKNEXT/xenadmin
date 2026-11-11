@@ -1,0 +1,16 @@
+{
+  "passed": false,
+  "expected": "clipboard-ทดสอบ-café-Δ",
+  "actual": "COPY_HAS_NOT_OCCURRED",
+  "provider_consumer_verified": true,
+  "host_point": [
+    700,
+    378
+  ],
+  "binary": "/tmp/xen-clipboard-before-20261111/xen-native",
+  "binary_sha256": "0dbe6bc589ed1e9504e6a22c8d68f028e620d2193b8367d2b3603273868e65b7",
+  "pid": 3574650,
+  "display": ":98",
+  "credentials_used": false,
+  "host_connection_submitted": false
+}

@@ -1,0 +1,11 @@
+{
+  "app_pid": 3660706,
+  "app_returncode": -15,
+  "clipboard_children": [
+    {
+      "pid": 3661583,
+      "returncode": -15
+    }
+  ],
+  "all_children_stopped": true
+}

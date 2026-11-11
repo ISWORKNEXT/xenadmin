@@ -10,6 +10,7 @@ from PIL import Image
 from Xlib import X,XK,display
 from Xlib.ext import xtest
 from audit_native_live import windows
+from audit_x11_clipboard import start_clipboard,stop_owned_process
 repo=Path(__file__).resolve().parents[1]
 out=Path(os.environ['XEN_AUDIT_OUTPUT']).resolve();out.mkdir(parents=True,exist_ok=True)
 audit_prefix=os.environ.get('XEN_AUDIT_OWNER_PREFIX','zz-parity-advanced-')
@@ -74,6 +75,7 @@ with tempfile.TemporaryDirectory(prefix='xen-live-clicks-') as t:
  def snap(name):
   w=window();g=w.get_geometry();raw=w.get_image(0,0,g.width,g.height,2,0xffffffff)
   Image.frombytes('RGB',(g.width,g.height),raw.data,'raw','BGRX').save(out/(name+'.png'))
+ clips=[]
  history=[]
  print('READY',flush=True)
  try:
@@ -103,6 +105,9 @@ with tempfile.TemporaryDirectory(prefix='xen-live-clicks-') as t:
      for n in names:key(n)
      for n in names[::-1]:key(n,False)
     if 'text' in c:text(c['text'])
+    if 'paste' in c:
+     clips.append(start_clipboard(c['paste'],env))
+     key('Control_L');key('v');key('v',False);key('Control_L',False);time.sleep(.5)
     time.sleep(c.get('wait',2))
     if 'snap' in c:snap(c['snap'])
     result={'ok':True,'action':c}
@@ -115,4 +120,8 @@ with tempfile.TemporaryDirectory(prefix='xen-live-clicks-') as t:
     history.append(result);(out/'actions.json').write_text(json.dumps(history,indent=2)+'\n')
     print(json.dumps(result),flush=True)
  finally:
-  app.terminate();app.wait(timeout=8);log.close()
+  try:stop_owned_process(app,timeout=8)
+  finally:
+   for clip in clips:stop_owned_process(clip)
+   (out/'process-cleanup.json').write_text(json.dumps({'app_pid':app.pid,'app_returncode':app.returncode,'clipboard_children':[{'pid':clip.pid,'returncode':clip.returncode} for clip in clips],'all_children_stopped':all(clip.poll() is not None for clip in clips)},indent=2)+'\n')
+   log.close();dpy.close()

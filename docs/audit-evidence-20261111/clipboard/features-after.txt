@@ -1,0 +1,27 @@
+egui-winit v0.37.0
+└── eframe v0.37.0
+    ├── eframe feature "clipboard"
+    │   └── xen-native v0.1.0 (/home/tinnerkun/Desktop/xen/xenadmin/native)
+    │       └── xen-native feature "default" (command-line)
+    ├── eframe feature "default_fonts"
+    │   └── xen-native v0.1.0 (/home/tinnerkun/Desktop/xen/xenadmin/native) (*)
+    ├── eframe feature "glow"
+    │   └── xen-native v0.1.0 (/home/tinnerkun/Desktop/xen/xenadmin/native) (*)
+    ├── eframe feature "wayland"
+    │   └── xen-native v0.1.0 (/home/tinnerkun/Desktop/xen/xenadmin/native) (*)
+    └── eframe feature "x11"
+        └── xen-native v0.1.0 (/home/tinnerkun/Desktop/xen/xenadmin/native) (*)
+├── egui-winit feature "arboard"
+│   └── egui-winit feature "clipboard"
+│       └── eframe feature "clipboard" (*)
+├── egui-winit feature "bytemuck"
+│   ├── egui-winit feature "clipboard" (*)
+│   ├── egui-winit feature "wayland"
+│   │   └── eframe feature "wayland" (*)
+│   └── egui-winit feature "x11"
+│       └── eframe feature "x11" (*)
+├── egui-winit feature "clipboard" (*)
+├── egui-winit feature "smithay-clipboard"
+│   └── egui-winit feature "clipboard" (*)
+├── egui-winit feature "wayland" (*)
+└── egui-winit feature "x11" (*)
