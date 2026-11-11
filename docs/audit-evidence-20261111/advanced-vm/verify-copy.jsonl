@@ -1,0 +1,6 @@
+{"prefix":"zz-parity-advanced-01a1c9e7-ee48-7538-8e44-8b37d839cec3"}
+{"check":"copy-iso-destination-rejected","status":"VERIFIED"}
+{"check":"full-copy-vm","copy_disk_uuid":"6a3c3f31-d3ca-4754-93bf-8a108b2ecda2","copy_uuid":"eec41d6e-a74d-f6f1-9492-7c1bfb369996","exact_tags":true,"independent_disk":true,"raw_bytes":16777216,"sha256":"25d88649b3bd8005e20f5e672e699ac53d83fe650055f6075f5f43c1b54610ac","source_disk_uuid":"3dbcd9a5-b03e-44cc-8ab3-cfe0313ade8a","source_unchanged":true,"source_uuid":"f3a752d7-b8ec-f174-df4c-cfc6452b7b07","sr_uuid":"7a5a8cb4-7052-8de1-7473-4a8d9a36e272","status":"VERIFIED"}
+{"check":"full-copy-template","copy_disk_uuid":"868e38bd-ba64-4125-a601-243da332c008","copy_uuid":"f47d0975-d72b-b5c9-33b7-c6a60ceab1a5","exact_tags":true,"independent_disk":true,"raw_bytes":16777216,"sha256":"25d88649b3bd8005e20f5e672e699ac53d83fe650055f6075f5f43c1b54610ac","source_disk_uuid":"3dbcd9a5-b03e-44cc-8ab3-cfe0313ade8a","source_unchanged":true,"source_uuid":"f3a752d7-b8ec-f174-df4c-cfc6452b7b07","sr_uuid":"7a5a8cb4-7052-8de1-7473-4a8d9a36e272","status":"VERIFIED"}
+{"phase":"ready-for-ui","prefix":"zz-parity-advanced-01a1c9e7-ee48-7538-8e44-8b37d839cec3","sr_uuid":"7a5a8cb4-7052-8de1-7473-4a8d9a36e272","uuid":"f3a752d7-b8ec-f174-df4c-cfc6452b7b07"}
+{"cleanup":"completed","result":{"Ok":"pass"}}

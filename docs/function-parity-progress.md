@@ -33,6 +33,8 @@ The final [cleanup readback](audit-evidence-20261111/snapshot-actions/cleanup.js
 
 The user requested all remaining functions except permissions and certificates. Work and qualification are tracked in [the completion plan](parity-completion-plan.md) and [the decision trail](parity-decisions.tsv). New advanced VM operations are documented in [their live qualification](advanced-vm-live-qualification-20261111.md). VM resource/metadata ownership, long-description creation and common name, description and tag editing are tracked in [object-properties qualification](object-properties-live-qualification-20261111.md).
 
+Full independent VM/template copies to a selected same-connection SR, interruption recovery, manual Reconnect and automatic session-expiry reconnect are tracked in [full-copy qualification](full-copy-live-qualification-20261111.md). Running/cross-pool copying, cancellation, another SR and larger/multiple disks remain outside that qualified path.
+
 ## Remaining functional coverage
 
 The remaining implementation groups include VM migration and copy, OVF and OVA import and export, advanced snapshots and VM properties, storage discovery and creation, host and pool administration, network configuration, recovery services, monitoring, and organization features. The individual gaps and upstream source links remain in the baseline capability tables and command crosswalks.

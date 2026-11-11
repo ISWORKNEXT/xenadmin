@@ -2327,6 +2327,10 @@ impl App {
                         self.worker.send(Command::Refresh { connection_id: id });
                     }
                 }
+                UiAction::Reconnect(id) => {
+                    self.state.busy.insert(id.clone());
+                    self.worker.send(Command::Reconnect { connection_id: id });
+                }
                 UiAction::Disconnect(id) => {
                     self.state.busy.insert(id.clone());
                     self.worker.send(Command::Disconnect { connection_id: id });
@@ -2556,6 +2560,49 @@ impl App {
                 UiAction::SetVmPerfRange(range) => {
                     self.state.vm_perf_range = range;
                     self.apply(vec![UiAction::LoadVmPerformance]);
+                }
+                UiAction::OpenVmCopy {
+                    connection_id,
+                    vm_uuid,
+                } => {
+                    let Some((connection, vm)) = find_vm(&self.workspace, &connection_id, &vm_uuid)
+                    else {
+                        continue;
+                    };
+                    if !crate::state::action_allowed(&self.workspace, &connection_id, vm, "copy")
+                        || vm.kind == "snapshot"
+                        || vm.power_state != "Halted"
+                        || crate::state::is_read_only(connection)
+                    {
+                        continue;
+                    }
+                    self.state.vm_copy = Some(crate::state::VmCopyDialog {
+                        connection_id,
+                        vm_uuid,
+                        request: xen_core::provisioning::CopyVmRequest {
+                            name: format!("{} full copy", vm.name),
+                            description: vm.description.clone(),
+                            sr_uuid: String::new(),
+                        },
+                    });
+                }
+                UiAction::CloseVmCopy => self.state.vm_copy = None,
+                UiAction::SubmitVmCopy => {
+                    let Some(dialog) = self.state.vm_copy.take() else {
+                        continue;
+                    };
+                    if dialog.request.name.trim().is_empty() || dialog.request.sr_uuid.is_empty() {
+                        self.state.vm_copy = Some(dialog);
+                        continue;
+                    }
+                    self.worker.send(Command::Action {
+                        connection_id: dialog.connection_id,
+                        vm_uuid: dialog.vm_uuid,
+                        action: xen_core::operations::VmAction::Copy {
+                            request: dialog.request,
+                        },
+                    });
+                    self.open_object(ObjectKey::Tasks, None);
                 }
                 UiAction::OpenVmResources => {
                     let Some(key) = self

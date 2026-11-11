@@ -1,0 +1,13 @@
+{"prefix":"zz-parity-advanced-01a1c9f9-80a2-76bd-ad42-2a788008a197"}
+{"check":"copy-iso-destination-rejected","status":"VERIFIED"}
+{"check":"full-copy-vm","copy_disk_uuid":"ee89c666-a169-4a77-afac-0cbc7a624694","copy_uuid":"67ec6265-2da7-5ff5-1477-8e1697341c3c","exact_tags":true,"independent_disk":true,"raw_bytes":16777216,"sha256":"25d88649b3bd8005e20f5e672e699ac53d83fe650055f6075f5f43c1b54610ac","source_disk_uuid":"927f7d8d-bc20-46a6-94b2-4cab944d4b13","source_unchanged":true,"source_uuid":"5a56d72d-6395-1879-0397-7671928d9ed4","sr_uuid":"7a5a8cb4-7052-8de1-7473-4a8d9a36e272","status":"VERIFIED"}
+{"check":"full-copy-template","copy_disk_uuid":"1dd8c22e-ad3a-496a-b8dc-7aab36e7c086","copy_uuid":"00ef9e55-2969-955f-1d2e-d2351f84fdef","exact_tags":true,"independent_disk":true,"raw_bytes":16777216,"sha256":"25d88649b3bd8005e20f5e672e699ac53d83fe650055f6075f5f43c1b54610ac","source_disk_uuid":"927f7d8d-bc20-46a6-94b2-4cab944d4b13","source_unchanged":true,"source_uuid":"5a56d72d-6395-1879-0397-7671928d9ed4","sr_uuid":"7a5a8cb4-7052-8de1-7473-4a8d9a36e272","status":"VERIFIED"}
+{"check":"real-copy-connection-loss","relay_event":{"event":"relay-closed-after-real-copy-task","task":{"name":"Async.VM.copy","task_ref":"OpaqueRef:95ee5fcd-d313-83ba-7ce3-527095c2c62f"}},"retained_task_ref":"OpaqueRef:95ee5fcd-d313-83ba-7ce3-527095c2c62f","status":"VERIFIED"}
+{"check":"read-only-copy-recovery-retains-context","status":"VERIFIED"}
+{"check": "owned-foreign-disk-attachment", "copy_uuid": "71db9ebd-d9d3-39b9-f158-63d633e2cbe4", "disk_uuid": "4ea66430-27f5-4f46-8929-dee2dbd378f3", "disk_still_exists": true}
+{"check":"changed-copy-layout-preserves-foreign-disk-and-vm","copy_uuid":"71db9ebd-d9d3-39b9-f158-63d633e2cbe4","foreign_disk_uuid":"4ea66430-27f5-4f46-8929-dee2dbd378f3","status":"VERIFIED"}
+{"check": "owned-foreign-disk-detachment", "copy_uuid": "71db9ebd-d9d3-39b9-f158-63d633e2cbe4", "disk_uuid": "4ea66430-27f5-4f46-8929-dee2dbd378f3", "disk_still_exists": true}
+{"check":"copy-recovery-rejects-concurrent-description-edit","copy_uuid":"71db9ebd-d9d3-39b9-f158-63d633e2cbe4","status":"VERIFIED"}
+{"check":"reconcile-existing-copy-without-resubmission","disk_uuid":"b0b455af-f119-4b9e-8e55-4c3b61cdc0e2","matching_destination_count":1,"sha256":"25d88649b3bd8005e20f5e672e699ac53d83fe650055f6075f5f43c1b54610ac","status":"VERIFIED","uuid":"71db9ebd-d9d3-39b9-f158-63d633e2cbe4"}
+{"phase":"ready-for-ui","prefix":"zz-parity-advanced-01a1c9f9-80a2-76bd-ad42-2a788008a197","sr_uuid":"7a5a8cb4-7052-8de1-7473-4a8d9a36e272","uuid":"5a56d72d-6395-1879-0397-7671928d9ed4"}
+{"cleanup":"completed","result":{"Ok":"pass"}}

@@ -15,6 +15,9 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
+    if state.vm_copy.is_some() {
+        super::vm_copy::show(ctx, state, workspace, actions);
+    }
     if state.properties.is_some() {
         super::properties::show(ctx, state, workspace, actions);
     }

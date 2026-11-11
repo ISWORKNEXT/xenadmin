@@ -21,6 +21,7 @@ use crate::{
 
 enum VmPreparation {
     Clone,
+    Copy(crate::provisioning::CopyVmRequest),
     ConvertToTemplate,
     NewVm(crate::provisioning::CreateVmRequest),
     Snapshot { as_template: bool },
@@ -57,7 +58,7 @@ struct ActiveConnection {
     snapshot: RwLock<Inventory>,
     error: RwLock<Option<String>>,
     lifecycle: Arc<RwLock<()>>,
-    busy_vms: Mutex<BTreeSet<String>>,
+    busy_vms: Arc<Mutex<BTreeSet<String>>>,
     password: String,
     heartbeat_failed: AtomicBool,
 }
@@ -107,6 +108,7 @@ struct TrackedTask {
     record: Operation,
     remote_ref: String,
     restore: Option<(String, String)>,
+    copy_recovery: Option<Box<crate::provisioning::CopyRecovery>>,
     local_cancel: Option<Arc<AtomicBool>>,
 }
 
@@ -221,7 +223,7 @@ impl Workspace {
             snapshot: RwLock::new(snapshot),
             error: RwLock::new(None),
             lifecycle: Arc::new(RwLock::new(())),
-            busy_vms: Mutex::new(BTreeSet::new()),
+            busy_vms: Arc::new(Mutex::new(BTreeSet::new())),
             password,
             heartbeat_failed: AtomicBool::new(false),
         });
@@ -1717,7 +1719,7 @@ impl Workspace {
                             | ApiError::Http(_)
                             | ApiError::Protocol
                             | ApiError::HostIsSlave(_)
-                    ) =>
+                    ) || matches!(&error,ApiError::XenCode(code,_) if code=="SESSION_INVALID") =>
                 {
                     failures += 1;
                     active.heartbeat_failed.store(true, Ordering::Relaxed);
@@ -1750,6 +1752,17 @@ impl Workspace {
         }
     }
 
+    /// Re-establish a saved session while retaining interrupted operation reservations.
+    pub async fn reconnect_connection(self: &Arc<Self>, id: &str) -> Result<(), String> {
+        if self.tasks.lock().await.values().any(|task| {
+            task.record.connection_id == id && task.record.status == TaskStatus::Running
+        }) {
+            return Err("Wait for running operations to complete or become interrupted before reconnecting.".into());
+        }
+        let active = self.active(id).await?;
+        self.reconnect(id, &active).await
+    }
+
     async fn reconnect(
         self: &Arc<Self>,
         id: &str,
@@ -1776,7 +1789,7 @@ impl Workspace {
             snapshot: RwLock::new(snapshot),
             error: RwLock::new(None),
             lifecycle: Arc::new(RwLock::new(())),
-            busy_vms: Mutex::new(BTreeSet::new()),
+            busy_vms: old.busy_vms.clone(),
             password: old.password.clone(),
             heartbeat_failed: AtomicBool::new(false),
         });
@@ -1859,6 +1872,16 @@ impl Workspace {
         {
             return self
                 .start_destroy(connection_id, vm_uuid, delete_disks, delete_snapshots)
+                .await;
+        }
+        if let VmAction::Copy { request } = action {
+            return self
+                .start_vm_preparation(
+                    connection_id,
+                    vm_uuid,
+                    request.name.clone(),
+                    VmPreparation::Copy(request),
+                )
                 .await;
         }
         if matches!(action, VmAction::ConvertToTemplate) {
@@ -1945,6 +1968,7 @@ impl Workspace {
                 record: record.clone(),
                 remote_ref: remote_ref.clone(),
                 restore,
+                copy_recovery: None,
                 local_cancel: None,
             },
         );
@@ -2043,6 +2067,7 @@ impl Workspace {
                 record: record.clone(),
                 remote_ref: remote_ref.clone(),
                 restore: None,
+                copy_recovery: None,
                 local_cancel: Some(local_cancel.clone()),
             },
         );
@@ -2144,6 +2169,7 @@ impl Workspace {
             object_name,
             action: match &mode {
                 VmPreparation::Clone => "Clone",
+                VmPreparation::Copy(_) => "Full copy",
                 VmPreparation::ConvertToTemplate => "Convert to template",
                 VmPreparation::NewVm(_) => "Create VM",
                 VmPreparation::Snapshot { as_template: true } => "Create template from snapshot",
@@ -2166,6 +2192,7 @@ impl Workspace {
                 record: record.clone(),
                 remote_ref: String::new(),
                 restore: None,
+                copy_recovery: None,
                 local_cancel: None,
             },
         );
@@ -2185,6 +2212,9 @@ impl Workspace {
                         .await
                 }
                 VmPreparation::Clone => active_for_task.connection.clone_vm(&vm_uuid, &name).await,
+                VmPreparation::Copy(request) => {
+                    active_for_task.connection.copy_vm(&vm_uuid, &request).await
+                }
                 VmPreparation::Snapshot { as_template } => {
                     active_for_task
                         .connection
@@ -2192,6 +2222,17 @@ impl Workspace {
                         .await
                 }
             };
+            if let Err(ApiError::CopyInterrupted(recovery)) = result {
+                if let Some(task) = workspace.tasks.lock().await.get_mut(&task_id) {
+                    task.record.status = TaskStatus::Unreachable;
+                    task.record.message = recovery.message.clone();
+                    task.remote_ref = recovery.task_ref.clone().unwrap_or_default();
+                    task.record.remote_ref = task.remote_ref.clone();
+                    task.copy_recovery = Some(recovery);
+                }
+                drop(lease);
+                return;
+            }
             let result = match result {
                 Ok(new_uuid) => match refresh_inventory_cache(&active_for_task).await {
                     Ok(()) => Ok(if converting {
@@ -2199,8 +2240,8 @@ impl Workspace {
                     } else {
                         format!("Created {name} ({new_uuid}).")
                     }),
-                    Err(error) => Err(format!(
-                        "The object was created, but the inventory refresh failed: {error}"
+                    Err(error) => Ok(format!(
+                        "Completed {name} ({new_uuid}), but the inventory refresh failed: {error}. Refresh the inventory before submitting another operation."
                     )),
                 },
                 Err(error) => Err(error.to_string()),
@@ -2280,6 +2321,7 @@ impl Workspace {
                 record: record.clone(),
                 remote_ref: String::new(),
                 restore: None,
+                copy_recovery: None,
                 local_cancel: None,
             },
         );
@@ -2407,7 +2449,7 @@ impl Workspace {
     }
 
     pub async fn check_task(self: &Arc<Self>, id: &str) -> Result<(), String> {
-        let (connection_id, vm_uuid, reference) = {
+        let (connection_id, vm_uuid, reference, copy_recovery) = {
             let tasks = self.tasks.lock().await;
             let task = tasks.get(id).ok_or("Task not found.")?;
             if task.record.status != TaskStatus::Unreachable {
@@ -2417,6 +2459,7 @@ impl Workspace {
                 task.record.connection_id.clone(),
                 task.record.vm_uuid.clone(),
                 task.remote_ref.clone(),
+                task.copy_recovery.clone(),
             )
         };
         let active = self.active(&connection_id).await?;
@@ -2433,7 +2476,44 @@ impl Workspace {
         let workspace = self.clone();
         let id = id.to_owned();
         tokio::spawn(async move {
-            workspace.monitor(&active, &id, &reference).await;
+            if let Some(recovery) = copy_recovery {
+                let result = active.connection.resume_copy_vm(&recovery).await;
+                let result = match result {
+                    Ok(uuid) => {
+                        let warning = refresh_inventory_cache(&active).await.err();
+                        Ok((uuid, warning))
+                    }
+                    Err(error) => Err(error),
+                };
+                if let Some(task) = workspace.tasks.lock().await.get_mut(&id) {
+                    match result {
+                        Ok((uuid, warning)) => {
+                            task.record.status = TaskStatus::Succeeded;
+                            task.record.progress = 1.0;
+                            task.record.message = match warning {
+                                Some(error) => format!(
+                                    "Reconciled full copy ({uuid}); inventory refresh failed: {error}. Refresh before submitting another copy."
+                                ),
+                                None => format!("Reconciled full copy ({uuid})."),
+                            };
+                            task.copy_recovery = None;
+                        }
+                        Err(ApiError::CopyInterrupted(recovery)) => {
+                            task.record.status = TaskStatus::Unreachable;
+                            task.record.message = recovery.message.clone();
+                            task.copy_recovery = Some(recovery);
+                        }
+                        Err(error) => {
+                            task.record.status = TaskStatus::Failed;
+                            task.record.message = error.to_string();
+                            task.copy_recovery = None;
+                        }
+                    }
+                }
+            } else {
+                workspace.monitor(&active, &id, &reference).await;
+            }
+
             if workspace
                 .tasks
                 .lock()
@@ -2524,5 +2604,55 @@ fn display_name(settings: &ConnectionSettings, pool_name: &str) -> String {
         pool_name.into()
     } else {
         settings.label.clone()
+    }
+}
+
+#[cfg(test)]
+mod live_session_tests {
+    use super::*;
+    use std::io::{self, BufRead};
+
+    /// Opt-in real-host check; stdin carries credentials, never fixtures.
+    #[tokio::test]
+    #[ignore = "Requires authorized .170 credentials as one JSON line on stdin"]
+    async fn expired_session_reconnects_to_real_dev_host() {
+        #[derive(Deserialize)]
+        struct Input {
+            settings: ConnectionSettings,
+            password: String,
+        }
+        let mut line = String::new();
+        io::stdin().lock().read_line(&mut line).unwrap();
+        let input: Input = serde_json::from_str(&line).unwrap();
+        assert_eq!(input.settings.host, "192.168.8.170");
+        let workspace = Workspace::with_profiles(vec![]);
+        let result: Result<(), String> = async {
+            let id = workspace.connect(input.settings, &input.password, None).await?;
+            let expired = workspace.active(&id).await?;
+            expired.connection.logout().await.map_err(|e|e.to_string())?;
+            if !matches!(expired.connection.heartbeat().await,Err(ApiError::XenCode(code,_)) if code=="SESSION_INVALID") {
+                return Err("The owned real session did not become invalid after logout.".into());
+            }
+            println!("{}",serde_json::json!({"check":"owned-session-expired","status":"VERIFIED"}));
+            let mut replaced = false;
+            for _ in 0..120 {
+                if !workspace.is_current(&id, &expired).await {
+                    replaced = true;
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+            if !replaced {return Err("Heartbeat did not replace the expired session within 60 seconds.".into());}
+            let active = workspace.active(&id).await?;
+            active.connection.heartbeat().await.map_err(|e|e.to_string())?;
+            let view = workspace.view().await;
+            if !view.connections.iter().any(|c|matches!(c,ConnectionView::Online{id:current,..} if current==&id)) {
+                return Err("The reconnected real host is not online.".into());
+            }
+            println!("{}",serde_json::json!({"check":"heartbeat-reconnects-expired-session","online":true,"active_connection_replaced":true,"status":"VERIFIED"}));
+            Ok(())
+        }.await;
+        workspace.close().await;
+        result.expect("Real session-expiry qualification failed");
     }
 }

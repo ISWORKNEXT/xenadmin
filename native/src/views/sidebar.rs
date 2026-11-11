@@ -343,11 +343,8 @@ fn pool_node(
                 actions.push(UiAction::Refresh(Some(id.clone())));
                 ui.close();
             }
-            if ui.button("Reconnect / edit").clicked() {
-                state.connect = Some(ConnectState::from_profile(
-                    id.clone(),
-                    connection_settings(connection).clone(),
-                ));
+            if ui.button("Reconnect").clicked() {
+                actions.push(UiAction::Reconnect(id.clone()));
                 ui.close();
             }
             if ui.button("Disconnect").clicked() {

@@ -1,6 +1,6 @@
-//! Configured template creation used by the native New VM wizard.
+//! Configured VM creation, template preparation and independent disk copies.
 use quick_xml::{Reader, Writer, events::Event};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::xapi::{ApiError, Connection};
@@ -17,6 +17,42 @@ pub struct CreateVmRequest {
     pub network_uuid: Option<String>,
     pub iso_uuid: Option<String>,
     pub affinity_host_uuid: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CopyVmRequest {
+    pub name: String,
+    pub description: String,
+    pub sr_uuid: String,
+}
+
+/// Retained only for reconciling an interrupted copy; never resubmits VM.copy.
+#[derive(Clone, Debug)]
+pub struct CopyRecovery {
+    pub(crate) source: crate::vm::VmDetails,
+    host: String,
+    pub(crate) request: CopyVmRequest,
+    pub(crate) task_ref: Option<String>,
+    pub(crate) copied_uuid: Option<String>,
+    pub(crate) message: String,
+}
+
+impl CopyRecovery {
+    pub fn task_reference(&self) -> Option<&str> {
+        self.task_ref.as_deref()
+    }
+
+    fn interrupted(&self, stage: &str, error: impl std::fmt::Display) -> ApiError {
+        let mut recovery = self.clone();
+        recovery.message = format!(
+            "Full copy outcome is unknown ({stage}): {error}. Do not submit another copy. Source: {}; destination name: {}; task: {}; copy UUID: {}. Check the existing task and inventory first.",
+            self.source.uuid,
+            self.request.name,
+            self.task_ref.as_deref().unwrap_or("response not received"),
+            self.copied_uuid.as_deref().unwrap_or("not yet read")
+        );
+        ApiError::CopyInterrupted(Box::new(recovery))
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -192,6 +228,221 @@ impl Connection {
         )
         .await?;
         Ok(())
+    }
+
+    /// Full independent copy on a selected SR, retaining VM/template identity.
+    pub async fn copy_vm(&self, uuid: &str, request: &CopyVmRequest) -> Result<String, ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen("This connection is read-only.".into()));
+        }
+        let name = request.name.trim();
+        if name.is_empty() || name.chars().count() > 255 {
+            return Err(ApiError::Xen(
+                "Enter a name between 1 and 255 characters.".into(),
+            ));
+        }
+        let reference: String = self
+            .request("VM.get_by_uuid", json!([self.session, uuid]))
+            .await?;
+        let record: Value = self
+            .request("VM.get_record", json!([self.session, reference]))
+            .await?;
+        if record["uuid"].as_str() != Some(uuid)
+            || record["is_control_domain"].as_bool() != Some(false)
+            || record["is_a_snapshot"].as_bool() != Some(false)
+            || record["power_state"].as_str() != Some("Halted")
+            || !record["allowed_operations"]
+                .as_array()
+                .is_some_and(|ops| ops.iter().any(|v| v.as_str() == Some("copy")))
+        {
+            return Err(ApiError::Xen(
+                "Select a halted VM or template that the host allows copying.".into(),
+            ));
+        }
+        let source = self.vm_details(uuid).await?;
+        crate::properties::validate_description_change(&source.description, &request.description)?;
+        let sr_ref: String = self
+            .request("SR.get_by_uuid", json!([self.session, request.sr_uuid]))
+            .await?;
+        let sr: Value = self
+            .request("SR.get_record", json!([self.session, sr_ref]))
+            .await?;
+        if sr["uuid"].as_str() != Some(request.sr_uuid.as_str())
+            || sr["content_type"].as_str() == Some("iso")
+            || matches!(sr["type"].as_str(), Some("iso" | "udev"))
+            || !sr["allowed_operations"]
+                .as_array()
+                .is_some_and(|ops| ops.iter().any(|v| v.as_str() == Some("vdi_create")))
+        {
+            return Err(ApiError::Xen(
+                "Select a writable storage repository for the copy.".into(),
+            ));
+        }
+        let pbds = self.records("PBD").await?;
+        if !pbds.values().any(|p| {
+            p["SR"].as_str() == Some(sr_ref.as_str())
+                && p["currently_attached"].as_bool() == Some(true)
+        }) {
+            return Err(ApiError::Xen(
+                "The selected storage repository is detached.".into(),
+            ));
+        }
+        let number = |v: &Value| {
+            v.as_u64()
+                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                .unwrap_or(0)
+        };
+        let required = source
+            .disks
+            .iter()
+            .filter(|d| !d.is_cd)
+            .try_fold(0u64, |total, d| total.checked_add(d.virtual_size))
+            .ok_or_else(|| ApiError::Xen("The disk sizes are too large.".into()))?;
+        if number(&sr["physical_size"]).saturating_sub(number(&sr["physical_utilisation"]))
+            < required
+        {
+            return Err(ApiError::Xen(
+                "The selected storage repository does not have enough free space for the copy."
+                    .into(),
+            ));
+        }
+        let mut recovery = CopyRecovery {
+            host: self.settings.host.clone(),
+            source,
+            request: request.clone(),
+            task_ref: None,
+            copied_uuid: None,
+            message: String::new(),
+        };
+        let task: String = match self
+            .request(
+                "Async.VM.copy",
+                json!([self.session, reference, name, sr_ref]),
+            )
+            .await
+        {
+            Ok(task) => task,
+            Err(error @ (ApiError::XenCode(..) | ApiError::Xen(..) | ApiError::Unsupported)) => {
+                return Err(error);
+            }
+            Err(error) => return Err(recovery.interrupted("submission response lost", error)),
+        };
+        recovery.task_ref = Some(task);
+        self.resume_copy_vm(&recovery).await
+    }
+
+    pub async fn resume_copy_vm(&self, recovery: &CopyRecovery) -> Result<String, ApiError> {
+        if self.settings.host != recovery.host {
+            return Err(recovery.interrupted(
+                "checking recovery connection",
+                "Reconnect to the original copy host to reconcile this operation",
+            ));
+        }
+        if self.settings.read_only {
+            return Err(recovery.interrupted("checking recovery connection", "This connection is read-only; use the original writable connection to check the existing copy"));
+        }
+        let mut recovery = recovery.clone();
+        if recovery.copied_uuid.is_none() {
+            let Some(task_ref) = recovery.task_ref.as_deref() else {
+                return Err(recovery.interrupted("submission response lost", "No remote task reference was received; manually inspect the host task list and destination name before resolving this operation"));
+            };
+            let result = self.wait_copy_result(&recovery, task_ref).await?;
+            let copied_ref = crate::operations::decode_ref(&result).ok_or_else(|| {
+                recovery.interrupted(
+                    "reading copy result",
+                    "The host returned an invalid object reference",
+                )
+            })?;
+            let uuid: String = self
+                .request("VM.get_uuid", json!([self.session, copied_ref]))
+                .await
+                .map_err(|error| recovery.interrupted("reading copy UUID", error))?;
+            if uuid == recovery.source.uuid {
+                return Err(
+                    recovery.interrupted("reading copy UUID", "The host returned the source UUID")
+                );
+            }
+            recovery.copied_uuid = Some(uuid);
+        }
+        let new_uuid = recovery.copied_uuid.clone().ok_or(ApiError::Protocol)?;
+        let source = &recovery.source;
+        let request = &recovery.request;
+        let configured=async {
+            let copied=self.vm_details(&new_uuid).await?;
+            if copied.is_snapshot || copied.is_template!=source.is_template || copied.power_state!="Halted" {
+                return Err(ApiError::Xen("The full copy has an unexpected type or power state.".into()));
+            }
+            if copied.disks.iter().filter(|d| !d.is_cd).count()
+                != source.disks.iter().filter(|d| !d.is_cd).count()
+            {
+                return Err(ApiError::Xen("The full copy is missing source disks.".into()));
+            }
+            for disk in copied.disks.iter().filter(|d|!d.is_cd) {
+                if disk.sr_uuid!=request.sr_uuid
+                    || source.disks.iter().any(|d|!d.is_cd && d.vdi_uuid==disk.vdi_uuid)
+                    || !source.disks.iter().any(|d| !d.is_cd && d.device == disk.device && d.virtual_size == disk.virtual_size)
+                {
+                    return Err(ApiError::Xen("The copied disks are not independent disks on the selected storage repository.".into()));
+                }
+
+            }
+            let current=self.object_properties(&crate::properties::ObjectTarget{kind:crate::properties::ObjectKind::Vm,uuid:new_uuid.clone()}).await?;
+            let mut original=current.clone();original.description=source.description.clone();
+            let mut edited=current;edited.description=request.description.clone();
+            self.update_object_properties(&crate::properties::ObjectPropertiesEdit{original,edited}).await?;
+            Ok::<(),ApiError>(())
+        }.await;
+        match configured {
+            Ok(()) => {
+                if let Some(reference) = &recovery.task_ref {
+                    self.destroy_task(reference).await;
+                }
+                Ok(new_uuid)
+            }
+            Err(error) => {
+                Err(recovery.interrupted("configuring or validating the completed copy", error))
+            }
+        }
+    }
+
+    async fn wait_copy_result(
+        &self,
+        recovery: &CopyRecovery,
+        reference: &str,
+    ) -> Result<Value, ApiError> {
+        for _ in 0..7200 {
+            let task = self
+                .task_record(reference)
+                .await
+                .map_err(|error| recovery.interrupted("polling existing task", error))?;
+            match task.status {
+                crate::operations::TaskStatus::Succeeded => {
+                    let record: Value = self
+                        .request("task.get_record", json!([self.session, reference]))
+                        .await
+                        .map_err(|error| {
+                            recovery.interrupted("reading existing task result", error)
+                        })?;
+                    return Ok(record["result"].clone());
+                }
+                crate::operations::TaskStatus::Failed
+                | crate::operations::TaskStatus::Cancelled => {
+                    self.destroy_task(reference).await;
+                    return Err(ApiError::Xen(format!(
+                        "The full copy ended without success: {}",
+                        task.message
+                    )));
+                }
+                crate::operations::TaskStatus::Running
+                | crate::operations::TaskStatus::Unreachable => {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await
+                }
+            }
+        }
+        Err(recovery.interrupted(
+            "waiting for existing task",
+            "The host task is still pending",
+        ))
     }
 
     pub async fn create_from_snapshot(

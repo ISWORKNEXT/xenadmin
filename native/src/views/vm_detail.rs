@@ -302,6 +302,20 @@ fn action_bar(
             });
         }
     });
+    if !is_snapshot
+        && ui
+            .add_enabled(
+                vm.power_state == "Halted" && action_allowed(workspace, connection_id, vm, "copy"),
+                egui::Button::new("Full copy…"),
+            )
+            .on_hover_text("Copy all disks to a selected storage repository, preserving the source VM or template")
+            .clicked()
+    {
+        actions.push(UiAction::OpenVmCopy {
+            connection_id: connection_id.to_owned(),
+            vm_uuid: vm_uuid.to_owned(),
+        });
+    }
     if is_template {
         ui.horizontal(|ui| {
             let can_clone = action_allowed(workspace, connection_id, vm, "clone");

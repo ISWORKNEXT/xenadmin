@@ -1,0 +1,21 @@
+{
+  "vm_uuids": {
+    "baseline_count": 68,
+    "current_count": 68,
+    "added": [],
+    "removed": []
+  },
+  "vdi_refs": {
+    "baseline_count": 81,
+    "current_count": 81,
+    "added": [],
+    "removed": []
+  },
+  "network_refs": {
+    "baseline_count": 2,
+    "current_count": 2,
+    "added": [],
+    "removed": []
+  },
+  "sets_match": true
+}

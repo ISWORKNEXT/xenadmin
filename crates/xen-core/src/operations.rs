@@ -59,6 +59,9 @@ pub enum VmAction {
         name: String,
     },
     ConvertToTemplate,
+    Copy {
+        request: crate::provisioning::CopyVmRequest,
+    },
     Revert,
     Destroy {
         delete_disks: bool,
@@ -85,6 +88,7 @@ impl VmAction {
             Self::Checkpoint { .. } => "checkpoint",
             Self::SnapshotWithQuiesce { .. } => "snapshot_with_quiesce",
             Self::ConvertToTemplate => "make_into_template",
+            Self::Copy { .. } => "copy",
             Self::Revert => "revert",
             Self::Destroy { .. } => "destroy",
         }
@@ -115,6 +119,7 @@ impl VmAction {
             Self::Checkpoint { .. } => "Take checkpoint",
             Self::SnapshotWithQuiesce { .. } => "Take quiesced snapshot",
             Self::ConvertToTemplate => "Convert to template",
+            Self::Copy { .. } => "Full copy",
             Self::Revert => "Revert snapshot",
             Self::Destroy { .. } => "Delete",
         }
@@ -150,7 +155,9 @@ impl Connection {
     pub async fn begin_vm_action(&self, uuid: &str, action: &VmAction) -> Result<String, ApiError> {
         if matches!(
             action,
-            VmAction::CreateFromSnapshot { .. } | VmAction::ConvertToTemplate
+            VmAction::CreateFromSnapshot { .. }
+                | VmAction::ConvertToTemplate
+                | VmAction::Copy { .. }
         ) {
             return Err(ApiError::Xen(
                 "This operation requires its configured workspace action.".into(),
@@ -2717,7 +2724,7 @@ fn owner_vdis(vbds: &HashMap<String, Value>, record: &Value, reference: &str) ->
 }
 
 /// XenAPI wraps references returned by task results in an XML `<value>` element.
-fn decode_ref(value: &Value) -> Option<String> {
+pub(crate) fn decode_ref(value: &Value) -> Option<String> {
     let mut text = value.as_str()?.trim();
     for (open, close) in [("<value>", "</value>"), ("<string>", "</string>")] {
         if let Some(inner) = text

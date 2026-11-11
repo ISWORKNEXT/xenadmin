@@ -23,6 +23,8 @@ pub enum ApiError {
     Unsupported,
     #[error("{0}")]
     Xen(String),
+    #[error("{}", .0.message)]
+    CopyInterrupted(Box<crate::provisioning::CopyRecovery>),
     #[error("{1}")]
     XenCode(String, String),
     #[error("This host is a pool member. Reconnect to the coordinator at {0}.")]

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add paused starts (including a selected host), memory checkpoints, capability-gated quiesced snapshots and in-place VM-to-template conversion.
+- Add supported live vCPU increases, with guest-metrics detection and host/state guards.
+- Add shared name, description and exact-tag editing for VMs, templates, snapshots, disks, SRs, networks, hosts and pools, with changed-field validation and optimistic conflict checks.
+- Separate VM Resources from metadata editing so CPU, memory and boot changes preserve long descriptions, exact tags and concurrent metadata changes; align creation with shared description validation.
+- Add full independent copies of halted VMs/templates to a selected same-connection SR, with retained interrupted-task context and reconciliation without resubmitting the copy.
+- Preserve changed copy destinations and attached disks during recovery; retain operation reservations across reconnect.
+- Add a real connection-tree Reconnect action and automatic recovery from expired XenAPI sessions.
+- Record real-host and native qualification, including complete test-disk checksums, connection interruption, conflict preservation and inventory cleanup; broader parity gaps remain tracked.
+
 - Add VM header and General-tab quick actions for VNC console, disks, network, snapshots and resources; opening Console auto-connects the active running VM.
 - Add vCPU, memory and disk-size sliders to the edit/add-disk/resize dialogs, and make the VM edit form scrollable so its footer stays reachable.
 - Rework the native UI into an XCP-ng Center-style Infrastructure tree with object tabs, a contextual toolbar and a status bar.

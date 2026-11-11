@@ -40,6 +40,9 @@ pub enum Command {
         password: String,
         profile_id: Option<String>,
     },
+    Reconnect {
+        connection_id: String,
+    },
     Refresh {
         connection_id: String,
     },
@@ -890,6 +893,16 @@ fn dispatch(
                     });
                 }
             },
+            Command::Reconnect { connection_id } => {
+                let result = workspace.reconnect_connection(&connection_id).await;
+                if result.is_ok() {
+                    save_profiles(&workspace, &path).await;
+                }
+                let _ = events.send(Event::RefreshFinished {
+                    connection_id,
+                    result,
+                });
+            }
             Command::Refresh { connection_id } => {
                 let result = workspace.refresh(&connection_id).await;
                 let _ = events.send(Event::RefreshFinished {

@@ -1242,6 +1242,12 @@ pub struct IsoDialog {
     pub error: Option<String>,
 }
 
+pub struct VmCopyDialog {
+    pub connection_id: String,
+    pub vm_uuid: String,
+    pub request: xen_core::provisioning::CopyVmRequest,
+}
+
 pub struct VmResourceEditState {
     pub connection_id: String,
     pub vm_uuid: String,
@@ -1348,6 +1354,7 @@ pub struct UiState {
     pub console_seq: u64,
     pub console_focus: bool,
     pub vm_resource_edit: Option<VmResourceEditState>,
+    pub vm_copy: Option<VmCopyDialog>,
     pub iso_dialog: Option<IsoDialog>,
     pub vif_dialog: Option<VifDialog>,
     pub vif_confirm: Option<VifConfirm>,
@@ -1472,6 +1479,7 @@ impl Default for UiState {
             console_seq: 0,
             console_focus: false,
             vm_resource_edit: None,
+            vm_copy: None,
             iso_dialog: None,
             vif_dialog: None,
             vif_confirm: None,
@@ -1607,6 +1615,7 @@ pub enum UiAction {
         profile_id: Option<String>,
     },
     Refresh(Option<String>),
+    Reconnect(String),
     Disconnect(String),
     Remove(String),
     OpenVm(String, String),
@@ -1634,6 +1643,12 @@ pub enum UiAction {
     ReloadVmDetails,
     LoadVmPerformance,
     SetVmPerfRange(u64),
+    OpenVmCopy {
+        connection_id: String,
+        vm_uuid: String,
+    },
+    CloseVmCopy,
+    SubmitVmCopy,
     OpenVmResources,
     CloseVmResources,
     SaveVmResources,
