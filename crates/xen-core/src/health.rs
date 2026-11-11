@@ -1652,9 +1652,7 @@ fn pif_map(raw: &RawInventory) -> DiagnosticCheck {
 }
 
 fn xapi_timestamp(value: &str) -> u64 {
-    chrono::NaiveDateTime::parse_from_str(value, "%Y%m%dT%H:%M:%SZ")
-        .map(|date| date.and_utc().timestamp().max(0) as u64)
-        .unwrap_or(0)
+    crate::performance::parse_server_epoch(&Value::String(value.into())).unwrap_or(0)
 }
 
 fn human_bytes(bytes: u64) -> String {

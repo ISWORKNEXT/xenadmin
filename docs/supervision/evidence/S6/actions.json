@@ -1,0 +1,164 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "/tmp/s6-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        151,
+        567,
+        3
+      ],
+      "snap": "01-vm-context-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        430,
+        110
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "F5",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        825,
+        163
+      ],
+      "snap": "/tmp/s6-snapshots"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "/tmp/s6-snapshots"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        151,
+        567,
+        3
+      ],
+      "snap": "01-vm-context-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        430,
+        110
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        420,
+        208
+      ],
+      "snap": "/tmp/s6-snapshot-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        600,
+        522
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+a"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "text": "zz-parity-S6-snapshot"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        575
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        858
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        50,
+        141
+      ],
+      "snap": "/tmp/s6-final-events",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "03-events-completed"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        50,
+        103
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        372,
+        225
+      ],
+      "snap": "02-alerts-mixed",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "snapshot_happy_path": {
+    "vm": "00ab4b45-017b-a920-8a06-5ccadaa3e351",
+    "snapshot": "c0c4e06a-7279-fd52-98ef-34bf674298b1",
+    "snapshot_of_matches": true,
+    "diskless": true,
+    "power_state": "Halted"
+  },
+  "alert_priorities": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "clock": {
+    "local_now": "2026-11-12T03:20:09.880025+07:00",
+    "xenapi_host_servertime": "20261112T03:20:09Z",
+    "note": "Host UTC value matches local wall clock, approximately seven hours ahead of actual UTC. Client preserves UTC semantics."
+  },
+  "tasks": [],
+  "cleanup": {
+    "owned_vms_absent": true,
+    "owned_alerts_absent": true,
+    "xenapi_available": true
+  }
+}

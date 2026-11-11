@@ -401,7 +401,20 @@ impl Connection {
 fn display(value: &Value) -> String {
     match value {
         Value::String(v) if v == "OpaqueRef:NULL" || v.is_empty() => "—".into(),
-        Value::String(v) => v.clone(),
+        Value::String(v) => {
+            if v.contains('T')
+                && let Some(epoch) = parse_server_epoch(value)
+            {
+                return chrono::DateTime::from_timestamp(epoch as i64, 0)
+                    .map(|date| {
+                        date.with_timezone(&chrono::Local)
+                            .format("%Y-%m-%d %H:%M:%S")
+                            .to_string()
+                    })
+                    .unwrap_or_else(|| v.clone());
+            }
+            v.clone()
+        }
         Value::Bool(v) => if *v { "Yes" } else { "No" }.into(),
         Value::Number(v) => v.to_string(),
         Value::Array(v) => {

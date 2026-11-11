@@ -64,3 +64,10 @@ pub fn truncate(value: &str, max: usize) -> String {
     out.push('…');
     out
 }
+
+/// XenAPI date strings denote UTC, including compact ISO-8601 values.
+pub fn xapi_time(value: &str) -> String {
+    xen_core::performance::parse_server_epoch(&serde_json::Value::String(value.into()))
+        .map(timestamp)
+        .unwrap_or_else(|| value.into())
+}

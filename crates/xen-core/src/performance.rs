@@ -35,7 +35,7 @@ pub struct MetricPoint {
     pub value: Option<f64>,
 }
 
-pub(crate) fn parse_server_epoch(value: &Value) -> Option<u64> {
+pub fn parse_server_epoch(value: &Value) -> Option<u64> {
     if let Some(number) = numeric(value).filter(|n| *n >= 0.0) {
         return Some(number as u64);
     }

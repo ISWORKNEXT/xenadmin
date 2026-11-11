@@ -714,9 +714,7 @@ impl RawInventory {
 }
 
 fn xapi_epoch(value: &str) -> u64 {
-    chrono::NaiveDateTime::parse_from_str(value, "%Y%m%dT%H:%M:%SZ")
-        .map(|date| date.and_utc().timestamp().max(0) as u64)
-        .unwrap_or(0)
+    crate::performance::parse_server_epoch(&Value::String(value.into())).unwrap_or(0)
 }
 
 fn vm_record(reference: String, r: &Value, host_names: &HashMap<String, String>) -> VirtualMachine {
@@ -996,7 +994,16 @@ mod tests {
 
     #[test]
     fn xapi_timestamps_are_parsed() {
-        assert!(xapi_epoch("20261110T18:36:56Z") > 0);
+        let compact = xapi_epoch("20261110T18:36:56Z");
+        assert_eq!(compact, xapi_epoch("2026-11-10T18:36:56Z"));
+        let bangkok = chrono::FixedOffset::east_opt(7 * 3600).unwrap();
+        let local = chrono::DateTime::from_timestamp(compact as i64, 0)
+            .unwrap()
+            .with_timezone(&bangkok);
+        assert_eq!(
+            local.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "2026-11-11 01:36:56"
+        );
         assert_eq!(xapi_epoch("19700101T00:00:00Z"), 0);
         assert_eq!(xapi_epoch(""), 0);
     }

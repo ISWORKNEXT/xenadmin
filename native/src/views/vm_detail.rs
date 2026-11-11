@@ -2149,9 +2149,9 @@ fn snapshots(
                 }
                 ui.label(
                     RichText::new(if snapshot.snapshot_time.is_empty() {
-                        "Unknown time"
+                        "—".into()
                     } else {
-                        &snapshot.snapshot_time
+                        format::xapi_time(&snapshot.snapshot_time)
                     })
                     .size(9.0)
                     .color(dim_fg()),

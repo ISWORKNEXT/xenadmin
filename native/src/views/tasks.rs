@@ -1,13 +1,11 @@
 //! Notifications pages, backed by the workspace history and XenAPI inventory.
 use std::collections::HashSet;
 
-use chrono::TimeZone;
 use egui::{RichText, Ui};
 use xen_core::{operations::TaskStatus, workspace::WorkspaceView};
 
 use crate::state::{
-    ObjectKey, UiAction, UiState, connection_id, connection_inventory, connection_name,
-    is_read_only,
+    ObjectKey, UiAction, UiState, connection_id, connection_inventory, is_read_only,
 };
 
 #[derive(Default)]
@@ -116,6 +114,22 @@ fn target(workspace: &WorkspaceView, id: &str, uuid: &str) -> Option<ObjectKey> 
     }
 }
 
+fn server_name(workspace: &WorkspaceView, id: &str) -> String {
+    crate::state::find_connection(workspace, id)
+        .and_then(connection_inventory)
+        .map(|inv| {
+            if inv.named_pool && !inv.pool_name.is_empty() {
+                inv.pool_name.clone()
+            } else {
+                inv.hosts
+                    .first()
+                    .map(|h| h.name.clone())
+                    .unwrap_or_default()
+            }
+        })
+        .unwrap_or_default()
+}
+
 fn entries(workspace: &WorkspaceView, alerts: bool) -> Vec<Entry> {
     let mut result = Vec::new();
     let owned: HashSet<_> = workspace
@@ -129,8 +143,8 @@ fn entries(workspace: &WorkspaceView, alerts: bool) -> Vec<Entry> {
             result.push(Entry {
                 id: format!("local:{}", t.id),
                 connection: t.connection_id.clone(),
-                server: t.connection_name.clone(),
-                location: t.connection_name.clone(),
+                server: server_name(workspace, &t.connection_id),
+                location: server_name(workspace, &t.connection_id),
                 host: crate::state::find_vm(workspace, &t.connection_id, &t.vm_uuid)
                     .map(|(_, vm)| vm.host_name.clone())
                     .unwrap_or_default(),
@@ -160,19 +174,14 @@ fn entries(workspace: &WorkspaceView, alerts: bool) -> Vec<Entry> {
             continue;
         };
         let id = connection_id(c);
-        let name = connection_name(c);
+        let name = server_name(workspace, id);
         if alerts {
             for a in &inv.alerts {
                 result.push(Entry {
                     id: format!("alert:{id}:{}", a.uuid),
                     connection: id.into(),
                     server: name.clone(),
-                    location: inv
-                        .hosts
-                        .iter()
-                        .find(|h| h.uuid == a.obj_uuid)
-                        .map(|h| h.name.clone())
-                        .unwrap_or_else(|| inv.pool_name.clone()),
+                    location: name.clone(),
                     host: inv
                         .hosts
                         .iter()
@@ -185,7 +194,7 @@ fn entries(workspace: &WorkspaceView, alerts: bool) -> Vec<Entry> {
                                 .map(|v| v.host_name.clone())
                         })
                         .unwrap_or_default(),
-                    title: a.name.clone(),
+                    title: super::alert_titles::title(&a.name).into(),
                     body: a.body.clone(),
                     status: severity(a.priority).into(),
                     time: a.time,
@@ -210,11 +219,7 @@ fn entries(workspace: &WorkspaceView, alerts: bool) -> Vec<Entry> {
                     id: format!("remote:{id}:{}", t.uuid),
                     connection: id.into(),
                     server: name.clone(),
-                    location: if t.host_name.is_empty() {
-                        name.clone()
-                    } else {
-                        t.host_name.clone()
-                    },
+                    location: name.clone(),
                     host: t.host_name.clone(),
                     title: t.name.clone(),
                     body: if t.error.is_empty() {
@@ -328,14 +333,7 @@ pub fn show(
                 };
                 ui.selectable_value(filter, String::new(), "All");
                 for label in if alerts {
-                    &[
-                        "Critical",
-                        "Major",
-                        "Warning",
-                        "Minor",
-                        "Information",
-                        "Unknown",
-                    ][..]
+                    &["Critical", "Major", "Warning", "Minor", "Information"][..]
                 } else {
                     &["In progress", "Completed", "Failed", "Cancelled"][..]
                 } {
@@ -347,7 +345,11 @@ pub fn show(
             super::shell::compact_menu(ui);
             ui.selectable_value(&mut n.server, String::new(), "All Servers");
             for c in &workspace.connections {
-                ui.selectable_value(&mut n.server, connection_id(c).into(), connection_name(c));
+                ui.selectable_value(
+                    &mut n.server,
+                    connection_id(c).into(),
+                    server_name(workspace, connection_id(c)),
+                );
                 if let Some(inv) = connection_inventory(c) {
                     for host in &inv.hosts {
                         ui.selectable_value(
@@ -437,111 +439,175 @@ pub fn show(
     if visible.len() > 1000 {
         ui.label("Showing first 1000 entries");
     }
-    let width = (ui.available_width() - 520.0).max(100.0);
-    egui::Grid::new("notifications-table")
-        .num_columns(6)
-        .striped(true)
-        .min_col_width(10.0)
-        .show(ui, |ui| {
-            for text in ["", "", "Message", "Server / Pool", "Date", "Actions"] {
-                ui.strong(text);
-            }
-            ui.end_row();
-            for e in visible.iter().take(1000) {
-                let mut expanded = n.expanded.contains(&e.id);
-                if ui.small_button(if expanded { "▾" } else { "▸" }).clicked() {
-                    expanded = !expanded;
-                    if expanded {
-                        n.expanded.insert(e.id.clone());
-                    } else {
-                        n.expanded.remove(&e.id);
-                    }
+    ui.scope(|ui| {
+        super::shell::compact_menu(ui);
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let message_width =
+            (ui.available_width() - 368.0 - ui.spacing().item_spacing.x * 5.0).max(1.0);
+        let body_height = |e: &Entry| {
+            ui.fonts_mut(|fonts| {
+                fonts.layout(
+                    e.body.clone(),
+                    egui::FontId::proportional(11.0),
+                    crate::theme::fg(),
+                    message_width,
+                )
+            })
+            .size()
+            .y
+        };
+        let heights: Vec<_> = visible
+            .iter()
+            .take(1000)
+            .map(|e| {
+                if n.expanded.contains(&e.id) {
+                    24.0 + body_height(e) + if e.running { 24.0 } else { 0.0 }
+                } else {
+                    24.0
                 }
-                let color = match e.status.as_str() {
-                    "Critical" | "Major" | "Failed" => crate::theme::red(),
-                    "Completed" => crate::theme::green(),
-                    "In progress" => crate::theme::accent(),
-                    _ => crate::theme::muted_fg(),
-                };
-                ui.label(RichText::new(if alerts { "⚠" } else { "●" }).color(color))
-                    .on_hover_text(&e.status);
-                ui.vertical(|ui| {
-                    ui.set_width(width);
-                    if ui
-                        .selectable_label(
-                            n.selected.contains(&e.id),
-                            RichText::new(&e.title).strong(),
-                        )
-                        .clicked()
-                    {
-                        let selected = n.selected.contains(&e.id);
-                        if !ui.input(|i| i.modifiers.ctrl || i.modifiers.command) {
-                            n.selected.clear();
-                        }
-                        if selected {
-                            n.selected.remove(&e.id);
-                        } else {
-                            n.selected.insert(e.id.clone());
-                        }
-                    }
-                    if expanded {
-                        ui.label(&e.body);
-                    }
-                    if e.running {
-                        ui.add(egui::ProgressBar::new(e.progress).show_percentage());
-                    }
-                });
-                ui.add_sized([150.0, 22.0], egui::Label::new(&e.location).truncate())
-                    .on_hover_text(&e.server);
-                ui.label(date(e.time));
-                ui.push_id(&e.id, |ui| {
-                    ui.menu_button("Actions ▾", |ui| {
-                        super::shell::compact_menu(ui);
-                        if alerts && ui.button("Help").clicked() {
-                            n.help = Some((e.title.clone(), e.body.clone()));
-                            ui.close();
-                        }
-                        if let Some(action) = &e.cancel
-                            && ui.button("Cancel").clicked()
-                        {
-                            actions.push(action.action());
-                            ui.close();
-                        }
-                        if e.local
-                            && e.running
-                            && let Some(action) = &e.dismiss
-                            && ui.button("Check again").clicked()
-                        {
-                            actions.push(action.action());
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(
-                                !e.running && (!alerts || e.dismiss.is_some()),
-                                egui::Button::new("Dismiss"),
-                            )
-                            .clicked()
-                        {
-                            dismiss(e, n, alerts, actions);
-                            ui.close();
-                        }
-                        if ui
-                            .add_enabled(e.target.is_some(), egui::Button::new("Go To"))
-                            .clicked()
-                        {
-                            if let Some(key) = &e.target {
-                                actions.push(UiAction::OpenObject {
-                                    key: key.clone(),
-                                    title: e.title.clone(),
-                                });
-                            }
-                            ui.close();
-                        }
+            })
+            .collect();
+        use egui_extras::{Column, TableBuilder};
+        TableBuilder::new(ui)
+            .id_salt("notifications-table")
+            .striped(true)
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+            .column(Column::exact(20.0))
+            .column(Column::exact(18.0))
+            .column(Column::remainder().clip(true))
+            .column(Column::exact(130.0).clip(true))
+            .column(Column::exact(125.0))
+            .column(Column::exact(75.0))
+            .header(24.0, |mut row| {
+                for text in ["", "", "Message", "Server / Pool", "Date", "Actions"] {
+                    row.col(|ui| {
+                        ui.strong(text);
                     });
-                });
-                ui.end_row();
-            }
-        });
+                }
+            })
+            .body(|mut body| {
+                for (e, height) in visible.iter().take(1000).zip(heights) {
+                    body.row(height, |mut row| {
+                        row.col(|ui| {
+                            let expanded = n.expanded.contains(&e.id);
+                            if ui.small_button(if expanded { "▾" } else { "▸" }).clicked() {
+                                if !expanded {
+                                    n.expanded.insert(e.id.clone());
+                                } else {
+                                    n.expanded.remove(&e.id);
+                                }
+                            }
+                        });
+                        row.col(|ui| {
+                            let color = match e.status.as_str() {
+                                "Critical" | "Major" | "Failed" => crate::theme::red(),
+                                "Completed" => crate::theme::green(),
+                                "In progress" | "Information" => crate::theme::accent(),
+                                "Warning" | "Minor" => crate::theme::amber(),
+                                _ => crate::theme::muted_fg(),
+                            };
+                            ui.label(
+                                RichText::new(if alerts {
+                                    match e.status.as_str() {
+                                        "Critical" | "Major" => "⛔",
+                                        "Information" => "ℹ",
+                                        _ => "⚠",
+                                    }
+                                } else {
+                                    "●"
+                                })
+                                .color(color),
+                            )
+                            .on_hover_text(&e.status);
+                        });
+                        row.col(|ui| {
+                            ui.vertical(|ui| {
+                                if ui
+                                    .add(
+                                        egui::Button::selectable(
+                                            n.selected.contains(&e.id),
+                                            RichText::new(&e.title).strong(),
+                                        )
+                                        .truncate(),
+                                    )
+                                    .clicked()
+                                {
+                                    let selected = n.selected.contains(&e.id);
+                                    if !ui.input(|i| i.modifiers.ctrl || i.modifiers.command) {
+                                        n.selected.clear();
+                                    }
+                                    if selected {
+                                        n.selected.remove(&e.id);
+                                    } else {
+                                        n.selected.insert(e.id.clone());
+                                    }
+                                }
+                                if n.expanded.contains(&e.id) {
+                                    ui.add(egui::Label::new(&e.body).wrap());
+                                }
+                                if e.running && n.expanded.contains(&e.id) {
+                                    ui.add(egui::ProgressBar::new(e.progress).show_percentage());
+                                }
+                            });
+                        });
+                        row.col(|ui| {
+                            ui.add(egui::Label::new(&e.location).truncate())
+                                .on_hover_text(&e.server);
+                        });
+                        row.col(|ui| {
+                            ui.label(date(e.time));
+                        });
+                        row.col(|ui| {
+                            ui.push_id(&e.id, |ui| {
+                                ui.menu_button("Actions ▾", |ui| {
+                                    super::shell::compact_menu(ui);
+                                    if alerts && ui.button("Help").clicked() {
+                                        n.help = Some((e.title.clone(), e.body.clone()));
+                                        ui.close();
+                                    }
+                                    if let Some(action) = &e.cancel
+                                        && ui.button("Cancel").clicked()
+                                    {
+                                        actions.push(action.action());
+                                        ui.close();
+                                    }
+                                    if e.local
+                                        && e.running
+                                        && let Some(action) = &e.dismiss
+                                        && ui.button("Check again").clicked()
+                                    {
+                                        actions.push(action.action());
+                                        ui.close();
+                                    }
+                                    if ui
+                                        .add_enabled(
+                                            !e.running && (!alerts || e.dismiss.is_some()),
+                                            egui::Button::new("Dismiss"),
+                                        )
+                                        .clicked()
+                                    {
+                                        dismiss(e, n, alerts, actions);
+                                        ui.close();
+                                    }
+                                    if ui
+                                        .add_enabled(e.target.is_some(), egui::Button::new("Go To"))
+                                        .clicked()
+                                    {
+                                        if let Some(key) = &e.target {
+                                            actions.push(UiAction::OpenObject {
+                                                key: key.clone(),
+                                                title: e.title.clone(),
+                                            });
+                                        }
+                                        ui.close();
+                                    }
+                                });
+                            });
+                        });
+                    });
+                }
+            });
+    });
     if visible.is_empty() {
         ui.label(if alerts {
             "No alerts to display."
@@ -600,11 +666,7 @@ pub fn show(
 }
 
 fn date(time: u64) -> String {
-    chrono::Local
-        .timestamp_opt(time as i64, 0)
-        .single()
-        .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-        .unwrap_or_else(|| "—".into())
+    crate::format::timestamp(time)
 }
 
 fn csv(entries: &[&Entry]) -> String {
