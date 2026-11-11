@@ -1,0 +1,203 @@
+===== MainMenuBar
+  File
+    Import...   <ImportCommand>
+    Import Search...   <ImportSearchCommand>
+    ---
+    Import Server List...
+    Export Server List...
+    ---
+    PluginItemsPlaceHolder
+    Exit
+  View
+    Custom Templates
+    {0} Templates
+    Local Storage
+    Hidden Objects
+    ---
+    PluginItemsPlaceHolder
+    Toolbar
+  Pool
+    New Pool...   <NewPoolCommand>
+    ---
+    Add Server
+    Remove Server
+    Reconnect As...   <PoolReconnectAsCommand>
+    Disconnect   <DisconnectPoolCommand>
+    ---
+    vApps...   <VMGroupCommandVM_appliance>
+    ---
+    High Availability   <HACommand>
+      Configure HA...   <HAConfigureCommand>
+      Disable HA   <HADisableCommand>
+    Disaster Recovery   <DRCommand>
+      Configure...   <DRConfigureCommand>
+      Disaster Recovery Wizard...   <DisasterRecoveryCommand>
+    VM Snapshot Schedule Policies...   <VMGroupCommandVMSS>
+    [exportResourceReportPoolToolStripMenuItem]   <ExportResourceReportCommand>
+    Workload Balancing   <WlbCommand>
+      View Workload Reports...   <ViewWorkloadReportsCommand>
+      Disconnect Workload Balancing Server   <DisconnectWlbServerCommand>
+    Conversion Manager...   <LaunchConversionManagerCommand>
+    ---
+    Change Server Password...   <ChangeHostPasswordCommand>
+    Rotate Pool Secret   <RotatePoolSecretCommand>
+    Enable Certificate Verification   <EnableTlsVerificationCommand>
+    ---
+    Make into standalone server   <DeletePoolCommand>
+    ---
+    PluginItemsPlaceHolder
+    Properties   <PoolPropertiesCommand>
+  Server
+    Add...   <AddHostCommand>
+    ---
+    Reboot   <RebootHostCommand>
+    Power On   <PowerOnHostCommand>
+    Shut Down   <ShutDownHostCommand>
+    Restart Toolstack   <RestartToolstackCommand>
+    ---
+    Connect/Disconnect
+      Connect   <ReconnectHostCommand>
+      Disconnect   <DisconnectHostCommand>
+      Reconnect As...   <HostReconnectAsCommand>
+      ---
+      Connect All   <ConnectAllHostsCommand>
+      Disconnect All   <DisconnectAllHostsCommand>
+    Add to Pool
+    Remove From Pool   <RemoveHostFromPoolCommand>
+    ---
+    Back Up...   <BackupHostCommand>
+    Restore From Backup...   <RestoreHostFromBackupCommand>
+    ---
+    Certificate   <CertificateCommand>
+      Install Certificate...   <InstallCertificateCommand>
+      Reset Certificate   <ResetCertificateCommand>
+    Enter Maintenance Mode   <HostMaintenanceModeCommand>
+    Control Domain Memory...   <ChangeControlDomainMemoryCommand>
+    Password   <HostPasswordCommand>
+      Change...   <ChangeHostPasswordCommand>
+      Forget Password   <ForgetSavedPasswordCommand>
+    ---
+    Destroy   <DestroyHostCommand>
+    Remove from {0}   <RemoveHostCommand>
+    ---
+    PluginItemsPlaceHolder
+    Properties   <HostPropertiesCommand>
+  VM
+    New VM...   <NewVMCommand>
+    Start/Shut down
+    Resume on Server
+    Migrate to Server
+    Start on Server
+    ---
+    Assign to Snapshot Schedule...
+    Assign to vApp
+    ---
+    Copy VM   <CopyVMCommand>
+    Move VM   <MoveVMCommand>
+    Take a Snapshot   <TakeSnapshotCommand>
+    Convert to Template   <ConvertVMToTemplateCommand>
+    Export...   <ExportCommand>
+    ---
+    Trusted Platform Module Manager...   <VtpmCommand>
+    Disable Changed Block Tracking   <DisableChangedBlockTrackingCommand>
+    [enablePVSReadcachingToolStripMenuItem]   <EnablePvsReadCachingCommand>
+    [disablePVSReadcachingToolStripMenuItem]   <DisablePvsReadCachingCommand>
+    ---
+    [installToolsToolStripMenuItem]
+    Send Ctrl+Alt+Del
+    ---
+    Delete VM   <DeleteVMCommand>
+    ---
+    PluginItemsPlaceHolder
+    Properties   <VMPropertiesCommand>
+  Storage
+    New Storage...   <NewSRCommand>
+    ---
+    Repair...   <RepairSRCommand>
+    Set as Default   <SetAsDefaultSRCommand>
+    ---
+    Virtual Disks   <VirtualDiskCommand>
+      New Virtual Disk...   <AddVirtualDiskCommand>
+      Attach Virtual Disk...   <AttachVirtualDiskCommand>
+    Reclaim freed space   <TrimSRCommand>
+    ---
+    Detach   <DetachSRCommand>
+    Reattach...   <ReattachSRCommand>
+    Forget   <ForgetSRCommand>
+    Destroy   <DestroySRCommand>
+    ---
+    PluginItemsPlaceHolder
+    Properties   <SRPropertiesCommand>
+  Templates
+    Create VM From Selection   <CreateVMFromTemplateCommand>
+      New VM wizard...   <NewVMFromTemplateCommand>
+      Quick Create   <InstantVMFromTemplateCommand>
+    ---
+    Export to File...   <ExportTemplateCommand>
+    Copy...   <CopyTemplateCommand>
+    ---
+    Delete Template   <DeleteTemplateCommand>
+    ---
+    PluginItemsPlaceHolder
+    Properties   <TemplatePropertiesCommand>
+  Tools
+    PluginItemsPlaceHolder
+    Options...
+  Window
+    PluginItemsPlaceHolder
+  Help
+    View {0} Log Files
+    ---
+    Check for {0} Updates
+    {0} on the Web
+    {0} Plugins online
+    ---
+    PluginItemsPlaceHolder
+    About
+===== ToolStrip
+  Back
+  Forward
+  ---
+  Add New Server   <AddHostCommand>
+  ---
+  New Pool   <NewPoolCommand>
+  New Storage   <NewSRCommand>
+  New VM   <NewVMCommand>
+  ---
+  Shut Down   <ShutDownCommand>
+  Power On   <PowerOnHostCommand>
+  Start   <StartVMCommand>
+  Reboot   <RebootCommand>
+  Resume   <ResumeVMCommand>
+  Suspend   <SuspendVMCommand>
+  Pause   <PauseVMCommand>
+  Unpause   <UnPauseVMCommand>
+  Force Shut Down   <ForceVMShutDownCommand>
+  Force Reboot   <ForceVMRebootCommand>
+  Stop   <StopDockerContainerCommand>
+  Start   <StartDockerContainerCommand>
+  Restart   <RestartDockerContainerCommand>
+  Resume   <ResumeDockerContainerCommand>
+  Pause   <PauseDockerContainerCommand>
+===== tabs
+['TabPageHome', 'TabPageGeneral', 'TabPageBallooning', 'TabPageConsole', 'TabPageCvmConsole', 'TabPageStorage', 'TabPagePhysicalStorage', 'TabPageSR', 'TabPageNetwork', 'TabPageNICs', 'TabPagePeformance', 'TabPageHA', 'TabPageSnapshots', 'TabPageWLB', 'TabPageAD', 'TabPageGPU', 'TabPageSearch', 'TabPageDockerProcess', 'TabPageDockerDetails', 'TabPageUSB']
+  TabPageHome = Home
+  TabPageGeneral = General
+  TabPageBallooning = Memory
+  TabPageConsole = Console
+  TabPageCvmConsole = Driver Domain Console
+  TabPageStorage = Storage
+  TabPagePhysicalStorage = Storage
+  TabPageSR = Storage
+  TabPageNetwork = Networking
+  TabPageNICs = NICs
+  TabPagePeformance = Performance
+  TabPageHA = HA
+  TabPageSnapshots = Snapshots
+  TabPageWLB = WLB
+  TabPageAD = Users
+  TabPageGPU = GPU
+  TabPageSearch = Search
+  TabPageDockerProcess = Processes
+  TabPageDockerDetails = Details
+  TabPageUSB = USB
