@@ -1,0 +1,11 @@
+{
+  "vm_uuid": "67962684-4666-5a9e-68ef-f8aeb51c7170",
+  "disk_uuid": "df5a1ce5-3733-4593-b91e-b87c372d119c",
+  "bytes": 33554432,
+  "sha256": "3d340b5a4dd59c3dfcfbaefb475dbd2ec82902a34ee27ad31a2c6dcd057f52fb",
+  "prefix_16m_sha256": "87098a04ac4d46aeafad5d6b6e087e062abeb67fddff089cea10a1a67201ee70",
+  "zero_tail": true,
+  "sr_uuid": "ffbd70d9-9d28-bcd9-cb5d-19ec2b91fbe0",
+  "status": "VERIFIED",
+  "check": "published-v0.1.7-ui-cross-sr-copy"
+}

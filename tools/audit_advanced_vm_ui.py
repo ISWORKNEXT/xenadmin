@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Interactive real-host native GUI audit. Credentials stdin only. No fixtures.
-Mutations go through native UI input. The independent readback only reports owned zz-parity-advanced-* guests.
+Mutations go through native UI input. The independent readback reports only the selected zz-parity-* owner prefix.
 Requires python-xlib and Pillow, an X11 display and XEN_AUDIT_OUTPUT.
 Select a VM, host, SR or network with XEN_AUDIT_*_UUID; omit for the pool.
 """
@@ -12,6 +12,8 @@ from Xlib.ext import xtest
 from audit_native_live import windows
 repo=Path(__file__).resolve().parents[1]
 out=Path(os.environ['XEN_AUDIT_OUTPUT']).resolve();out.mkdir(parents=True,exist_ok=True)
+audit_prefix=os.environ.get('XEN_AUDIT_OWNER_PREFIX','zz-parity-advanced-')
+if not audit_prefix.startswith('zz-parity-') or len(audit_prefix)>160:raise ValueError('Choose an owned qualification prefix')
 password=getpass.getpass('Authorized dev-host password (hidden): ')
 dpy=display.Display();root=dpy.screen().root
 ctx=ssl._create_unverified_context();seq=0
@@ -29,7 +31,7 @@ def readback():
  try:
   vms=rpc('VM.get_all_records',[s]);res=[]
   for ref,v in vms.items():
-   if v.get('name_label','').startswith('zz-parity-advanced-'):
+   if v.get('name_label','').startswith(audit_prefix):
     res.append({k:v.get(k) for k in ['uuid','name_label','power_state','is_a_template','is_a_snapshot','VCPUs_max','VCPUs_at_startup','memory_static_max','memory_dynamic_min','memory_dynamic_max']})
   return res
  finally:rpc('session.logout',[s])
@@ -43,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='xen-live-clicks-') as t:
  for flag,value in targets:args.extend([flag,value])
  app=subprocess.Popen(args,env=env,stdin=subprocess.PIPE,stdout=log,stderr=log,text=True)
  binary=Path(args[0]).resolve()
- (out/'startup.json').write_text(json.dumps({'started_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'args':args,'pid':app.pid,'host':'192.168.8.170','display':env.get('DISPLAY')},indent=2)+'\n')
+ (out/'startup.json').write_text(json.dumps({'started_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'args':args,'pid':app.pid,'host':'192.168.8.170','display':env.get('DISPLAY'),'owner_prefix':audit_prefix},indent=2)+'\n')
  app.stdin.write(json.dumps({'settings':{'host':'192.168.8.170','username':'root','label':'AUTHORIZED DEV UI AUDIT','read_only':False,'tls':{'bypass_certificate_verification':True}},'password':password})+'\n');app.stdin.close();time.sleep(7)
  def window():
   for w in windows(root):

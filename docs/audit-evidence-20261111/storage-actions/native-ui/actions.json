@@ -1,0 +1,255 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1440,
+        940
+      ],
+      "snap": "published-storage-source",
+      "readback": true,
+      "wait": 3
+    },
+    "readback": [
+      {
+        "uuid": "8642d65a-d48e-cdf6-ea0f-97636b639a0b",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-source",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "0a8e39b9-b819-9e32-7b73-cd03e2132c34",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-template-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "8c006c00-6e3e-8789-4dc8-f01379a02e02",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "resume-storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        414,
+        370
+      ],
+      "wait": 3,
+      "snap": "copy-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "copy-dialog-settled",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        660,
+        402
+      ],
+      "key": "Control_L+a",
+      "paste": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-ui-copy-\u0e17\u0e14\u0e2a\u0e2d\u0e1a",
+      "snap": "copy-unicode-paste",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        750,
+        571
+      ],
+      "snap": "copy-sr-choices",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        681,
+        650
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        665,
+        402
+      ],
+      "key": "Control_L+a",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+v",
+      "snap": "unicode-real-clipboard",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        955,
+        623
+      ],
+      "wait": 8,
+      "snap": "cross-sr-copy-submitted",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "8642d65a-d48e-cdf6-ea0f-97636b639a0b",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-source",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "0a8e39b9-b819-9e32-7b73-cd03e2132c34",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-template-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "67962684-4666-5a9e-68ef-f8aeb51c7170",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-source full copy",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "8c006c00-6e3e-8789-4dc8-f01379a02e02",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "cross-sr-copy-final",
+      "readback": true,
+      "wait": 3
+    },
+    "readback": [
+      {
+        "uuid": "8642d65a-d48e-cdf6-ea0f-97636b639a0b",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-source",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "0a8e39b9-b819-9e32-7b73-cd03e2132c34",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-template-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "67962684-4666-5a9e-68ef-f8aeb51c7170",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-source full copy",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "8c006c00-6e3e-8789-4dc8-f01379a02e02",
+        "name_label": "zz-parity-storage-01a1ca3b-b6b4-754f-bdad-97ed10a7b18e-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]
