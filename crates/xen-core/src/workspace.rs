@@ -1067,6 +1067,38 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn probe_storage(
+        &self,
+        connection_id: &str,
+        host_uuid: &str,
+        config: &crate::storage::SrConfig,
+    ) -> Result<crate::storage::SrProbe, String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .probe_storage(host_uuid, config)
+            .await
+            .map_err(|e| e.to_string())
+    }
+    pub async fn create_storage(
+        &self,
+        connection_id: &str,
+        host_uuid: &str,
+        name: &str,
+        description: &str,
+        config: &crate::storage::SrConfig,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_storage(host_uuid, name, description, config)
+            .await
+            .map_err(|e| e.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn create_sr(
         &self,
         connection_id: &str,
@@ -1269,6 +1301,7 @@ impl Workspace {
         vm_uuid: &str,
         vdi_uuid: &str,
         bootable: bool,
+        read_only: bool,
     ) -> Result<(), String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;
@@ -1277,7 +1310,7 @@ impl Workspace {
         }
         active
             .connection
-            .attach_vdi(vm_uuid, vdi_uuid, bootable)
+            .attach_vdi_mode(vm_uuid, vdi_uuid, bootable, read_only)
             .await
             .map_err(|error| error.to_string())?;
         refresh_inventory_cache(&active).await
@@ -1375,7 +1408,7 @@ impl Workspace {
     ) -> Result<(), String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;
-        if !vm_in_snapshot(&active.snapshot, vm_uuid).await {
+        if !vm_uuid.is_empty() && !vm_in_snapshot(&active.snapshot, vm_uuid).await {
             return Err("This virtual machine is not part of the selected connection.".into());
         }
         if !active
@@ -1388,11 +1421,15 @@ impl Workspace {
         {
             return Err("The target storage repository is not part of this connection.".into());
         }
-        active
-            .connection
-            .move_disk(vm_uuid, vbd_uuid, target_sr_uuid)
-            .await
-            .map_err(|error| error.to_string())?;
+        if vm_uuid.is_empty() {
+            active.connection.move_vdi(vbd_uuid, target_sr_uuid).await
+        } else {
+            active
+                .connection
+                .move_disk(vm_uuid, vbd_uuid, target_sr_uuid)
+                .await
+        }
+        .map_err(|error| error.to_string())?;
         refresh_inventory_cache(&active).await
     }
 
@@ -1456,6 +1493,24 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
+    pub async fn create_vdi(
+        &self,
+        connection_id: &str,
+        sr_uuid: &str,
+        name: &str,
+        description: &str,
+        size: u64,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .create_vdi(sr_uuid, name, description, size)
+            .await
+            .map_err(|e| e.to_string())?;
+        refresh_inventory_cache(&active).await
+    }
+
     pub async fn add_disk(
         &self,
         connection_id: &str,
@@ -1463,6 +1518,7 @@ impl Workspace {
         sr_uuid: &str,
         size_bytes: u64,
         name: Option<String>,
+        description: &str,
     ) -> Result<(), String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;
@@ -1471,7 +1527,7 @@ impl Workspace {
         }
         active
             .connection
-            .add_disk(vm_uuid, sr_uuid, size_bytes, name.as_deref())
+            .add_disk_described(vm_uuid, sr_uuid, size_bytes, name.as_deref(), description)
             .await
             .map_err(|error| error.to_string())?;
         refresh_inventory_cache(&active).await

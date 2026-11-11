@@ -270,6 +270,7 @@ impl Connection {
             bonds,
             vifs,
             certificates,
+            storage_managers,
         ) = tokio::join!(
             self.records("pool"),
             self.records("host"),
@@ -286,7 +287,8 @@ impl Connection {
             self.records("PIF"),
             self.records("Bond"),
             self.records("VIF"),
-            self.records("Certificate")
+            self.records("Certificate"),
+            self.records("SM")
         );
         Ok(RawInventory {
             pools: pools?,
@@ -307,6 +309,7 @@ impl Connection {
             bonds: bonds.unwrap_or_default(),
             vifs: vifs.unwrap_or_default(),
             certificates: certificates.unwrap_or_default(),
+            storage_managers: storage_managers.unwrap_or_default(),
         })
     }
 
@@ -329,6 +332,7 @@ impl Connection {
 
 #[derive(Clone, Default)]
 pub struct RawInventory {
+    pub(crate) storage_managers: HashMap<String, Value>,
     pub(crate) pools: HashMap<String, Value>,
     pub(crate) hosts: HashMap<String, Value>,
     pub(crate) host_metrics: HashMap<String, Value>,
@@ -363,6 +367,7 @@ impl RawInventory {
                 "host_metrics" => &mut self.host_metrics,
                 "vm" => &mut self.vms,
                 "sr" => &mut self.storage,
+                "sm" => &mut self.storage_managers,
                 "network" => &mut self.networks,
                 "task" => &mut self.tasks,
                 "message" => &mut self.messages,
@@ -463,6 +468,31 @@ impl RawInventory {
                     })
                     .count();
                 Storage {
+                    can_create_vdi: pbd_attached > 0
+                        && r["content_type"] != "iso"
+                        && r["allowed_operations"]
+                            .as_array()
+                            .is_some_and(|ops| ops.iter().any(|op| op == "vdi_create")),
+                    supports_trim: self.storage_managers.values().any(|sm| {
+                        sm["type"] == r["type"] && sm["features"].get("SR_TRIM").is_some()
+                    }),
+                    can_forget: r["allowed_operations"]
+                        .as_array()
+                        .is_some_and(|ops| ops.iter().any(|op| op == "forget")),
+                    can_destroy: r["allowed_operations"]
+                        .as_array()
+                        .is_some_and(|ops| ops.iter().any(|op| op == "destroy")),
+                    has_running_vms: self.vbds.values().any(|vbd| {
+                        match (
+                            self.vdis.get(&text(vbd, "VDI")),
+                            self.vms.get(&text(vbd, "VM")),
+                        ) {
+                            (Some(vdi), Some(vm)) => {
+                                crate::storage::sr_has_running_vm(vdi, vm, reference)
+                            }
+                            _ => false,
+                        }
+                    }),
                     uuid: text(r, "uuid"),
                     name: text(r, "name_label"),
                     storage_type: text(r, "type"),
@@ -910,6 +940,11 @@ pub struct ExternalTask {
 
 #[derive(Clone, Serialize)]
 pub struct Storage {
+    pub can_create_vdi: bool,
+    pub supports_trim: bool,
+    pub can_forget: bool,
+    pub can_destroy: bool,
+    pub has_running_vms: bool,
     pub uuid: String,
     pub name: String,
     pub description: String,

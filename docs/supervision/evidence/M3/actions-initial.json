@@ -1,0 +1,677 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        470,
+        55
+      ],
+      "snap": "01-wizard-type"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        520,
+        598
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        763
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        690,
+        309
+      ],
+      "text": "zz-parity-M3-iso"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Return",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        313
+      ],
+      "text": "zz-parity-M3-iso",
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "click": [
+        650,
+        313
+      ],
+      "text": "zz-parity-M3-iso",
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Return",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        763
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        763
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        680,
+        350
+      ],
+      "text": "//127.0.0.1/iso",
+      "snap": "02-wizard-frontend"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        774
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        763
+      ],
+      "wait": 4,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        103
+      ],
+      "text": "Local storage",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "click": [
+        120,
+        103
+      ],
+      "key": "Control_L+a",
+      "text": "Local storage",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        125,
+        199
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        470,
+        164
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        395,
+        757
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        630,
+        470
+      ],
+      "key": "Control_L+a",
+      "text": "1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        539
+      ],
+      "text": "zz-parity-M3-disk"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        600
+      ],
+      "text": "Standalone storage acceptance"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        980,
+        666
+      ],
+      "wait": 2,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        103
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M3-attach"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        130,
+        199
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        534,
+        164
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        495,
+        297
+      ],
+      "wait": 1,
+      "snap": "03-attach-disk"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        468,
+        426
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        398,
+        732
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1005,
+        783
+      ],
+      "wait": 2,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        398,
+        164
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        534,
+        164
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        495,
+        297
+      ],
+      "wait": 2,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        397,
+        684
+      ],
+      "snap": "03-attach-disk"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1005,
+        736
+      ],
+      "wait": 2,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        540,
+        286
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        774,
+        323
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        971,
+        562
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        103
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M3-iso"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        199
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        225,
+        14
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        235,
+        82
+      ],
+      "wait": 2,
+      "snap": "04-repair-sr"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        522,
+        526
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        225,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        230,
+        199
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        452,
+        512
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        916,
+        563
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        225,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        233,
+        247
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        452,
+        518
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        915,
+        571
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        103
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M3-default"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        142,
+        199
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        225,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        260,
+        107
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        103
+      ],
+      "key": "Control_L+a",
+      "text": "Local storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        142,
+        199
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        225,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        260,
+        107
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

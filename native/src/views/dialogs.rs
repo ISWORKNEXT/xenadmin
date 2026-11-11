@@ -51,6 +51,52 @@ pub fn show(
     if state.move_disk_dialog.is_some() {
         move_disk_dialog(ctx, state, actions);
     }
+    if state.repair_sr_dialog.is_some() {
+        let response = egui::Modal::new(egui::Id::unique("repair-sr"))
+            .frame(theme::modal_frame())
+            .show(ctx, |ui| {
+                ui.set_width(560.0);
+                ui.heading("Repair Storage Repository");
+                ui.label(
+                    "Repair the connection to the storage repository on the following servers.",
+                );
+                if state.pbd_catalog_loading {
+                    ui.spinner();
+                }
+                for pbd in &state.pbd_catalog {
+                    ui.horizontal(|ui| {
+                        ui.label(&pbd.host_name);
+                        ui.label(if pbd.attached {
+                            "Connected"
+                        } else {
+                            "Unplugged"
+                        });
+                    });
+                }
+                if let Some(error) = &state.pbd_catalog_error {
+                    ui.colored_label(theme::red(), error);
+                }
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button("Cancel").clicked() {
+                        actions.push(UiAction::CloseRepairSr);
+                    }
+                    if ui
+                        .add_enabled(
+                            !state.pbd_catalog_loading
+                                && state.pbd_catalog.iter().any(|p| !p.attached),
+                            egui::Button::new("Repair"),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::ConfirmRepairSr);
+                    }
+                });
+            });
+        if response.should_close() {
+            actions.push(UiAction::CloseRepairSr);
+        }
+    }
     if state.sr_create_dialog.is_some() {
         sr_create_dialog(ctx, state, actions);
     }
@@ -2451,13 +2497,13 @@ fn sr_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec
                 ui.label(
                     RichText::new(match dialog.action {
                         xen_core::operations::SrAction::Detach => {
-                            "Detaching disconnects this storage from the host. Data on the storage remains, but VMs using it must be stopped."
+                            "Detaching this storage repository will make the virtual disks that it contains inaccessible. The contents of the virtual disks themselves will remain intact.\n\nIf you subsequently reattach the storage repository, you will need to provide the correct device configuration details.\n\nAre you sure you want to detach this storage repository?"
                         }
                         xen_core::operations::SrAction::Forget => {
-                            "Forgetting removes only the SR record and its PBDs. Data on the storage is left untouched; use Introduce to add it back."
+                            "Are you sure you want to forget 'the selected storage repository'?\n\nForgetting this storage repository will permanently remove the information used to connect the virtual machines to the virtual disks in the storage repository. The contents of the virtual disks themselves will remain intact.\n\nThis action is final and unrecoverable."
                         }
                         _ => {
-                            "Destroying an SR removes its record. The SR must be empty; data loss is possible."
+                            "Are you sure you want to destroy 'the selected storage repository'?\n    \nDestroying this storage repository will permanently remove all associated virtual disks from the underlying storage device.\n\nThis action is final and unrecoverable."
                         }
                     })
                     .size(9.5)
@@ -3767,93 +3813,119 @@ fn sr_create_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<
     };
     let mut frame = std::mem::take(&mut dialog.frame);
     let error = dialog.error.clone();
-    let outcome = super::wizard::Frame {
+    let mut probe = false;
+    let kinds = [
+        "NFS",
+        "iSCSI",
+        "Hardware HBA",
+        "SMB/CIFS",
+        "Local storage",
+        "NFS ISO",
+        "Windows File Sharing (SMB/CIFS) ISO",
+    ];
+    let wizard = super::wizard::Frame {
         id: "sr-create-wizard",
         title: "New Storage Repository",
-        steps: &[super::wizard::Step {
-            title: "Storage repository",
-            description: "Create a host-local, file-backed SR at an existing absolute path.",
-        }],
+        steps: &[
+            super::wizard::Step {
+                title: "Type",
+                description: "Select the type of storage repository to create.",
+            },
+            super::wizard::Step {
+                title: "Name",
+                description: "Enter a name and description for the storage repository.",
+            },
+            super::wizard::Step {
+                title: "Provisioning",
+                description: "Select the provisioning method supported by this storage type.",
+            },
+            super::wizard::Step {
+                title: "Location",
+                description: "Specify the location and scan for existing storage.",
+            },
+            super::wizard::Step {
+                title: "Finish",
+                description: "Review the storage repository settings.",
+            },
+        ],
         busy: dialog.submitting,
-        dirty: !dialog.name.is_empty()
-            || !dialog.description.is_empty()
-            || !dialog.location.is_empty(),
+        dirty: !dialog.name.is_empty() || !dialog.location.is_empty(),
         error: error.as_deref(),
-    }
-    .show(ctx, &mut frame, |ui, _| {
-        widgets::field_label(ui, "Name");
-        ui.add_enabled(
-            !dialog.submitting,
-            egui::TextEdit::singleline(&mut dialog.name)
-                .desired_width(f32::INFINITY)
-                .char_limit(255)
-                .margin(egui::Margin::symmetric(8, 5)),
-        );
-        ui.add_space(8.0);
-        widgets::field_label(ui, "Description");
-        ui.add_enabled(
-            !dialog.submitting,
-            egui::TextEdit::multiline(&mut dialog.description)
-                .desired_width(f32::INFINITY)
-                .desired_rows(2)
-                .char_limit(1024)
-                .margin(egui::Margin::symmetric(8, 5)),
-        );
-        ui.add_space(8.0);
-        widgets::field_label(ui, "Host");
-        let host_label = dialog
-            .host_uuid
-            .as_ref()
-            .and_then(|uuid| dialog.hosts.iter().find(|(id, _)| id == uuid))
-            .map(|(_, name)| name.as_str())
-            .unwrap_or("Select a host");
-        ui.add_enabled_ui(!dialog.submitting, |ui| {
-            egui::ComboBox::from_id_salt("sr-create-host")
-                .selected_text(RichText::new(host_label).size(11.0))
-                .width(ui.available_width())
-                .show_ui(ui, |ui| {
-                    for (uuid, name) in &dialog.hosts {
-                        if ui
-                            .selectable_label(
-                                dialog.host_uuid.as_deref() == Some(uuid.as_str()),
-                                RichText::new(name).size(11.0),
-                            )
-                            .clicked()
-                        {
-                            dialog.host_uuid = Some(uuid.clone());
+    };
+    let outcome = wizard.show(ctx,&mut frame,|ui,step| {
+        match step {
+            0 => {
+                ui.strong("Virtual disk storage");
+                for (index,label) in kinds.iter().enumerate() {
+                    if index==5 {ui.separator(); ui.strong("ISO library");}
+                    if ui.radio_value(&mut dialog.kind,index,*label).changed() {dialog.probe=None; if !dialog.reattaching {dialog.existing_uuid=None;}}
+                }
+            }
+            1 => {
+                widgets::field_label(ui,"Name"); ui.add(egui::TextEdit::singleline(&mut dialog.name).desired_width(f32::INFINITY).char_limit(255));
+                widgets::field_label(ui,"Description"); ui.add(egui::TextEdit::multiline(&mut dialog.description).desired_width(f32::INFINITY).desired_rows(3));
+                if dialog.name.trim().is_empty() {return Some("Enter a storage repository name.");}
+            }
+            2 => {
+                if dialog.kind==4 {
+                    ui.radio_value(&mut dialog.thick,false,"Thin provisioning (EXT)");
+                    ui.radio_value(&mut dialog.thick,true,"Thick provisioning (LVM)");
+                } else {ui.label(if matches!(dialog.kind,1|2) {"Thick provisioning (LVM)"} else {"Thin provisioning"});}
+            }
+            3 => {
+                egui::ComboBox::from_id_salt("sr-create-host").selected_text(dialog.hosts.iter().find(|(id,_)|Some(id)==dialog.host_uuid.as_ref()).map(|(_,n)|n.as_str()).unwrap_or("Host")).show_ui(ui,|ui| {
+                    for (id,name) in &dialog.hosts {ui.selectable_value(&mut dialog.host_uuid,Some(id.clone()),name);}
+                });
+                if matches!(dialog.kind,0|1) {widgets::field_label(ui,"Server"); ui.text_edit_singleline(&mut dialog.server);}
+                if dialog.kind==1 {
+                    widgets::field_label(ui,"Port");ui.text_edit_singleline(&mut dialog.port);
+                    widgets::field_label(ui,"Target IQN");ui.text_edit_singleline(&mut dialog.target_iqn);
+                }
+                if matches!(dialog.kind,0|5) {egui::ComboBox::from_id_salt("sr-nfs-version").selected_text(format!("NFS {}",dialog.nfs_version)).show_ui(ui,|ui| {for v in ["3","4","4.1"] {ui.selectable_value(&mut dialog.nfs_version,v.into(),format!("NFS {v}"));}});}
+                if matches!(dialog.kind,1|2) {widgets::field_label(ui,"Target LUN (SCSI ID)");ui.text_edit_singleline(&mut dialog.scsi_id);}
+                else {
+                    widgets::field_label(ui, match dialog.kind {0=>"Server path",4=>"Device path (unused host disk only)",5=>"Share name (server:/path)",_=>"Share name (//server/share)"});
+                    ui.add(egui::TextEdit::singleline(&mut dialog.location).desired_width(f32::INFINITY));
+                }
+                if matches!(dialog.kind,1|3|6) {
+                    widgets::field_label(ui,"Username");ui.text_edit_singleline(&mut dialog.username);
+                    widgets::field_label(ui,"Password");ui.add(egui::TextEdit::singleline(&mut dialog.password).password(true));
+                }
+                if dialog.kind==4 {ui.colored_label(theme::red(),"Creating storage erases the selected disk. Verify that the device is unused.");}
+                if ui.button("Scan / Probe").clicked() {probe=true;}
+                if let Some(result)=&dialog.probe {
+                    for config in &result.configurations {
+                        let label=["target","targetIQN","SCSIid"].iter().filter_map(|key|config.get(*key).map(String::as_str)).collect::<Vec<_>>().join(" · ");
+                        if !label.is_empty() && ui.selectable_label(false,label).clicked() {
+                            if let Some(v)=config.get("target") {dialog.server=v.clone();}
+                            if let Some(v)=config.get("targetIQN") {dialog.target_iqn=v.clone();}
+                            if let Some(v)=config.get("SCSIid") {dialog.scsi_id=v.clone();}
                         }
                     }
-                });
-        });
-        ui.add_space(8.0);
-        widgets::field_label(ui, "Location on host");
-        ui.add_enabled(
-            !dialog.submitting,
-            egui::TextEdit::singleline(&mut dialog.location)
-                .desired_width(f32::INFINITY)
-                .hint_text("/var/tmp/xen-storage")
-                .char_limit(255)
-                .margin(egui::Margin::symmetric(8, 5)),
-        );
-        ui.label(
-            RichText::new("The path must be absolute and should be dedicated to this SR.")
-                .size(9.0)
-                .color(dim_fg()),
-        );
-
-        if dialog.name.trim().is_empty() {
-            Some("Enter a storage repository name.")
-        } else if !dialog.location.trim().starts_with('/') {
-            Some("Enter an absolute location on the host.")
-        } else {
-            None
+                    ui.radio_value(&mut dialog.existing_uuid,None,"Create a new storage repository");
+                    for sr in &result.found {ui.radio_value(&mut dialog.existing_uuid,Some(sr.uuid.clone()),format!("Reattach {} ({})",sr.name,sr.uuid));}
+                    if result.found.is_empty() {ui.label("No existing storage repositories found.");}
+                }
+                if dialog.host_uuid.is_none() {return Some("Select a host.");}
+                if matches!(dialog.kind,0|1) && dialog.server.trim().is_empty() {return Some("Enter a server.");}
+                if matches!(dialog.kind,1|2) {if dialog.scsi_id.trim().is_empty() {return Some("Select a target LUN.");}}
+                else if dialog.location.trim().is_empty() {return Some("Enter a storage location.");}
+            }
+            _ => {
+                ui.label(format!("Type: {}",kinds[dialog.kind]));ui.label(format!("Name: {}",dialog.name));ui.label(format!("Location: {} {}",dialog.server,dialog.location));
+                ui.label(if dialog.existing_uuid.is_some() {"Reattach the existing storage repository."} else {"Create the new storage repository."});
+            }
         }
+        None
     });
     dialog.frame = frame;
+    if probe {
+        actions.push(UiAction::ProbeNewSr);
+    }
     match outcome {
         super::wizard::Outcome::Cancel => actions.push(UiAction::CloseSrCreate),
         super::wizard::Outcome::Finish => actions.push(UiAction::SaveSrCreate),
-        super::wizard::Outcome::None => {}
+        _ => {}
     }
 }
 
@@ -3973,6 +4045,8 @@ fn move_disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<
                 "Move virtual disk",
                 if dialog.live {
                     "The disk is migrated live; the VM stays running."
+                } else if dialog.vm_uuid.is_empty() {
+                    "Move this unattached virtual disk to another storage repository."
                 } else {
                     "The disk is copied to the target SR and then re-attached."
                 },
@@ -4014,6 +4088,8 @@ fn move_disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<
             ui.label(
                 RichText::new(if dialog.live {
                     "The destination SR must be visible to the running guest. The VM stays running during the move."
+                } else if dialog.vm_uuid.is_empty() {
+                    "The source disk is deleted after the copy completes."
                 } else {
                     "The VM must be shut down. The copy uses the target SR's free space until the source is deleted."
                 })
@@ -4197,40 +4273,53 @@ fn attach_vdi_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec
                     .max_height(300.0)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        for vdi in &dialog.vdis {
-                            if !query.is_empty()
-                                && !vdi.name.to_lowercase().contains(&query)
-                                && !vdi.sr_name.to_lowercase().contains(&query)
-                            {
-                                continue;
-                            }
-                            visible += 1;
-                            let selected = dialog.selected.as_deref() == Some(vdi.uuid.as_str());
-                            ui.horizontal(|ui| {
-                                if ui
-                                    .selectable_label(
-                                        selected,
-                                        RichText::new(if vdi.name.is_empty() {
-                                            "(unnamed disk)"
-                                        } else {
-                                            &vdi.name
-                                        })
-                                        .size(11.0),
-                                    )
-                                    .clicked()
-                                {
-                                    dialog.selected = Some(vdi.uuid.clone());
-                                }
-                                ui.label(
-                                    RichText::new(format!(
-                                        "{} · {}",
-                                        vdi.sr_name,
-                                        crate::format::bytes(vdi.virtual_size)
-                                    ))
-                                    .size(9.0)
-                                    .color(dim_fg()),
-                                );
-                            });
+                        let mut repositories: Vec<_> =
+                            dialog.vdis.iter().map(|v| v.sr_name.clone()).collect();
+                        repositories.sort();
+                        repositories.dedup();
+                        for repository in repositories {
+                            egui::CollapsingHeader::new(&repository)
+                                .default_open(true)
+                                .show(ui, |ui| {
+                                    for vdi in
+                                        dialog.vdis.iter().filter(|v| v.sr_name == repository)
+                                    {
+                                        if !query.is_empty()
+                                            && !vdi.name.to_lowercase().contains(&query)
+                                            && !vdi.sr_name.to_lowercase().contains(&query)
+                                        {
+                                            continue;
+                                        }
+                                        visible += 1;
+                                        let selected =
+                                            dialog.selected.as_deref() == Some(vdi.uuid.as_str());
+                                        ui.horizontal(|ui| {
+                                            if ui
+                                                .selectable_label(
+                                                    selected,
+                                                    RichText::new(if vdi.name.is_empty() {
+                                                        "(unnamed disk)"
+                                                    } else {
+                                                        &vdi.name
+                                                    })
+                                                    .size(11.0),
+                                                )
+                                                .clicked()
+                                            {
+                                                dialog.selected = Some(vdi.uuid.clone());
+                                            }
+                                            ui.label(
+                                                RichText::new(format!(
+                                                    "{} · {}",
+                                                    vdi.sr_name,
+                                                    crate::format::bytes(vdi.virtual_size)
+                                                ))
+                                                .size(9.0)
+                                                .color(dim_fg()),
+                                            );
+                                        });
+                                    }
+                                });
                         }
                         if visible == 0 {
                             ui.label(
@@ -4249,8 +4338,8 @@ fn attach_vdi_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec
             ui.add_enabled(
                 !dialog.submitting && !dialog.loading,
                 egui::Checkbox::new(
-                    &mut dialog.bootable,
-                    RichText::new("Mark the attached disk as bootable").size(10.5),
+                    &mut dialog.read_only,
+                    RichText::new("Attach as read-only").size(10.5),
                 ),
             );
             if let Some(error) = &dialog.error {
@@ -4311,7 +4400,7 @@ fn disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAct
                     modal_title(
                         ui,
                         "Add virtual disk",
-                        "Create a new disk in a storage repository. The VM must be shut down.",
+                        "Create a new virtual disk in a storage repository.",
                     );
                     widgets::field_label(ui, "Storage repository");
                     let selected = dialog
@@ -4376,6 +4465,13 @@ fn disk_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAct
                             .hint_text("Generated from the VM name")
                             .char_limit(255)
                             .margin(egui::Margin::symmetric(8, 5)),
+                    );
+                    widgets::field_label(ui, "Description");
+                    ui.add_enabled(
+                        !dialog.submitting,
+                        egui::TextEdit::multiline(&mut dialog.description)
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(2),
                     );
                     if let Some(error) = &dialog.error {
                         ui.add_space(8.0);

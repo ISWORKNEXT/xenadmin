@@ -28,11 +28,221 @@ pub struct ProbedSr {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SrProbe {
+    pub configurations: Vec<std::collections::BTreeMap<String, String>>,
     pub raw: String,
     pub found: Vec<ProbedSr>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct SrConfig {
+    pub sr_type: String,
+    pub content_type: String,
+    pub shared: bool,
+    pub device: std::collections::BTreeMap<String, String>,
+    pub existing_uuid: Option<String>,
+}
+
 impl Connection {
+    pub async fn probe_storage(
+        &self,
+        host_uuid: &str,
+        config: &SrConfig,
+    ) -> Result<SrProbe, ApiError> {
+        let host: String = self
+            .request("host.get_by_uuid", json!([self.session, host_uuid]))
+            .await?;
+        if matches!(config.sr_type.as_str(), "lvmoiscsi" | "lvmohba") {
+            let results: Vec<Value> = self
+                .request(
+                    "SR.probe_ext",
+                    json!([self.session, host, config.device, config.sr_type, {}]),
+                )
+                .await?;
+            let configurations = results
+                .iter()
+                .filter_map(|result| result["configuration"].as_object())
+                .map(|map| {
+                    map.iter()
+                        .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_owned())))
+                        .collect()
+                })
+                .collect();
+            let found = results
+                .iter()
+                .filter_map(|result| {
+                    let sr = &result["sr"];
+                    let uuid = sr["uuid"].as_str()?;
+                    Some(ProbedSr {
+                        uuid: uuid.into(),
+                        name: text(sr, "name_label"),
+                        description: text(sr, "name_description"),
+                        shared: config.shared,
+                        sr_type: config.sr_type.clone(),
+                        content_type: config.content_type.clone(),
+                        physical_size: 0,
+                        physical_utilisation: 0,
+                    })
+                })
+                .collect();
+            return Ok(SrProbe {
+                configurations,
+                found,
+                raw: String::new(),
+            });
+        }
+        let task: String = self
+            .request(
+                "Async.SR.probe",
+                json!([self.session, host, config.device, config.sr_type, {}]),
+            )
+            .await?;
+        let value = wait_task_value(self, &task).await?;
+        let raw = value.as_str().unwrap_or_default().to_owned();
+        Ok(SrProbe {
+            configurations: Vec::new(),
+            found: parse_probe_xml(&raw),
+            raw,
+        })
+    }
+
+    pub async fn create_storage(
+        &self,
+        host_uuid: &str,
+        name: &str,
+        description: &str,
+        config: &SrConfig,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen("This connection is read-only.".into()));
+        }
+        if name.trim().is_empty()
+            || !matches!(
+                config.sr_type.as_str(),
+                "nfs" | "lvmoiscsi" | "lvmohba" | "smb" | "ext" | "lvm" | "iso"
+            )
+            || config.device.is_empty()
+        {
+            return Err(ApiError::Xen(
+                "Select a storage type, name and location.".into(),
+            ));
+        }
+        let host: String = self
+            .request("host.get_by_uuid", json!([self.session, host_uuid]))
+            .await?;
+        if let Some(uuid) = &config.existing_uuid {
+            let managed = self.records("SR").await?;
+            let sr: String = if let Some((reference, record)) = managed
+                .iter()
+                .find(|(_, sr)| sr["uuid"].as_str() == Some(uuid.as_str()))
+            {
+                if record["type"].as_str() != Some(config.sr_type.as_str())
+                    || self
+                        .records("PBD")
+                        .await?
+                        .values()
+                        .any(|pbd| pbd["SR"].as_str() == Some(reference.as_str()))
+                {
+                    return Err(ApiError::Xen(
+                        "This storage repository already has attachments or has a different type."
+                            .into(),
+                    ));
+                }
+                reference.clone()
+            } else {
+                self.request(
+                    "SR.introduce",
+                    json!([
+                        self.session,
+                        uuid,
+                        name,
+                        description,
+                        config.sr_type,
+                        config.content_type,
+                        config.shared,
+                        {}
+                    ]),
+                )
+                .await?
+            };
+            let pbd: String = self.request("PBD.create",json!([self.session,{"host":host,"SR":sr,"device_config":config.device,"other_config":{}}])).await?;
+            self.async_task("Async.PBD.plug", json!([self.session, pbd]))
+                .await
+        } else {
+            self.request::<String>(
+                "SR.create",
+                json!([
+                    self.session,
+                    host,
+                    config.device,
+                    "0",
+                    name,
+                    description,
+                    config.sr_type,
+                    config.content_type,
+                    config.shared,
+                    {}
+                ]),
+            )
+            .await?;
+            Ok(())
+        }
+    }
+
+    pub(crate) async fn guard_sr_not_in_use(&self, sr_ref: &str) -> Result<(), ApiError> {
+        let (vbds, vdis, vms) =
+            tokio::join!(self.records("VBD"), self.records("VDI"), self.records("VM"));
+        let (vbds, vdis, vms) = (vbds?, vdis?, vms?);
+        if vbds.values().any(
+            |vbd| match (vdis.get(&text(vbd, "VDI")), vms.get(&text(vbd, "VM"))) {
+                (Some(vdi), Some(vm)) => sr_has_running_vm(vdi, vm, sr_ref),
+                _ => false,
+            },
+        ) {
+            return Err(ApiError::Xen(
+                "A running VM is using this storage. Shut it down before detaching the SR.".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn create_vdi(
+        &self,
+        sr_uuid: &str,
+        name: &str,
+        description: &str,
+        size: u64,
+    ) -> Result<String, ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen("This connection is read-only.".into()));
+        }
+        if name.trim().is_empty() || size == 0 {
+            return Err(ApiError::Xen(
+                "Enter a disk name and a size greater than zero.".into(),
+            ));
+        }
+        let sr: String = self
+            .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
+            .await?;
+        let record: Value = self
+            .request("SR.get_record", json!([self.session, sr]))
+            .await?;
+        if record["content_type"] == "iso"
+            || !record["allowed_operations"]
+                .as_array()
+                .is_some_and(|ops| ops.iter().any(|op| op == "vdi_create"))
+        {
+            return Err(ApiError::Xen(
+                "Select attached writable virtual disk storage.".into(),
+            ));
+        }
+        let vdi: String = self.request("VDI.create", json!([self.session, {
+            "name_label":name.trim(), "name_description":description, "SR":sr, "virtual_size":size.to_string(),
+            "type":"user", "sharable":false, "read_only":false, "other_config":{}, "sm_config":{}, "tags":[]
+        }])).await?;
+        self.request("VDI.get_uuid", json!([self.session, vdi]))
+            .await
+    }
+
     pub async fn pbd_catalog(&self, sr_uuid: &str) -> Result<Vec<PbdSummary>, ApiError> {
         let sr_ref: String = self
             .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
@@ -165,10 +375,17 @@ impl Connection {
         let raw = wait_task_value(self, &task).await?;
         let raw = raw.as_str().unwrap_or_default().to_owned();
         Ok(SrProbe {
+            configurations: Vec::new(),
             found: parse_probe_xml(&raw),
             raw,
         })
     }
+}
+
+pub(crate) fn sr_has_running_vm(vdi: &Value, vm: &Value, sr_ref: &str) -> bool {
+    text(vdi, "SR") == sr_ref
+        && vm["power_state"] == "Running"
+        && !(vdi["type"] == "metadata" && vm["is_control_domain"] == true)
 }
 
 fn parse_probe_xml(xml: &str) -> Vec<ProbedSr> {
@@ -212,6 +429,24 @@ fn text(record: &Value, key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detach_blocks_running_guests_but_allows_control_domain_metadata() {
+        let disk = json!({"SR":"sr", "type":"user"});
+        let running = json!({"power_state":"Running", "is_control_domain":false});
+        assert!(sr_has_running_vm(&disk, &running, "sr"));
+        assert!(!sr_has_running_vm(&disk, &running, "other"));
+        assert!(!sr_has_running_vm(
+            &disk,
+            &json!({"power_state":"Halted"}),
+            "sr"
+        ));
+        assert!(!sr_has_running_vm(
+            &json!({"SR":"sr","type":"metadata"}),
+            &json!({"power_state":"Running","is_control_domain":true}),
+            "sr"
+        ));
+    }
 
     #[test]
     fn parses_probe_xml_records() {

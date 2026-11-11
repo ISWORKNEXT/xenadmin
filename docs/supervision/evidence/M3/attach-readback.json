@@ -1,0 +1,9 @@
+{
+  "owned_vbds": [
+    {
+      "uuid": "e7cf02e5-44ce-ff17-0617-f3137ce6994f",
+      "mode": "RO",
+      "currently_attached": false
+    }
+  ]
+}

@@ -60,3 +60,11 @@ Adding backend is allowed in this unit.
   yourself, Rescan shows an ISO you put there, then Detach + Forget it;
   Set as Default to another SR and back to the original default.
   Never destroy or forget a pre-existing SR.
+
+## Supervisor additions
+
+- Build the New SR wizard on the shared wizard frame from M2d
+  (`native/src/views/wizard.rs`).
+- Fix in the shared wizard frame: pressing Enter while editing a text or
+  number field (e.g. a disk size) must commit the field, not advance the
+  page. Enter advances only when no text field has focus.

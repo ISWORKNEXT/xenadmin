@@ -43,8 +43,9 @@ impl Frame<'_> {
         let step = state.step.min(self.steps.len() - 1);
         let current = self.steps[step];
         let confirm_cancel = state.confirm_cancel;
-        let enter =
-            ctx.input(|input| input.key_pressed(egui::Key::Enter) && input.modifiers.is_none());
+        let editing = ctx.text_edit_focused();
+        let enter = !editing
+            && ctx.input(|input| input.key_pressed(egui::Key::Enter) && input.modifiers.is_none());
         let response = egui::Modal::new(egui::Id::unique(self.id))
             .frame(theme::modal_frame())
             .show(ctx, |ui| {
@@ -142,5 +143,81 @@ impl Frame<'_> {
             }
         }
         outcome
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enter_commits_text_without_advancing_the_wizard() {
+        let ctx = egui::Context::default();
+        let mut state = WizardState::default();
+        let mut value = String::from("1");
+        let frame = Frame {
+            id: "enter-test",
+            title: "Test",
+            busy: false,
+            dirty: false,
+            error: None,
+            steps: &[
+                Step {
+                    title: "Size",
+                    description: "",
+                },
+                Step {
+                    title: "Finish",
+                    description: "",
+                },
+            ],
+        };
+        let id = egui::Id::unique("size-input");
+        let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+            frame.show(ctx, &mut state, |ui, _| {
+                ui.add(egui::TextEdit::singleline(&mut value).id(id))
+                    .request_focus();
+                None
+            });
+        });
+        output.textures_delta.clear();
+        assert!(ctx.text_edit_focused());
+        let input = egui::RawInput {
+            events: vec![egui::Event::Key {
+                key: egui::Key::Enter,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            ..Default::default()
+        };
+        let mut output = ctx.run_pass(input, |ctx| {
+            frame.show(ctx, &mut state, |ui, _| {
+                ui.add(egui::TextEdit::singleline(&mut value).id(id));
+                None
+            });
+        });
+        output.textures_delta.clear();
+        assert_eq!(state.step, 0);
+        assert_eq!(value, "1");
+        ctx.memory_mut(|m| m.surrender_focus(id));
+        let mut output = ctx.run_pass(
+            egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: egui::Key::Enter,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            },
+            |ctx| {
+                frame.show(ctx, &mut state, |_, _| None);
+            },
+        );
+        output.textures_delta.clear();
+        assert_eq!(state.step, 1);
     }
 }

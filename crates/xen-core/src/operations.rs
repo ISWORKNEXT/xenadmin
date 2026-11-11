@@ -608,6 +608,7 @@ impl Connection {
             }
             SrAction::Trim => self.sr_trim(sr_uuid).await,
             SrAction::Detach => {
+                self.guard_sr_not_in_use(&sr_ref).await?;
                 let pbds = self.records("PBD").await?;
                 for (pbd_ref, pbd) in pbds
                     .iter()
@@ -623,6 +624,7 @@ impl Connection {
                 Ok(())
             }
             SrAction::Forget => {
+                self.guard_sr_not_in_use(&sr_ref).await?;
                 let pbds = self.records("PBD").await?;
                 for (pbd_ref, pbd) in pbds
                     .iter()
@@ -640,6 +642,7 @@ impl Connection {
                 Ok(())
             }
             SrAction::Destroy => {
+                self.guard_sr_not_in_use(&sr_ref).await?;
                 // Keep the PBD records: some backends (notably `file`) need one
                 // to locate the storage while destroying it. SR.destroy removes
                 // them once the backend has finished.
@@ -795,6 +798,22 @@ impl Connection {
     }
 
     async fn sr_trim(&self, sr_uuid: &str) -> Result<(), ApiError> {
+        let sr_ref_check: String = self
+            .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
+            .await?;
+        let sr: Value = self
+            .request("SR.get_record", json!([self.session, sr_ref_check]))
+            .await?;
+        if !self
+            .records("SM")
+            .await?
+            .values()
+            .any(|sm| sm["type"] == sr["type"] && sm["features"].get("SR_TRIM").is_some())
+        {
+            return Err(ApiError::Xen(
+                "This storage does not support reclaiming freed space.".into(),
+            ));
+        }
         let pbds = self.records("PBD").await?;
         let sr_ref: String = self
             .request("SR.get_by_uuid", json!([self.session, sr_uuid]))
@@ -1463,6 +1482,18 @@ impl Connection {
         size_bytes: u64,
         name: Option<&str>,
     ) -> Result<(), ApiError> {
+        self.add_disk_described(vm_uuid, sr_uuid, size_bytes, name, "")
+            .await
+    }
+
+    pub async fn add_disk_described(
+        &self,
+        vm_uuid: &str,
+        sr_uuid: &str,
+        size_bytes: u64,
+        name: Option<&str>,
+        description: &str,
+    ) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(
                 "This connection is read-only. Changes are blocked by the Rust backend.".into(),
@@ -1530,7 +1561,7 @@ impl Connection {
                     self.session,
                     {
                         "name_label": name,
-                        "name_description": "",
+                        "name_description": description,
                         "SR": sr_ref,
                         "virtual_size": size_bytes,
                         "type": "user",
@@ -1575,6 +1606,17 @@ impl Connection {
         vm_uuid: &str,
         vdi_uuid: &str,
         bootable: bool,
+    ) -> Result<(), ApiError> {
+        self.attach_vdi_mode(vm_uuid, vdi_uuid, bootable, false)
+            .await
+    }
+
+    pub async fn attach_vdi_mode(
+        &self,
+        vm_uuid: &str,
+        vdi_uuid: &str,
+        bootable: bool,
+        read_only: bool,
     ) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(
@@ -1637,7 +1679,7 @@ impl Connection {
                 "This VM has no free virtual disk device slots.".into(),
             ));
         };
-        let mode = vbd_mode(vdi["read_only"].as_bool() == Some(true));
+        let mode = vbd_mode(read_only || vdi["read_only"].as_bool() == Some(true));
         let vbd = json!({
             "VM": vm_ref,
             "VDI": vdi_ref,
@@ -1754,6 +1796,60 @@ impl Connection {
 
     /// Move a data disk to another SR. Running VM disks are migrated live with
     /// VDI.pool_migrate; halted VM disks are copied and their VBD is swapped.
+    pub async fn move_vdi(&self, vdi_uuid: &str, target_sr_uuid: &str) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen("This connection is read-only.".into()));
+        }
+        let vdi: String = self
+            .request("VDI.get_by_uuid", json!([self.session, vdi_uuid]))
+            .await?;
+        let record: Value = self
+            .request("VDI.get_record", json!([self.session, vdi]))
+            .await?;
+        if record["read_only"] == true
+            || record["is_a_snapshot"] == true
+            || record["VBDs"]
+                .as_array()
+                .is_none_or(|vbds| !vbds.is_empty())
+            || record["snapshots"]
+                .as_array()
+                .is_some_and(|snapshots| !snapshots.is_empty())
+        {
+            return Err(ApiError::Xen(
+                "Select an unattached writable disk without snapshots.".into(),
+            ));
+        }
+        let sr: String = self
+            .request("SR.get_by_uuid", json!([self.session, target_sr_uuid]))
+            .await?;
+        let target: Value = self
+            .request("SR.get_record", json!([self.session, sr]))
+            .await?;
+        if record["SR"] == sr
+            || target["content_type"] == "iso"
+            || !target["allowed_operations"]
+                .as_array()
+                .is_some_and(|ops| ops.iter().any(|op| op == "vdi_create"))
+            || number(&target, "physical_size")
+                .saturating_sub(number(&target, "physical_utilisation"))
+                < number(&record, "virtual_size")
+        {
+            return Err(ApiError::Xen(
+                "Choose different writable storage with enough free space.".into(),
+            ));
+        }
+        let task: String = self
+            .request("Async.VDI.copy", json!([self.session, vdi, sr]))
+            .await?;
+        let copied = wait_task_value(self, &task).await?;
+        let new_ref = decode_ref(&copied).ok_or(ApiError::Protocol)?;
+        self.delete_vdi(vdi_uuid).await.map_err(|e| {
+            ApiError::Xen(format!(
+                "The disk was copied to {new_ref}, but the source was retained: {e}"
+            ))
+        })
+    }
+
     pub async fn move_disk(
         &self,
         vm_uuid: &str,

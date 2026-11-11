@@ -1,5 +1,5 @@
 use super::{
-    infrastructure_page::{disabled, properties, section, table_with_menu},
+    infrastructure_page::{properties, section, table_with_menu},
     object_page::{self, Selection, value_row},
     sidebar::TreeIcon,
 };
@@ -197,7 +197,12 @@ fn sr_disk_commands(
     actions: &mut Vec<UiAction>,
 ) {
     super::context_menu::command_strip(ui, |ui| {
-        disabled(ui, "Add…");
+        if ui
+            .add_enabled(writable && sr.can_create_vdi, egui::Button::new("Add…"))
+            .clicked()
+        {
+            actions.push(UiAction::OpenAddDisk);
+        }
         if ui
             .add_enabled(writable, egui::Button::new("Rescan"))
             .on_disabled_hover_text("The object state or connection does not allow this operation.")
@@ -210,7 +215,22 @@ fn sr_disk_commands(
                 action: SrAction::Scan,
             });
         }
-        disabled(ui, "Move…");
+        if ui
+            .add_enabled(
+                writable
+                    && disk.is_some_and(|d| d.attached_to.is_empty() && !d.read_only && !d.missing),
+                egui::Button::new("Move…"),
+            )
+            .clicked()
+        {
+            let d = disk.unwrap();
+            actions.push(UiAction::OpenMoveDisk {
+                vbd_uuid: d.uuid.clone(),
+                name: d.name.clone(),
+                size: d.virtual_size,
+                source_sr_uuid: sr_uuid.into(),
+            });
+        }
         let deletable = writable
             && sr.content_type != "iso"
             && disk.is_some_and(|d| d.attached_to.is_empty() && !d.missing && !d.read_only);

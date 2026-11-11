@@ -1093,6 +1093,19 @@ pub struct SrIntroduceDialog {
 }
 
 pub struct SrCreateDialog {
+    pub reattaching: bool,
+    pub port: String,
+    pub nfs_version: String,
+    pub kind: usize,
+    pub thick: bool,
+    pub server: String,
+    pub target_iqn: String,
+    pub scsi_id: String,
+    pub username: String,
+    pub password: String,
+    pub probe: Option<SrProbe>,
+    pub existing_uuid: Option<String>,
+
     pub frame: crate::views::wizard::WizardState,
     pub connection_id: String,
     pub hosts: Vec<(String, String)>,
@@ -1102,6 +1115,78 @@ pub struct SrCreateDialog {
     pub location: String,
     pub submitting: bool,
     pub error: Option<String>,
+}
+
+impl SrCreateDialog {
+    pub fn config(&self) -> xen_core::storage::SrConfig {
+        use std::collections::BTreeMap;
+        let mut device = BTreeMap::new();
+        let (sr_type, content_type, shared) = match self.kind {
+            0 => {
+                device.insert("server".into(), self.server.trim().into());
+                device.insert("serverpath".into(), self.location.trim().into());
+                ("nfs", "user", true)
+            }
+            1 => {
+                device.insert("target".into(), self.server.trim().into());
+                device.insert("targetIQN".into(), self.target_iqn.trim().into());
+                device.insert("SCSIid".into(), self.scsi_id.trim().into());
+                ("lvmoiscsi", "user", true)
+            }
+            2 => {
+                device.insert("SCSIid".into(), self.scsi_id.trim().into());
+                ("lvmohba", "user", true)
+            }
+            3 => {
+                let path = self.location.trim().replace('\\', "/");
+                let (server, directory) = path.split_once(':').unwrap_or((&path, ""));
+                device.insert("server".into(), server.into());
+                if !directory.is_empty() {
+                    device.insert("serverpath".into(), directory.into());
+                }
+                ("smb", "user", true)
+            }
+            4 => {
+                device.insert("device".into(), self.location.trim().into());
+                (if self.thick { "lvm" } else { "ext" }, "user", false)
+            }
+            5 => {
+                device.insert("location".into(), self.location.trim().into());
+                device.insert("type".into(), "nfs_iso".into());
+                ("iso", "iso", true)
+            }
+            _ => {
+                device.insert("location".into(), self.location.trim().replace('\\', "/"));
+                device.insert("type".into(), "cifs".into());
+                ("iso", "iso", true)
+            }
+        };
+        if self.kind == 1 {
+            device.insert("port".into(), self.port.clone());
+        }
+        if matches!(self.kind, 0 | 5) {
+            device.insert("nfsversion".into(), self.nfs_version.clone());
+        }
+        device.retain(|_, value| !value.is_empty());
+        if !self.username.is_empty() {
+            let (user, pass) = if self.kind == 1 {
+                ("chapuser", "chappassword")
+            } else if self.kind == 3 {
+                ("username", "password")
+            } else {
+                ("username", "cifspassword")
+            };
+            device.insert(user.into(), self.username.clone());
+            device.insert(pass.into(), self.password.clone());
+        }
+        xen_core::storage::SrConfig {
+            sr_type: sr_type.into(),
+            content_type: content_type.into(),
+            shared,
+            device,
+            existing_uuid: self.existing_uuid.clone(),
+        }
+    }
 }
 
 pub struct SrReattachDialog {
@@ -1176,6 +1261,7 @@ pub struct VdiDeleteConfirm {
 }
 
 pub struct AttachVdiDialog {
+    pub read_only: bool,
     pub connection_id: String,
     pub vm_uuid: String,
     pub vdis: Vec<VdiSummary>,
@@ -1188,6 +1274,7 @@ pub struct AttachVdiDialog {
 }
 
 pub struct DiskAddDialog {
+    pub description: String,
     pub connection_id: String,
     pub vm_uuid: String,
     pub srs: Vec<(String, String, u64)>,
@@ -1480,6 +1567,7 @@ pub struct UiState {
     pub pif_catalog_loading: bool,
     pub pif_catalog_error: Option<String>,
     pub pif_catalog_seq: u64,
+    pub repair_sr_dialog: Option<(String, String)>,
     pub pbd_catalog: Vec<PbdSummary>,
     pub pbd_catalog_sr: Option<String>,
     pub pbd_catalog_loading: bool,
@@ -1615,6 +1703,7 @@ impl Default for UiState {
             pif_catalog_loading: false,
             pif_catalog_error: None,
             pif_catalog_seq: 0,
+            repair_sr_dialog: None,
             pbd_catalog: Vec::new(),
             pbd_catalog_sr: None,
             pbd_catalog_loading: false,
@@ -1811,6 +1900,8 @@ pub enum UiAction {
         plugged: bool,
     },
     RepairSr,
+    CloseRepairSr,
+    ConfirmRepairSr,
     OpenSrProbe,
     CloseSrProbe,
     SaveSrProbe,
@@ -1927,6 +2018,7 @@ pub enum UiAction {
     OpenSrCreate,
     CloseSrCreate,
     SaveSrCreate,
+    ProbeNewSr,
     OpenSrReattach,
     CloseSrReattach,
     SaveSrReattach,

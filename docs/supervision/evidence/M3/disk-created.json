@@ -1,0 +1,11 @@
+{
+  "created_vdis": [
+    {
+      "uuid": "9bb7e562-2f5a-4c95-ac86-eea9fca85624",
+      "name_label": "zz-parity-M3-disk",
+      "name_description": "Standalone storage acceptance",
+      "virtual_size": 1073741824,
+      "VBDs": []
+    }
+  ]
+}

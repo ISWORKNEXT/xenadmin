@@ -109,7 +109,7 @@ pub enum Command {
         host_uuid: String,
         name: String,
         description: String,
-        location: String,
+        config: xen_core::storage::SrConfig,
     },
     IntroduceSr {
         connection_id: String,
@@ -189,6 +189,11 @@ pub enum Command {
     RepairSr {
         connection_id: String,
         sr_uuid: String,
+    },
+    ProbeNewSr {
+        connection_id: String,
+        host_uuid: String,
+        config: xen_core::storage::SrConfig,
     },
     ProbeSr {
         seq: u64,
@@ -369,6 +374,7 @@ pub enum Command {
         vm_uuid: String,
         vdi_uuid: String,
         bootable: bool,
+        read_only: bool,
     },
     MoveDisk {
         connection_id: String,
@@ -388,6 +394,7 @@ pub enum Command {
         sr_uuid: String,
         size_bytes: u64,
         name: Option<String>,
+        description: String,
     },
     RemoveDisk {
         connection_id: String,
@@ -572,6 +579,9 @@ pub enum Event {
     SrRepaired {
         sr_uuid: String,
         result: Result<usize, String>,
+    },
+    NewSrProbed {
+        result: Result<xen_core::storage::SrProbe, String>,
     },
     SrProbed {
         seq: u64,
@@ -1068,10 +1078,10 @@ fn dispatch(
                 host_uuid,
                 name,
                 description,
-                location,
+                config,
             } => {
                 let result = workspace
-                    .create_sr(&connection_id, &host_uuid, name, description, location)
+                    .create_storage(&connection_id, &host_uuid, &name, &description, &config)
                     .await;
                 let _ = events.send(Event::SrCreated { result });
             }
@@ -1419,6 +1429,16 @@ fn dispatch(
                 let result = workspace.repair_sr(&connection_id, &sr_uuid).await;
                 let _ = events.send(Event::SrRepaired { sr_uuid, result });
             }
+            Command::ProbeNewSr {
+                connection_id,
+                host_uuid,
+                config,
+            } => {
+                let result = workspace
+                    .probe_storage(&connection_id, &host_uuid, &config)
+                    .await;
+                let _ = events.send(Event::NewSrProbed { result });
+            }
             Command::ProbeSr {
                 seq,
                 connection_id,
@@ -1693,9 +1713,10 @@ fn dispatch(
                 vm_uuid,
                 vdi_uuid,
                 bootable,
+                read_only,
             } => {
                 let result = workspace
-                    .attach_vdi(&connection_id, &vm_uuid, &vdi_uuid, bootable)
+                    .attach_vdi(&connection_id, &vm_uuid, &vdi_uuid, bootable, read_only)
                     .await;
                 let _ = events.send(Event::DiskChanged {
                     vm_uuid,
@@ -1750,10 +1771,30 @@ fn dispatch(
                 sr_uuid,
                 size_bytes,
                 name,
+                description,
             } => {
-                let result = workspace
-                    .add_disk(&connection_id, &vm_uuid, &sr_uuid, size_bytes, name)
-                    .await;
+                let result = if vm_uuid.is_empty() {
+                    workspace
+                        .create_vdi(
+                            &connection_id,
+                            &sr_uuid,
+                            name.as_deref().unwrap_or("New virtual disk"),
+                            &description,
+                            size_bytes,
+                        )
+                        .await
+                } else {
+                    workspace
+                        .add_disk(
+                            &connection_id,
+                            &vm_uuid,
+                            &sr_uuid,
+                            size_bytes,
+                            name,
+                            &description,
+                        )
+                        .await
+                };
                 let _ = events.send(Event::DiskChanged {
                     vm_uuid,
                     action: "add".into(),

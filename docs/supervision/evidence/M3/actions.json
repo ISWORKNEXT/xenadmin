@@ -1,0 +1,274 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "click": [
+        120,
+        103
+      ],
+      "text": "zz-parity-M3-disk"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        752
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        145,
+        199
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        103
+      ],
+      "key": "Control_L+a",
+      "text": "Local storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        145,
+        199
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        463,
+        164
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        720
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        558,
+        757
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        977,
+        567
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        103
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M3-default"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        145,
+        199
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        463,
+        164
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        103
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M3-default",
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        145,
+        199
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        463,
+        164
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        550,
+        242
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        640,
+        279
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        542
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        395,
+        252
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        630,
+        470
+      ],
+      "key": "Control_L+a",
+      "text": "0"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        982,
+        666
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        452,
+        680
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

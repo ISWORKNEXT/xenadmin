@@ -1,0 +1,13 @@
+{
+  "disks": [
+    {
+      "uuid": "614d4d5e-2c49-4caa-b9ce-6cb89b2d0f86",
+      "name_label": "zz-parity-M3-disk",
+      "name_description": "Standalone storage acceptance",
+      "virtual_size": 1073741824,
+      "VBDs": [],
+      "sr_name": "zz-parity-M3-default"
+    }
+  ],
+  "source_absent": true
+}

@@ -96,15 +96,15 @@ VM	Install XenServer VM Tools...	Install XenServer VM Tools...	disabled-not-impl
 VM	Send Ctrl+Alt+Del	SendCtrlAltDel	wired	ConsoleKey (six key transitions)
 VM	Delete VM	DeleteVMCommand	wired	Propose (whole selection; sequential ActionBatch)
 VM	Properties	VMPropertiesCommand	wired	OpenProperties
-Storage	New Storage...	NewSRCommand	wired	OpenSrCreate
-Storage	Repair...	RepairSRCommand	wired	RepairSr
+Storage	New Storage...	NewSRCommand	wired	OpenSrCreate shared Type/Name/Provisioning/Location/Finish wizard; NFS/iSCSI/HBA/SMB disk targets untested-lab
+Storage	Repair...	RepairSRCommand	wired	RepairSr PBD-per-host dialog
 Storage	Set as Default	SetAsDefaultSRCommand	wired	PromptSrAction
 Storage	Virtual Disks	VirtualDiskCommand	wired	submenu
-Storage > Virtual Disks	New Virtual Disk...	AddVirtualDiskCommand	wired	OpenAddDisk
-Storage > Virtual Disks	Attach Virtual Disk...	AttachVirtualDiskCommand	wired	OpenAttachVdi
+Storage > Virtual Disks	New Virtual Disk...	AddVirtualDiskCommand	wired	OpenAddDisk standalone SR or create+attach VM; name/description/size/SR
+Storage > Virtual Disks	Attach Virtual Disk...	AttachVirtualDiskCommand	wired	OpenAttachVdi SR-to-VDI tree with read-only option
 Storage	Reclaim freed space	TrimSRCommand	wired	PromptSrAction
-Storage	Detach	DetachSRCommand	wired	PromptSrAction
-Storage	Reattach...	ReattachSRCommand	wired	OpenSrReattach
+Storage	Detach	DetachSRCommand	wired	PromptSrAction; running VM guard in inventory and backend
+Storage	Reattach...	ReattachSRCommand	wired	OpenSrReattach shared wizard location fields
 Storage	Forget	ForgetSRCommand	wired	PromptSrAction
 Storage	Destroy	DestroySRCommand	wired	PromptSrAction
 Storage	Properties	SRPropertiesCommand	wired	OpenProperties
@@ -138,3 +138,4 @@ VM General	Section Edit…	PropertiesCommand	wired	OpenProperties on CPU / Boot 
 Pool / standalone host	Properties pages	PoolPropertiesCommand	wired	OpenProperties > Live Patching / Network Options / Advanced
 VM Networking	Properties	PropertiesCommand	wired	OpenProperties > Network Settings
 Host / Pool / SR General	Properties	PropertiesCommand	wired	OpenProperties
+SR Storage	Add… / Move…		wired	Standalone VDI create and copy-then-delete move; destination SR selection

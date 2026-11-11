@@ -1495,6 +1495,18 @@ impl App {
                         .toasts
                         .push(Toast::new(message, ToastKind::Error)),
                 },
+                Event::NewSrProbed { result } => {
+                    if let Some(dialog) = self.state.sr_create_dialog.as_mut() {
+                        dialog.submitting = false;
+                        match result {
+                            Ok(probe) => {
+                                dialog.probe = Some(probe);
+                                dialog.error = None;
+                            }
+                            Err(e) => dialog.error = Some(e),
+                        }
+                    }
+                }
                 Event::SrProbed { seq, result } => {
                     if seq == self.state.sr_probe_seq
                         && let Some(dialog) = self.state.sr_probe_dialog.as_mut()
@@ -1911,6 +1923,7 @@ impl App {
                             self.state
                                 .toasts
                                 .push(Toast::new(message, ToastKind::Success));
+                            self.state.sr_vdis_sr = None;
                             self.apply(vec![UiAction::ReloadVmDetails]);
                         }
                         Err(message) => {
@@ -4305,17 +4318,34 @@ impl App {
                     });
                 }
                 UiAction::RepairSr => {
-                    let Some(ObjectKey::Storage {
+                    if let Some(ObjectKey::Storage {
                         connection_id,
                         sr_uuid,
                     }) = self.state.selection.as_ref().map(|tab| tab.key.clone())
-                    else {
-                        continue;
-                    };
-                    self.worker.send(Command::RepairSr {
-                        connection_id,
-                        sr_uuid,
-                    });
+                    {
+                        self.state.repair_sr_dialog =
+                            Some((connection_id.clone(), sr_uuid.clone()));
+                        self.state.pbd_catalog_seq += 1;
+                        self.state.pbd_catalog_loading = true;
+                        self.state.pbd_catalog.clear();
+                        self.state.pbd_catalog_error = None;
+                        self.worker.send(Command::PbdCatalog {
+                            seq: self.state.pbd_catalog_seq,
+                            connection_id,
+                            sr_uuid,
+                        });
+                    }
+                }
+                UiAction::CloseRepairSr => {
+                    self.state.repair_sr_dialog = None;
+                }
+                UiAction::ConfirmRepairSr => {
+                    if let Some((connection_id, sr_uuid)) = self.state.repair_sr_dialog.take() {
+                        self.worker.send(Command::RepairSr {
+                            connection_id,
+                            sr_uuid,
+                        });
+                    }
                 }
                 UiAction::OpenSrProbe => {
                     let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
@@ -4787,6 +4817,18 @@ impl App {
                         continue;
                     }
                     self.state.sr_create_dialog = Some(crate::state::SrCreateDialog {
+                        reattaching: false,
+                        port: "3260".into(),
+                        nfs_version: "3".into(),
+                        kind: 0,
+                        thick: false,
+                        server: String::new(),
+                        target_iqn: String::new(),
+                        scsi_id: String::new(),
+                        username: String::new(),
+                        password: String::new(),
+                        probe: None,
+                        existing_uuid: None,
                         frame: Default::default(),
                         connection_id,
                         host_uuid: hosts.first().map(|(uuid, _)| uuid.clone()),
@@ -4808,6 +4850,19 @@ impl App {
                         self.state.sr_create_dialog = None;
                     }
                 }
+                UiAction::ProbeNewSr => {
+                    if let Some(dialog) = self.state.sr_create_dialog.as_mut()
+                        && let Some(host_uuid) = dialog.host_uuid.clone()
+                    {
+                        dialog.submitting = true;
+                        dialog.error = None;
+                        self.worker.send(Command::ProbeNewSr {
+                            connection_id: dialog.connection_id.clone(),
+                            host_uuid,
+                            config: dialog.config(),
+                        });
+                    }
+                }
                 UiAction::SaveSrCreate => {
                     let Some(dialog) = self.state.sr_create_dialog.as_mut() else {
                         continue;
@@ -4827,7 +4882,7 @@ impl App {
                         host_uuid,
                         name: dialog.name.trim().to_owned(),
                         description: dialog.description.clone(),
-                        location: dialog.location.trim().to_owned(),
+                        config: dialog.config(),
                     });
                 }
                 UiAction::OpenSrReattach => {
@@ -4860,17 +4915,43 @@ impl App {
                     if hosts.is_empty() {
                         continue;
                     }
-                    self.state.sr_reattach_dialog = Some(crate::state::SrReattachDialog {
-                        connection_id,
-                        sr_uuid: sr.uuid.clone(),
-                        sr_name: sr.name.clone(),
-                        host_uuid: hosts.first().map(|(uuid, _)| uuid.clone()),
-                        hosts,
-                        location: String::new(),
-                        submitting: false,
-                        error: None,
-                    });
+                    if sr.storage_type == "file" {
+                        self.state.sr_reattach_dialog = Some(crate::state::SrReattachDialog {
+                            connection_id,
+                            sr_uuid: sr.uuid.clone(),
+                            sr_name: sr.name.clone(),
+                            host_uuid: hosts.first().map(|(id, _)| id.clone()),
+                            hosts,
+                            location: String::new(),
+                            submitting: false,
+                            error: None,
+                        });
+                        continue;
+                    }
+                    let sr_name = sr.name.clone();
+                    let sr_description = sr.description.clone();
+                    let sr_id = sr.uuid.clone();
+                    let kind = match sr.storage_type.as_str() {
+                        "nfs" => 0,
+                        "lvmoiscsi" => 1,
+                        "lvmohba" => 2,
+                        "smb" => 3,
+                        "ext" | "lvm" => 4,
+                        _ => 5,
+                    };
+                    let thick = sr.storage_type == "lvm";
+                    self.apply(vec![UiAction::OpenSrCreate]);
+                    if let Some(dialog) = self.state.sr_create_dialog.as_mut() {
+                        dialog.name = sr_name;
+                        dialog.description = sr_description;
+                        dialog.kind = kind;
+                        dialog.thick = thick;
+                        dialog.reattaching = true;
+                        dialog.existing_uuid = Some(sr_id);
+                        dialog.frame.step = 3;
+                    }
                 }
+
                 UiAction::CloseSrReattach => {
                     if !self
                         .state
@@ -5135,6 +5216,7 @@ impl App {
                     };
                     self.state.vdi_catalog_seq += 1;
                     self.state.attach_vdi_dialog = Some(crate::state::AttachVdiDialog {
+                        read_only: false,
                         connection_id: connection_id.clone(),
                         vm_uuid,
                         vdis: Vec::new(),
@@ -5175,6 +5257,7 @@ impl App {
                         vm_uuid: dialog.vm_uuid.clone(),
                         vdi_uuid,
                         bootable: dialog.bootable,
+                        read_only: dialog.read_only,
                     });
                 }
                 UiAction::OpenMoveDisk {
@@ -5186,8 +5269,16 @@ impl App {
                     let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
-                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
-                        continue;
+                    let (connection_id, vm_uuid) = match &key {
+                        ObjectKey::Storage { connection_id, .. } => {
+                            (connection_id.clone(), String::new())
+                        }
+                        _ => {
+                            let Some(pair) = vm_key(&key) else {
+                                continue;
+                            };
+                            pair
+                        }
                     };
                     let srs: Vec<(String, String, u64)> =
                         find_connection(&self.workspace, &connection_id)
@@ -5351,8 +5442,16 @@ impl App {
                     let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
                         continue;
                     };
-                    let Some((connection_id, vm_uuid)) = vm_key(&key) else {
-                        continue;
+                    let (connection_id, vm_uuid) = match &key {
+                        ObjectKey::Storage { connection_id, .. } => {
+                            (connection_id.clone(), String::new())
+                        }
+                        _ => {
+                            let Some(pair) = vm_key(&key) else {
+                                continue;
+                            };
+                            pair
+                        }
                     };
                     let srs: Vec<(String, String, u64)> =
                         find_connection(&self.workspace, &connection_id)
@@ -5361,7 +5460,7 @@ impl App {
                                 inventory
                                     .storage
                                     .iter()
-                                    .filter(|sr| sr.content_type != "iso" && sr.total > sr.used)
+                                    .filter(|sr| sr.can_create_vdi && sr.total > sr.used)
                                     .map(|sr| {
                                         (
                                             sr.uuid.clone(),
@@ -5383,9 +5482,13 @@ impl App {
                         Some(crate::state::DiskDialog::Add(crate::state::DiskAddDialog {
                             connection_id,
                             vm_uuid,
-                            sr_uuid: srs.first().map(|(uuid, _, _)| uuid.clone()),
+                            sr_uuid: match &key {
+                                ObjectKey::Storage { sr_uuid, .. } => Some(sr_uuid.clone()),
+                                _ => srs.first().map(|(uuid, _, _)| uuid.clone()),
+                            },
                             srs,
                             name: String::new(),
+                            description: String::new(),
                             size_gib: "10".into(),
                             submitting: false,
                             error: None,
@@ -5456,6 +5559,7 @@ impl App {
                                 vm_uuid: dialog.vm_uuid.clone(),
                                 sr_uuid,
                                 size_bytes,
+                                description: dialog.description.clone(),
                                 name: (!dialog.name.trim().is_empty())
                                     .then(|| dialog.name.trim().to_owned()),
                             });

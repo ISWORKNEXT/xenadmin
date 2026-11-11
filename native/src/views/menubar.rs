@@ -627,8 +627,22 @@ fn resolve_single(
                 }
                 return Ok(Dispatch(UiAction::RepairSr));
             }
+            if command == "TrimSRCommand" && !sr.supports_trim {
+                return Err("This storage does not support reclaiming freed space.");
+            }
+            if command == "ForgetSRCommand" && (!sr.can_forget || sr.has_running_vms) {
+                return Err("This storage cannot be forgotten in its current state.");
+            }
+            if command == "DestroySRCommand" && (!sr.can_destroy || sr.has_running_vms) {
+                return Err("This storage cannot be destroyed in its current state.");
+            }
             if command == "TrimSRCommand" && sr.pbd_attached == 0 {
                 return Err("Attach the storage first.");
+            }
+            if command == "DetachSRCommand" && sr.has_running_vms {
+                return Err(
+                    "A running VM is using this storage. Shut it down before detaching the SR.",
+                );
             }
             if command == "DetachSRCommand" && sr.pbd_attached == 0 {
                 return Err("The storage is already detached.");
@@ -659,6 +673,9 @@ fn resolve_single(
             UiAction::OpenSrReattach
         }
         "AddVirtualDiskCommand" | "AttachVirtualDiskCommand" => {
+            if command == "AddVirtualDiskCommand" && matches!(key, ObjectKey::Storage { .. }) {
+                return Ok(Dispatch(UiAction::OpenAddDisk));
+            }
             if !matches!(key, ObjectKey::Vm { .. }) {
                 return Err("Select a virtual machine.");
             }
