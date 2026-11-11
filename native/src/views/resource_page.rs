@@ -1,5 +1,5 @@
 use super::{
-    infrastructure_page::{disabled, properties, section, table},
+    infrastructure_page::{disabled, properties, section, table_with_menu},
     object_page::{self, Selection, value_row},
     sidebar::TreeIcon,
 };
@@ -141,52 +141,33 @@ pub fn storage(
                     )
                 })
                 .collect::<Vec<_>>();
-            let selected = table(
+            let selected = table_with_menu(
                 ui,
                 "sr-disks",
                 &["Name", "Description", "Size", "VM"],
                 &rows,
+                |ui, key| {
+                    sr_disk_commands(
+                        ui,
+                        &id,
+                        &sr_uuid,
+                        sr,
+                        !state::is_read_only(connection),
+                        state.sr_vdis.iter().find(|d| d.uuid == key),
+                        actions,
+                    )
+                },
             );
             let disk = state.sr_vdis.iter().find(|d| d.uuid == selected);
-            ui.horizontal(|ui| {
-                disabled(ui, "Add…");
-                if ui
-                    .add_enabled(
-                        !state::is_read_only(connection),
-                        egui::Button::new("Rescan"),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::PromptSrAction {
-                        connection_id: id.clone(),
-                        sr_uuid: sr_uuid.clone(),
-                        sr_name: sr.name.clone(),
-                        action: SrAction::Scan,
-                    });
-                }
-                disabled(ui, "Move…");
-                let deletable = !state::is_read_only(connection)
-                    && sr.content_type != "iso"
-                    && disk.is_some_and(|d| d.attached_to.is_empty() && !d.missing && !d.read_only);
-                if ui
-                    .add_enabled(deletable, egui::Button::new("Delete"))
-                    .on_disabled_hover_text("Select an unattached, writable disk.")
-                    .clicked()
-                {
-                    let d = disk.unwrap();
-                    actions.push(UiAction::PromptDeleteVdi {
-                        vdi_uuid: d.uuid.clone(),
-                        name: d.name.clone(),
-                        size: d.virtual_size,
-                    });
-                }
-                if ui
-                    .add_enabled(disk.is_some(), egui::Button::new("Properties"))
-                    .clicked()
-                {
-                    properties(actions, &id, ObjectKind::Disk, &selected);
-                }
-            });
+            sr_disk_commands(
+                ui,
+                &id,
+                &sr_uuid,
+                sr,
+                !state::is_read_only(connection),
+                disk,
+                actions,
+            );
             if let Some(disk) = disk
                 && ui.link(format!("Open {}", disk.name)).clicked()
             {
@@ -201,6 +182,56 @@ pub fn storage(
         }
         _ => {}
     }
+}
+
+fn sr_disk_commands(
+    ui: &mut Ui,
+    id: &str,
+    sr_uuid: &str,
+    sr: &xen_core::xapi::Storage,
+    writable: bool,
+    disk: Option<&xen_core::vm::SrVdi>,
+    actions: &mut Vec<UiAction>,
+) {
+    super::context_menu::command_strip(ui, |ui| {
+        disabled(ui, "Add…");
+        if ui
+            .add_enabled(writable, egui::Button::new("Rescan"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
+            .clicked()
+        {
+            actions.push(UiAction::PromptSrAction {
+                connection_id: id.to_owned(),
+                sr_uuid: sr_uuid.to_owned(),
+                sr_name: sr.name.clone(),
+                action: SrAction::Scan,
+            });
+        }
+        disabled(ui, "Move…");
+        let deletable = writable
+            && sr.content_type != "iso"
+            && disk.is_some_and(|d| d.attached_to.is_empty() && !d.missing && !d.read_only);
+        if ui
+            .add_enabled(deletable, egui::Button::new("Delete"))
+            .on_disabled_hover_text("Select an unattached, writable disk.")
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
+            .clicked()
+        {
+            let d = disk.unwrap();
+            actions.push(UiAction::PromptDeleteVdi {
+                vdi_uuid: d.uuid.clone(),
+                name: d.name.clone(),
+                size: d.virtual_size,
+            });
+        }
+        if ui
+            .add_enabled(disk.is_some(), egui::Button::new("Properties"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
+            .clicked()
+        {
+            properties(actions, id, ObjectKind::Disk, &disk.unwrap().uuid);
+        }
+    });
 }
 
 pub fn network(

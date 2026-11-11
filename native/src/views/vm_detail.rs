@@ -1697,24 +1697,47 @@ fn storage(
                                 ui.label(RichText::new(value).size(11.0));
                             });
                         }
-                        if row.response().clicked() {
+                        if row.response().clicked() || row.response().secondary_clicked() {
                             selected = disk.vbd_uuid.clone();
                         }
+                        row.response().context_menu(|ui| {
+                            storage_commands(
+                                ui,
+                                connection_id,
+                                editable,
+                                halted,
+                                Some(disk),
+                                actions,
+                            )
+                        });
                     });
                 });
         });
     ui.ctx()
         .data_mut(|data| data.insert_temp(selection_id, selected.clone()));
     let disk = disks.iter().copied().find(|disk| disk.vbd_uuid == selected);
-    ui.horizontal_wrapped(|ui| {
+    storage_commands(ui, connection_id, editable, halted, disk, actions);
+}
+
+fn storage_commands(
+    ui: &mut Ui,
+    connection_id: &str,
+    editable: bool,
+    halted: bool,
+    disk: Option<&xen_core::vm::VmDisk>,
+    actions: &mut Vec<UiAction>,
+) {
+    super::context_menu::command_strip(ui, |ui| {
         if ui
             .add_enabled(editable && halted, egui::Button::new("Add…"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             actions.push(UiAction::OpenAddDisk);
         }
         if ui
             .add_enabled(editable && halted, egui::Button::new("Attach Disk…"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             actions.push(UiAction::OpenAttachVdi);
@@ -1725,6 +1748,7 @@ fn storage(
                 editable && !halted && disk.is_some(),
                 egui::Button::new(if active { "Deactivate" } else { "Activate" }),
             )
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             let disk = disk.unwrap();
@@ -1735,6 +1759,7 @@ fn storage(
         }
         if ui
             .add_enabled(editable && disk.is_some(), egui::Button::new("Move…"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             let disk = disk.unwrap();
@@ -1751,6 +1776,9 @@ fn storage(
                     editable && halted && disk.is_some_and(|disk| !delete || disk.owner),
                     egui::Button::new(label),
                 )
+                .on_disabled_hover_text(
+                    "The object state or connection does not allow this operation.",
+                )
                 .clicked()
             {
                 let disk = disk.unwrap();
@@ -1763,6 +1791,7 @@ fn storage(
         }
         if ui
             .add_enabled(editable && disk.is_some(), egui::Button::new("Properties"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             actions.push(UiAction::OpenProperties {
@@ -1875,9 +1904,11 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
                         ui.label(RichText::new(value).size(11.0));
                     });
                 }
-                if row.response().clicked() {
+                if row.response().clicked() || row.response().secondary_clicked() {
                     selected = interface.uuid.clone();
                 }
+                row.response()
+                    .context_menu(|ui| network_commands(ui, editable, Some(interface), actions));
             });
         });
     ui.ctx()
@@ -1885,9 +1916,19 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
     let interface = interfaces
         .iter()
         .find(|interface| interface.uuid == selected);
-    ui.horizontal(|ui| {
+    network_commands(ui, editable, interface, actions);
+}
+
+fn network_commands(
+    ui: &mut Ui,
+    editable: bool,
+    interface: Option<&VmInterface>,
+    actions: &mut Vec<UiAction>,
+) {
+    super::context_menu::command_strip(ui, |ui| {
         if ui
             .add_enabled(editable, egui::Button::new("Add Interface…"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             actions.push(UiAction::OpenVifDialog(None));
@@ -1897,6 +1938,7 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
                 editable && interface.is_some(),
                 egui::Button::new("Properties"),
             )
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             actions.push(UiAction::OpenVifDialog(Some(
@@ -1905,6 +1947,7 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
         }
         if ui
             .add_enabled(editable && interface.is_some(), egui::Button::new("Remove"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             let interface = interface.unwrap();
@@ -1919,6 +1962,7 @@ fn network(ui: &mut Ui, interfaces: &[VmInterface], editable: bool, actions: &mu
                 editable && interface.is_some(),
                 egui::Button::new(if active { "Deactivate" } else { "Activate" }),
             )
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
             .clicked()
         {
             actions.push(UiAction::SetVifPlugged {
@@ -2073,7 +2117,7 @@ fn snapshots(
         );
     }
     for snapshot in &snapshots {
-        ui.horizontal(|ui| {
+        let response = ui.horizontal(|ui| {
             let mut checked = state.snapshot_selection.contains(&snapshot.uuid);
             if ui
                 .add_enabled(!read_only, egui::Checkbox::without_text(&mut checked))
@@ -2113,6 +2157,89 @@ fn snapshots(
                     .color(dim_fg()),
                 );
             });
+        });
+        let row_response = response.response.interact(Sense::click());
+        if row_response.secondary_clicked() && !state.snapshot_selection.contains(&snapshot.uuid) {
+            state.snapshot_selection.clear();
+            state.snapshot_selection.insert(snapshot.uuid.clone());
+        }
+        row_response.context_menu(|ui| {
+            for (label, kind, operation) in [
+                ("Take Snapshot…", ActionKind::Snapshot, "snapshot"),
+                ("Revert To…", ActionKind::Revert, "revert"),
+                ("New VM from Snapshot…", ActionKind::SnapshotToVm, "clone"),
+                (
+                    "New Template from Snapshot…",
+                    ActionKind::SnapshotToTemplate,
+                    "clone",
+                ),
+            ] {
+                let target = if kind == ActionKind::Snapshot {
+                    vm
+                } else {
+                    snapshot
+                };
+                if ui
+                    .add_enabled(
+                        !read_only
+                            && action_allowed(
+                                workspace,
+                                connection_id(connection),
+                                target,
+                                operation,
+                            ),
+                        egui::Button::new(label),
+                    )
+                    .on_disabled_hover_text("The VM state does not allow this operation.")
+                    .clicked()
+                {
+                    actions.push(UiAction::Propose(
+                        kind,
+                        vec![(connection_id(connection).into(), target.uuid.clone())],
+                    ));
+                    ui.close();
+                }
+            }
+            if ui
+                .add_enabled(
+                    action_allowed(workspace, connection_id(connection), snapshot, "export"),
+                    egui::Button::new("Export Snapshot as Template…"),
+                )
+                .on_disabled_hover_text("The snapshot state does not allow export.")
+                .clicked()
+            {
+                actions.push(UiAction::OpenXvaExport {
+                    connection_id: connection_id(connection).into(),
+                    vm_uuid: snapshot.uuid.clone(),
+                });
+                ui.close();
+            }
+            if ui.button("Properties").clicked() {
+                actions.push(UiAction::OpenProperties {
+                    connection_id: connection_id(connection).into(),
+                    target: xen_core::properties::ObjectTarget {
+                        kind: xen_core::properties::ObjectKind::Vm,
+                        uuid: snapshot.uuid.clone(),
+                    },
+                });
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    !read_only
+                        && state.snapshot_selection.iter().all(|uuid| {
+                            snapshots.iter().find(|s| &s.uuid == uuid).is_some_and(|s| {
+                                action_allowed(workspace, connection_id(connection), s, "destroy")
+                            })
+                        }),
+                    egui::Button::new("Delete"),
+                )
+                .on_disabled_hover_text("The snapshot state does not allow deletion.")
+                .clicked()
+            {
+                actions.push(UiAction::PromptDeleteSnapshots);
+                ui.close();
+            }
         });
         ui.add_space(3.0);
     }

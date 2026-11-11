@@ -504,7 +504,7 @@ pub fn show(
                 .min_scrolled_height(height)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    draw_node(ui, state, &tree, 0, "", actions);
+                    draw_node(ui, state, workspace, &tree, &[], 0, "", actions);
                     if tree.children.is_empty()
                         && !matches!(
                             state.navigation_mode,
@@ -617,10 +617,13 @@ pub fn show(
         });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_node(
     ui: &mut Ui,
     state: &mut UiState,
+    workspace: &WorkspaceView,
     node: &Node,
+    siblings: &[crate::state::ObjectSelection],
     depth: usize,
     parent_id: &str,
     actions: &mut Vec<UiAction>,
@@ -643,7 +646,7 @@ fn draw_node(
     let selected = node
         .key
         .as_ref()
-        .is_some_and(|key| state.selection.as_ref().is_some_and(|s| &s.key == key));
+        .is_some_and(|key| super::context_menu::contains(state, key));
     let (main, chevron) = tree_row_colored(
         ui,
         &path_id,
@@ -666,19 +669,43 @@ fn draw_node(
     if chevron.is_some_and(|c| c.clicked()) {
         actions.push(UiAction::ToggleTreeNode(path_id.clone()));
     }
-    if main.clicked() {
-        if let Some(key) = &node.key {
-            actions.push(UiAction::OpenObject {
+    if let Some(key) = &node.key {
+        super::context_menu::row(
+            &main,
+            state,
+            workspace,
+            crate::state::ObjectSelection {
                 key: key.clone(),
                 title: node.name.clone(),
-            });
-        } else {
-            actions.push(UiAction::ToggleTreeNode(path_id.clone()));
-        }
+            },
+            siblings,
+            actions,
+        );
+    } else if main.clicked() {
+        actions.push(UiAction::ToggleTreeNode(path_id.clone()));
     }
     if expanded {
+        let siblings: Vec<_> = node
+            .children
+            .iter()
+            .filter_map(|n| {
+                n.key.clone().map(|key| crate::state::ObjectSelection {
+                    key,
+                    title: n.name.clone(),
+                })
+            })
+            .collect();
         for child in &node.children {
-            draw_node(ui, state, child, depth + 1, &path_id, actions);
+            draw_node(
+                ui,
+                state,
+                workspace,
+                child,
+                &siblings,
+                depth + 1,
+                &path_id,
+                actions,
+            );
         }
     }
 }

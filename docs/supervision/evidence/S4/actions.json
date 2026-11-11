@@ -1,0 +1,228 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        145,
+        568,
+        3
+      ],
+      "wait": 1,
+      "snap": "01-vm-context"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "01-vm-context",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        110
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        130,
+        170,
+        3
+      ],
+      "snap": "02-host-context",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        110
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        125,
+        567
+      ],
+      "wait": 0.5
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        130,
+        595,
+        3
+      ],
+      "wait": 1,
+      "snap": "04-multiple-vms-context",
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "78c6e4ec-67dd-654c-a95d-983a59f56696",
+        "name_label": "zz-parity-S4-b",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "b5eb3835-c38c-9e92-a0d7-a38a7422a634",
+        "name_label": "zz-parity-S4-a",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1100,
+        110
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        125,
+        567
+      ],
+      "wait": 1,
+      "snap": "/tmp/s4-ctrl"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        130,
+        595,
+        3
+      ],
+      "wait": 1,
+      "snap": "04-multiple-vms-context"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        178,
+        878
+      ],
+      "wait": 1,
+      "snap": "/tmp/s4-confirm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        948,
+        636
+      ],
+      "wait": 5,
+      "readback": true,
+      "snap": "/tmp/s4-deleted"
+    },
+    "readback": []
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        132,
+        104
+      ],
+      "text": "Local",
+      "wait": 1,
+      "snap": "/tmp/s4-sr-filter"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        132,
+        198,
+        3
+      ],
+      "wait": 1,
+      "snap": "03-sr-context"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        130,
+        104
+      ],
+      "text": "Local",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        132,
+        198,
+        3
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        167,
+        351
+      ],
+      "wait": 1,
+      "snap": "/tmp/s4-reattach-rejected"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

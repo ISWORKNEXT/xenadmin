@@ -1,0 +1,35 @@
+{
+  "created_via": "XenAPI template clone (no disks)",
+  "before": [
+    {
+      "uuid": "b5eb3835-c38c-9e92-a0d7-a38a7422a634",
+      "name_label": "zz-parity-S4-a",
+      "power_state": "Halted"
+    },
+    {
+      "uuid": "78c6e4ec-67dd-654c-a95d-983a59f56696",
+      "name_label": "zz-parity-S4-b",
+      "power_state": "Halted"
+    }
+  ],
+  "after_context_menu_delete": [],
+  "host_xenapi_answered": true,
+  "reattach_guard_after_disabled_click": {
+    "sr_uuid": "7a5a8cb4-7052-8de1-7473-4a8d9a36e272",
+    "pbd_count": 1,
+    "expected": "Disabled because this SR already has PBDs; no reattach dialog"
+  },
+  "multi_selection_input": "XTest Ctrl+click on b with a already selected, then right-click b; both names visible in one confirmation",
+  "ui_delete_tasks_observed": [
+    {
+      "name": "zz-parity-S4-a",
+      "status": "succeeded",
+      "started": "02:36:26"
+    },
+    {
+      "name": "zz-parity-S4-b",
+      "status": "succeeded",
+      "started": "02:36:27"
+    }
+  ]
+}

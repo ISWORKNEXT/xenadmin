@@ -66,14 +66,14 @@ Server	Remove from Xen Desktop	RemoveHostCommand	wired	ConfirmRemove
 Server	Properties	HostPropertiesCommand	wired	OpenProperties
 VM	New VM...	NewVMCommand	wired	OpenNewVmWizard
 VM	Start/Shut down	Start/Shutdown	wired	submenu
-VM > Start/Shut down	Start	StartVMCommand	wired	Propose
-VM > Start/Shut down	Shut Down	ShutDownVMCommand	wired	Propose
-VM > Start/Shut down	Resume	ResumeVMCommand	wired	Propose
-VM > Start/Shut down	Suspend	SuspendVMCommand	wired	Propose
-VM > Start/Shut down	Reboot	RebootVMCommand	wired	Propose
+VM > Start/Shut down	Start	StartVMCommand	wired	Propose (whole selection; sequential ActionBatch)
+VM > Start/Shut down	Shut Down	ShutDownVMCommand	wired	Propose (whole selection; sequential ActionBatch)
+VM > Start/Shut down	Resume	ResumeVMCommand	wired	Propose (whole selection; sequential ActionBatch)
+VM > Start/Shut down	Suspend	SuspendVMCommand	wired	Propose (whole selection; sequential ActionBatch)
+VM > Start/Shut down	Reboot	RebootVMCommand	wired	Propose (whole selection; sequential ActionBatch)
 VM > Start/Shut down	Start in Recovery Mode	VMRecoveryModeCommand	disabled-not-implemented	
-VM > Start/Shut down	Force Shut Down	ForceVMShutDownCommand	wired	Propose
-VM > Start/Shut down	Force Reboot	ForceVMRebootCommand	wired	Propose
+VM > Start/Shut down	Force Shut Down	ForceVMShutDownCommand	wired	Propose (whole selection; sequential ActionBatch)
+VM > Start/Shut down	Force Reboot	ForceVMRebootCommand	wired	Propose (whole selection; sequential ActionBatch)
 VM > Start/Shut down	Start vApp	VappStartCommand	disabled-not-implemented	
 VM > Start/Shut down	Shut Down vApp	VappShutDownCommand	disabled-not-implemented	
 VM	Resume on Server	ResumeVMOnHostCommand	wired	submenu
@@ -87,14 +87,14 @@ VM	Copy VM	CopyVMCommand	wired	OpenVmCopy
 VM	Move VM	MoveVMCommand	disabled-not-implemented	
 VM	Take a Snapshot	TakeSnapshotCommand	wired	Propose
 VM	Convert to Template	ConvertVMToTemplateCommand	wired	Propose
-VM	Export...	ExportCommand	wired	OpenXvaExport
+VM	Export...	ExportCommand	wired	OpenXvaExport / OpenXvaExportMany (sequential XvaBatch)
 VM	Trusted Platform Module Manager...	VtpmCommand	disabled-not-implemented	
 VM	Disable Changed Block Tracking	DisableChangedBlockTrackingCommand	disabled-not-implemented	
 VM	Enable PVS-Accelerator...	EnablePvsReadCachingCommand	disabled-not-implemented	
 VM	Disable PVS-Accelerator	DisablePvsReadCachingCommand	disabled-not-implemented	
 VM	Install XenServer VM Tools...	Install XenServer VM Tools...	disabled-not-implemented	
 VM	Send Ctrl+Alt+Del	SendCtrlAltDel	wired	ConsoleKey (six key transitions)
-VM	Delete VM	DeleteVMCommand	wired	Propose
+VM	Delete VM	DeleteVMCommand	wired	Propose (whole selection; sequential ActionBatch)
 VM	Properties	VMPropertiesCommand	wired	OpenProperties
 Storage	New Storage...	NewSRCommand	wired	OpenSrCreate
 Storage	Repair...	RepairSRCommand	wired	RepairSr
@@ -113,7 +113,7 @@ Templates > Create VM From Selection	New VM wizard...	NewVMFromTemplateCommand	w
 Templates > Create VM From Selection	Quick Create	InstantVMFromTemplateCommand	disabled-not-implemented	
 Templates	Export to File...	ExportTemplateCommand	wired	OpenXvaExport
 Templates	Copy...	CopyTemplateCommand	wired	OpenVmCopy
-Templates	Delete Template	DeleteTemplateCommand	wired	Propose
+Templates	Delete Template	DeleteTemplateCommand	wired	Propose (whole selection; sequential ActionBatch)
 Templates	Properties	TemplatePropertiesCommand	wired	OpenProperties
 Tools	Options...	Options	disabled-not-implemented	
 Help	View Xen Desktop Log Files	ViewXenDesktopLogFiles	disabled-not-implemented	
@@ -121,3 +121,16 @@ Help	Check for Xen Desktop Updates	CheckforXenDesktopUpdates	disabled-not-implem
 Help	Xen Desktop on the Web	XenDesktopontheWeb	disabled-not-implemented	
 Help	Xen Desktop Plugins online	XenDesktopPluginsonline	disabled-not-implemented	
 Help	About	About	disabled-not-implemented	
+Tree / Search	Object context menu	ContextMenuBuilder	wired	Shared menubar resolver; Ctrl/Shift selection
+Tree / Search	Delete Snapshot	DeleteSnapshotCommand	wired	Propose (whole selection)
+Tree / Search	Delete VMs and Templates	DeleteVMsAndTemplatesCommand	wired	Propose (whole selection)
+Tree / Search	New VM from Snapshot…	NewVMFromSnapshotCommand	wired	Propose SnapshotToVm
+Tree / Search	New Template from Snapshot…	NewTemplateFromSnapshotCommand	wired	Propose SnapshotToTemplate
+Tree / Search	Export Snapshot as Template…	ExportSnapshotAsTemplateCommand	wired	OpenXvaExport
+Tree / Search	Network / VDI Properties	PropertiesCommand	wired	OpenProperties
+VM Storage	Properties / Resize…	OpenDiskResize	wired	OpenProperties > OpenDiskResize
+VM Storage	Properties / Mode	SetVbdMode	wired	SetVbdMode
+VM Storage	Properties / Bootable	SetVbdBootable	wired	SetVbdBootable
+VM Storage	Properties / Position		disabled-not-implemented	No existing position setter
+VM Storage / Networking / Snapshots	Row context menus		wired	Same actions as table buttons
+Host Networking / NICs / SR Storage	Row context menus		wired	Same actions as table buttons; NIC Delete Bond and Copy

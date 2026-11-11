@@ -237,6 +237,8 @@ impl App {
 
     fn open_object(&mut self, key: ObjectKey, title: Option<String>) {
         let title = title.unwrap_or_else(|| self.object_title(&key));
+        self.state.tree_selection.clear();
+        self.state.tree_anchor = None;
         self.state.selection = Some(ObjectSelection { key, title });
         self.activate_selection();
     }
@@ -2164,6 +2166,17 @@ impl App {
                         });
                     }
                 }
+                UiAction::OpenXvaExportMany(targets) => {
+                    if let Some((connection_id, vm_uuid, _)) = targets.first() {
+                        self.apply(vec![UiAction::OpenXvaExport {
+                            connection_id: connection_id.clone(),
+                            vm_uuid: vm_uuid.clone(),
+                        }]);
+                        if let Some(dialog) = self.state.xva_dialog.as_mut() {
+                            dialog.export_targets = targets;
+                        }
+                    }
+                }
                 UiAction::OpenXvaExport {
                     connection_id,
                     vm_uuid,
@@ -2186,6 +2199,7 @@ impl App {
                         .map(std::path::PathBuf::from)
                         .unwrap_or_else(|| std::path::PathBuf::from("."));
                     self.state.xva_dialog = Some(crate::state::XvaDialog {
+                        export_targets: Vec::new(),
                         connection_id,
                         vm_uuid: Some(vm_uuid),
                         path: directory
@@ -2201,6 +2215,7 @@ impl App {
                 }
                 UiAction::OpenXvaImport(connection_id) => {
                     self.state.xva_dialog = Some(crate::state::XvaDialog {
+                        export_targets: Vec::new(),
                         connection_id,
                         vm_uuid: None,
                         path: String::new(),
@@ -2225,6 +2240,45 @@ impl App {
                     if let Some(dialog) = self.state.xva_dialog.as_mut()
                         && !dialog.submitting
                     {
+                        if !dialog.export_targets.is_empty() {
+                            let path = std::path::PathBuf::from(&dialog.path);
+                            let directory =
+                                path.parent().unwrap_or_else(|| std::path::Path::new("."));
+                            let requests = dialog
+                                .export_targets
+                                .iter()
+                                .enumerate()
+                                .map(|(index, (id, uuid, name))| {
+                                    let file_name: String = name
+                                        .chars()
+                                        .take(64)
+                                        .map(|c| {
+                                            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
+                                                c
+                                            } else {
+                                                '_'
+                                            }
+                                        })
+                                        .collect();
+                                    let destination = if index == 0 {
+                                        path.clone()
+                                    } else {
+                                        directory.join(format!("{file_name}-{uuid}.xva"))
+                                    };
+                                    (
+                                        id.clone(),
+                                        xen_core::xva::XvaRequest::Export {
+                                            vm_uuid: uuid.clone(),
+                                            path: destination,
+                                        },
+                                    )
+                                })
+                                .collect();
+                            dialog.submitting = true;
+                            dialog.error = None;
+                            self.worker.send(Command::XvaBatch { requests });
+                            continue;
+                        }
                         let request = match &dialog.vm_uuid {
                             Some(vm_uuid) => xen_core::xva::XvaRequest::Export {
                                 vm_uuid: vm_uuid.clone(),
@@ -2332,6 +2386,14 @@ impl App {
                     if !self.state.tree_expanded.remove(&id) {
                         self.state.tree_expanded.insert(id);
                     }
+                }
+                UiAction::SelectObjects(selection) => {
+                    if let Some(last) = selection.last() {
+                        let anchor = self.state.tree_anchor.clone();
+                        self.open_object(last.key.clone(), Some(last.title.clone()));
+                        self.state.tree_anchor = anchor;
+                    }
+                    self.state.tree_selection = selection;
                 }
                 UiAction::OpenObject { key, title } => {
                     self.open_object(key, Some(title));
@@ -2481,13 +2543,10 @@ impl App {
                             .map(|(reference, _)| reference.as_str()),
                     );
                     let count = intent.targets.len();
-                    for (connection_id, vm_uuid) in intent.targets {
-                        self.worker.send(Command::Action {
-                            connection_id,
-                            vm_uuid,
-                            action: action.clone(),
-                        });
-                    }
+                    self.worker.send(Command::ActionBatch {
+                        targets: intent.targets,
+                        action,
+                    });
                     self.state.selected.clear();
                     self.open_object(ObjectKey::Tasks, None);
                     self.state.toasts.push(Toast::new(

@@ -26,6 +26,10 @@ pub fn show(
         ui.add_enabled_ui(!dialog.submitting && available,|ui| {
             if export {ui.label(format!("Export {} as a complete XVA archive. The VM must be halted.",dialog.name));}
             else {ui.label("Import one VM or template from an XVA archive. The imported object stays halted.");}
+            if dialog.export_targets.len()>1 {
+                ui.label("Each selected VM exports to a separate file in the destination folder:");
+                for (_,_,name) in &dialog.export_targets {ui.label(name);}
+            }
             ui.add_space(8.0);
             widgets::field_label(ui,if export {"Destination file on this computer"} else {"XVA file on this computer"});
             ui.add(egui::TextEdit::singleline(&mut dialog.path).desired_width(f32::INFINITY));

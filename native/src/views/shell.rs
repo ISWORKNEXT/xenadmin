@@ -14,6 +14,33 @@ pub fn menubar(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
+    if !ui.ctx().egui_wants_keyboard_input() {
+        let key = model::selection(state);
+        let command = if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete)) {
+            Some(match key {
+                crate::state::ObjectKey::Template { .. } => "DeleteTemplateCommand",
+                crate::state::ObjectKey::Snapshot { .. } => "DeleteSnapshotCommand",
+                _ => "DeleteVMsAndTemplatesCommand",
+            })
+        } else if state.tree_selection.len() <= 1
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F2))
+        {
+            Some(match key {
+                crate::state::ObjectKey::Host { .. } => "HostPropertiesCommand",
+                crate::state::ObjectKey::Storage { .. } => "SRPropertiesCommand",
+                crate::state::ObjectKey::Network { .. } => "PropertiesCommand",
+                crate::state::ObjectKey::Template { .. } => "TemplatePropertiesCommand",
+                _ => "VMPropertiesCommand",
+            })
+        } else {
+            None
+        };
+        if let Some(command) = command
+            && let Ok(action) = model::resolve(command, state, workspace)
+        {
+            perform(action, ui.ctx(), state, workspace, actions);
+        }
+    }
     egui::Panel::top("menu-bar")
         .frame(Frame::NONE.fill(theme::panel()).inner_margin(egui::Margin {
             left: 8,
@@ -30,7 +57,7 @@ pub fn menubar(
             });
         });
 }
-fn render_items(
+pub(super) fn render_items(
     ui: &mut Ui,
     items: &[MenuItem],
     state: &mut UiState,

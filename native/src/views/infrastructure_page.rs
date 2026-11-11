@@ -306,7 +306,7 @@ pub fn show(
                     )
                 })
                 .collect();
-            table(
+            table_with_menu(
                 ui,
                 "nics",
                 &[
@@ -322,6 +322,16 @@ pub fn show(
                     "SR-IOV",
                 ],
                 &rows,
+                |ui, key| {
+                    disabled(ui, "Delete Bond");
+                    ui.separator();
+                    if ui.button("Copy").clicked() {
+                        if let Some((_, values)) = rows.iter().find(|(id, _)| id == key) {
+                            ui.ctx().copy_text(values.join("\t"));
+                        }
+                        ui.close();
+                    }
+                },
             );
             load_pifs(state, id, actions);
             ui.horizontal(|ui| {
@@ -449,6 +459,16 @@ pub(super) fn table(
     columns: &[&str],
     rows: &[(String, Vec<String>)],
 ) -> String {
+    table_with_menu(ui, id, columns, rows, |_, _| {})
+}
+
+pub(super) fn table_with_menu(
+    ui: &mut Ui,
+    id: &str,
+    columns: &[&str],
+    rows: &[(String, Vec<String>)],
+    mut menu: impl FnMut(&mut Ui, &str),
+) -> String {
     let selection_id = ui.scope_id().with(("selection", id));
     let mut selected = ui
         .ctx()
@@ -484,9 +504,10 @@ pub(super) fn table(
                             );
                         });
                     }
-                    if row.response().clicked() {
+                    if row.response().clicked() || row.response().secondary_clicked() {
                         selected = key.clone();
                     }
+                    row.response().context_menu(|ui| menu(ui, key));
                 });
             });
     });
@@ -532,6 +553,55 @@ fn load_pifs(state: &mut UiState, id: &str, actions: &mut Vec<UiAction>) {
         });
     }
 }
+fn network_commands(
+    ui: &mut Ui,
+    id: &str,
+    inv: &xen_core::xapi::Inventory,
+    read_only: bool,
+    selected: &str,
+    actions: &mut Vec<UiAction>,
+) {
+    super::context_menu::command_strip(ui, |ui| {
+        if ui
+            .add_enabled(!read_only, egui::Button::new("Add Network…"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
+            .clicked()
+        {
+            actions.push(UiAction::OpenNetworkChooser);
+        }
+        if ui
+            .add_enabled(!selected.is_empty(), egui::Button::new("Properties"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
+            .clicked()
+        {
+            properties(actions, id, ObjectKind::Network, selected);
+        }
+        let removable = !read_only
+            && inv
+                .networks
+                .iter()
+                .find(|n| n.uuid == selected)
+                .is_some_and(|n| n.interface_count == 0 && n.virtual_interface_count == 0);
+        if ui
+            .add_enabled(removable, egui::Button::new("Remove"))
+            .on_disabled_hover_text("The object state or connection does not allow this operation.")
+            .clicked()
+        {
+            actions.push(UiAction::PromptDestroyNetwork {
+                connection_id: id.into(),
+                network_uuid: selected.to_owned(),
+                name: inv
+                    .networks
+                    .iter()
+                    .find(|n| n.uuid == selected)
+                    .unwrap()
+                    .name
+                    .clone(),
+            });
+        }
+    });
+}
+
 fn networking(
     ui: &mut Ui,
     state: &mut UiState,
@@ -579,7 +649,7 @@ fn networking(
             ))
         })
         .collect();
-    let selected = table(
+    let selected = table_with_menu(
         ui,
         "host-networks",
         &[
@@ -593,43 +663,9 @@ fn networking(
             "MTU",
         ],
         &rows,
+        |ui, key| network_commands(ui, id, inv, read_only, key, actions),
     );
-    ui.horizontal(|ui| {
-        if ui
-            .add_enabled(!read_only, egui::Button::new("Add Network…"))
-            .clicked()
-        {
-            actions.push(UiAction::OpenNetworkChooser);
-        }
-        if ui
-            .add_enabled(!selected.is_empty(), egui::Button::new("Properties"))
-            .clicked()
-        {
-            properties(actions, id, ObjectKind::Network, &selected);
-        }
-        let removable = !read_only
-            && inv
-                .networks
-                .iter()
-                .find(|n| n.uuid == selected)
-                .is_some_and(|n| n.interface_count == 0 && n.virtual_interface_count == 0);
-        if ui
-            .add_enabled(removable, egui::Button::new("Remove"))
-            .clicked()
-        {
-            actions.push(UiAction::PromptDestroyNetwork {
-                connection_id: id.into(),
-                network_uuid: selected.clone(),
-                name: inv
-                    .networks
-                    .iter()
-                    .find(|n| n.uuid == selected)
-                    .unwrap()
-                    .name
-                    .clone(),
-            });
-        }
-    });
+    network_commands(ui, id, inv, read_only, &selected, actions);
     ui.add_space(10.0);
     ui.label(RichText::new("IP Address Configuration").strong());
     let ips: Vec<_> = details

@@ -13,6 +13,11 @@ pub fn show(
     actions: &mut Vec<UiAction>,
 ) {
     let sequence = state.properties_seq;
+    let disks = state
+        .vm_state
+        .ready()
+        .map(|vm| vm.disks.clone())
+        .unwrap_or_default();
     let Some(dialog) = state.properties.as_mut() else {
         return;
     };
@@ -44,6 +49,27 @@ pub fn show(
                             widgets::field_label(ui, "Description");
                             ui.add(egui::TextEdit::multiline(&mut properties.description).desired_width(f32::INFINITY).desired_rows(4).char_limit(xen_core::properties::MAX_DESCRIPTION_CHARS));
                             ui.add_space(8.0);
+                            if let Some(disk) = disks.iter().find(|d| d.vdi_uuid == dialog.target.uuid) {
+                                widgets::field_label(ui, "Size and Location");
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("{} · {}", crate::format::bytes(disk.virtual_size), disk.sr_name));
+                                    if ui.button("Resize…").clicked() {
+                                        actions.push(UiAction::CloseProperties);
+                                        actions.push(UiAction::OpenDiskResize {vdi_uuid: disk.vdi_uuid.clone(), name: disk.vdi_name.clone(), current_gib: disk.virtual_size.div_ceil(1024*1024*1024)});
+                                    }
+                                });
+                                widgets::field_label(ui, "Device options for this VM");
+                                let mut mode = disk.mode.clone();
+                                egui::ComboBox::from_id_salt("disk-properties-mode").selected_text(if mode == "RO" {"Read-only"} else {"Read/write"}).show_ui(ui,|ui| {
+                                    ui.selectable_value(&mut mode, "RO".into(), "Read-only");
+                                    ui.selectable_value(&mut mode, "RW".into(), "Read/write");
+                                });
+                                if mode != disk.mode {actions.push(UiAction::SetVbdMode {vbd_uuid:disk.vbd_uuid.clone(),mode});}
+                                let mut bootable = disk.bootable;
+                                if ui.checkbox(&mut bootable,"Bootable").changed() {actions.push(UiAction::SetVbdBootable {vbd_uuid:disk.vbd_uuid.clone(),bootable});}
+                                ui.add_enabled(false,egui::Label::new(format!("Position: {}",disk.userdevice))).on_disabled_hover_text("Not implemented yet");
+                                ui.add_space(8.0);
+                            }
                             widgets::field_label(ui, "Tags");
                             let mut remove = None;
                             for (index, tag) in properties.tags.iter_mut().enumerate() {

@@ -14,6 +14,11 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
+    if state.tree_selection.len() > 1 {
+        super::object_page::tab_strip(ui, &[crate::state::VmTab::Search], &mut state.object_tab);
+        super::search_page::show(ui, state, workspace, actions);
+        return;
+    }
     let key = state
         .selection
         .as_ref()

@@ -1,0 +1,30 @@
+{
+  "unit": "S4",
+  "toolchain": "cargo/rustc 1.99.1",
+  "checks": {
+    "fmt": "passed",
+    "clippy": "passed",
+    "workspace_tests": {
+      "passed": 119,
+      "ignored": 1,
+      "failed": 0
+    },
+    "build": "passed"
+  },
+  "ui_environment": "Real xen-native binary connected to dev host; isolated Xvfb :98 because desktop Xwayland did not deliver XTest input",
+  "screenshots": [
+    "01-vm-context.png",
+    "02-host-context.png",
+    "03-sr-context.png",
+    "04-multiple-vms-context.png"
+  ],
+  "tooltip": "01-vm-context.png shows disabled Move VM reason",
+  "happy_path": "Two diskless VMs cloned via XenAPI, Ctrl-selected and deleted through one native context-menu confirmation; two successful tasks; XenAPI confirms absent",
+  "rejection": "Final binary: disabled Reattach clicked for Local storage with one PBD; no dialog; XenAPI still reports one PBD",
+  "limitations": [
+    "VM creation was via XenAPI, not UI",
+    "Other batch operations, export, row menus, keyboard shortcuts and disk property mutations were not exercised live",
+    "Device position is displayed disabled: no existing setter",
+    "VM/host/multi screenshots precede final minor keyboard, snapshot hitbox and label corrections; final binary was launched for SR rejection"
+  ]
+}

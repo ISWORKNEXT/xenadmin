@@ -1364,6 +1364,7 @@ pub struct NewVmWizard {
 }
 
 pub struct XvaDialog {
+    pub export_targets: Vec<(String, String, String)>,
     pub connection_id: String,
     pub vm_uuid: Option<String>,
     pub path: String,
@@ -1387,6 +1388,8 @@ pub struct UiState {
     pub view: View,
     pub scope: Scope,
     pub selection: Option<ObjectSelection>,
+    pub tree_selection: Vec<ObjectSelection>,
+    pub tree_anchor: Option<ObjectKey>,
     pub navigation_mode: crate::views::sidebar::NavigationMode,
     pub tree_initialized: HashSet<String>,
     pub tree_preferences: crate::config::TreePreferences,
@@ -1519,6 +1522,8 @@ impl Default for UiState {
             new_vm_seq: 0,
             view: View::Overview,
             scope: Scope::All,
+            tree_selection: Vec::new(),
+            tree_anchor: None,
             selection: Some(ObjectSelection {
                 key: ObjectKey::Home,
                 title: "Home".into(),
@@ -1651,6 +1656,7 @@ pub enum UiAction {
     ReloadProperties,
     SaveProperties,
     CloseProperties,
+    OpenXvaExportMany(Vec<(String, String, String)>),
     OpenXvaExport {
         connection_id: String,
         vm_uuid: String,
@@ -1667,6 +1673,7 @@ pub enum UiAction {
     CreateNewVm,
     SetView(View),
     SetScope(Scope),
+    SelectObjects(Vec<ObjectSelection>),
     OpenObject {
         key: ObjectKey,
         title: String,
@@ -1929,10 +1936,6 @@ pub enum UiAction {
     OpenAttachVdi,
     CloseAttachVdi,
     SaveAttachVdi,
-    #[expect(
-        dead_code,
-        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
-    )]
     SetVbdBootable {
         vbd_uuid: String,
         bootable: bool,
@@ -1945,10 +1948,6 @@ pub enum UiAction {
     },
     CloseMoveDisk,
     SaveMoveDisk,
-    #[expect(
-        dead_code,
-        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
-    )]
     SetVbdMode {
         vbd_uuid: String,
         mode: String,
@@ -1964,10 +1963,6 @@ pub enum UiAction {
     CloseSaveSearch,
     SaveCurrentSearch,
     AddCdDrive,
-    #[expect(
-        dead_code,
-        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
-    )]
     OpenDiskResize {
         vdi_uuid: String,
         name: String,

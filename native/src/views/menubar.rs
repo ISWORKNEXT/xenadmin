@@ -18,7 +18,7 @@ pub struct MenuItem {
     pub children: Vec<MenuItem>,
 }
 impl MenuItem {
-    fn item(label: impl Into<String>, command: &'static str) -> Self {
+    pub(super) fn item(label: impl Into<String>, command: &'static str) -> Self {
         Self {
             label: label.into(),
             host_ref: None,
@@ -34,7 +34,7 @@ impl MenuItem {
             children,
         }
     }
-    fn separator() -> Self {
+    pub(super) fn separator() -> Self {
         Self::item("---", "")
     }
 }
@@ -76,7 +76,10 @@ pub fn vm_kind(command: &str) -> Option<ActionKind> {
         "ForceVMRebootCommand" => ActionKind::ForceReboot,
         "TakeSnapshotCommand" => ActionKind::Snapshot,
         "ConvertVMToTemplateCommand" => ActionKind::ConvertToTemplate,
-        "DeleteVMCommand" | "DeleteTemplateCommand" => ActionKind::Destroy,
+        "DeleteVMCommand"
+        | "DeleteTemplateCommand"
+        | "DeleteSnapshotCommand"
+        | "DeleteVMsAndTemplatesCommand" => ActionKind::Destroy,
         _ => return None,
     })
 }
@@ -115,6 +118,10 @@ pub fn implemented(command: &str) -> bool {
                 | "HostMaintenanceModeCommand"
                 | "PoolPropertiesCommand"
                 | "HostPropertiesCommand"
+                | "PropertiesCommand"
+                | "NewVMFromSnapshotCommand"
+                | "NewTemplateFromSnapshotCommand"
+                | "ExportSnapshotAsTemplateCommand"
                 | "VMPropertiesCommand"
                 | "SRPropertiesCommand"
                 | "TemplatePropertiesCommand"
@@ -153,9 +160,93 @@ pub fn out_of_scope(command: &str) -> bool {
 }
 
 pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Resolution {
+    if out_of_scope(command) {
+        return Err("Excluded from this port");
+    }
+    if !implemented(command) {
+        return Err("Not implemented yet");
+    }
+    if matches!(
+        command,
+        "AddHostCommand"
+            | "Exit"
+            | "Toolbar"
+            | "Theme"
+            | "ZoomIn"
+            | "ZoomOut"
+            | "ZoomReset"
+            | "CustomTemplates"
+            | "XenDesktopTemplates"
+            | "LocalStorage"
+            | "HiddenObjects"
+            | "Back"
+            | "Forward"
+            | "ConnectAllHostsCommand"
+            | "DisconnectAllHostsCommand"
+    ) {
+        return resolve_single(command, state, workspace, selection(state));
+    }
+
+    if state.tree_selection.len() > 1 {
+        if command == "ExportCommand" {
+            let mut targets = Vec::new();
+            for selected in &state.tree_selection {
+                if let CommandAction::Dispatch(UiAction::OpenXvaExport {
+                    connection_id,
+                    vm_uuid,
+                }) = resolve_single(command, state, workspace, &selected.key)?
+                {
+                    targets.push((connection_id, vm_uuid, selected.title.clone()));
+                }
+            }
+            return Ok(CommandAction::Dispatch(UiAction::OpenXvaExportMany(
+                targets,
+            )));
+        }
+
+        let Some(kind) = vm_kind(command).filter(|kind| {
+            matches!(
+                kind,
+                ActionKind::Start
+                    | ActionKind::Shutdown
+                    | ActionKind::Reboot
+                    | ActionKind::Suspend
+                    | ActionKind::Resume
+                    | ActionKind::ForceShutdown
+                    | ActionKind::ForceReboot
+                    | ActionKind::Destroy
+            )
+        }) else {
+            return Err("This command requires a single selection.");
+        };
+        let mut targets = Vec::new();
+        let mut reason = "This selection does not support this command.";
+        for selected in &state.tree_selection {
+            match resolve_single(command, state, workspace, &selected.key) {
+                Ok(CommandAction::Dispatch(UiAction::Propose(_, mut target))) => {
+                    targets.append(&mut target)
+                }
+                Err(error) => reason = error,
+                _ => {}
+            }
+        }
+        if targets.is_empty() {
+            return Err(reason);
+        }
+        return Ok(CommandAction::Dispatch(UiAction::Propose(kind, targets)));
+    }
+    resolve_single(command, state, workspace, selection(state))
+}
+
+fn resolve_single(
+    command: &str,
+    state: &UiState,
+    workspace: &WorkspaceView,
+    key: &ObjectKey,
+) -> Resolution {
     use CommandAction::*;
     if out_of_scope(command) {
-        return Err("Out of scope");
+        return Err("Excluded from this port");
     }
     if !implemented(command) {
         return Err("Not implemented yet");
@@ -202,7 +293,6 @@ pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Res
         }
         _ => {}
     }
-    let key = selection(state);
     if matches!(
         command,
         "RepairSRCommand"
@@ -276,6 +366,20 @@ pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Res
         return Ok(DispatchMany(batch));
     }
     let inventory = connection_inventory(connection).ok_or("Refresh the connection first.")?;
+    if command == "PropertiesCommand" {
+        let (kind, uuid) = match key {
+            ObjectKey::Network { network_uuid, .. } => (ObjectKind::Network, network_uuid),
+            ObjectKey::Vdi { vdi_uuid, .. } => (ObjectKind::Disk, vdi_uuid),
+            _ => return Err("Select an object with properties."),
+        };
+        return Ok(Dispatch(UiAction::OpenProperties {
+            connection_id: id.into(),
+            target: ObjectTarget {
+                kind,
+                uuid: uuid.clone(),
+            },
+        }));
+    }
     let properties_kind = match command {
         "PoolPropertiesCommand" => Some(ObjectKind::Pool),
         "HostPropertiesCommand" => Some(ObjectKind::Host),
@@ -287,7 +391,10 @@ pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Res
         let uuid = match (command, key) {
             ("PoolPropertiesCommand", ObjectKey::Pool(_)) => &inventory.pool_id,
             ("HostPropertiesCommand", ObjectKey::Host { host_uuid, .. }) => host_uuid,
-            ("VMPropertiesCommand", ObjectKey::Vm { vm_uuid, .. })
+            (
+                "VMPropertiesCommand",
+                ObjectKey::Vm { vm_uuid, .. } | ObjectKey::Snapshot { vm_uuid, .. },
+            )
             | ("TemplatePropertiesCommand", ObjectKey::Template { vm_uuid, .. }) => vm_uuid,
             ("SRPropertiesCommand", ObjectKey::Storage { sr_uuid, .. }) => sr_uuid,
             _ => return Err("Select an object of this type."),
@@ -313,8 +420,17 @@ pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Res
     }
     if let Some(kind) = vm_kind(command) {
         let uuid = match (command, key) {
-            ("DeleteTemplateCommand", ObjectKey::Template { vm_uuid, .. }) => vm_uuid,
-            (_, ObjectKey::Vm { vm_uuid, .. }) if command != "DeleteTemplateCommand" => vm_uuid,
+            ("DeleteTemplateCommand", ObjectKey::Template { vm_uuid, .. })
+            | ("DeleteSnapshotCommand", ObjectKey::Snapshot { vm_uuid, .. })
+            | (
+                "DeleteVMsAndTemplatesCommand",
+                ObjectKey::Vm { vm_uuid, .. } | ObjectKey::Template { vm_uuid, .. },
+            ) => vm_uuid,
+            (_, ObjectKey::Vm { vm_uuid, .. })
+                if !matches!(command, "DeleteTemplateCommand" | "DeleteSnapshotCommand") =>
+            {
+                vm_uuid
+            }
             _ => {
                 return Err(if command == "DeleteTemplateCommand" {
                     "Select a template."
@@ -333,6 +449,42 @@ pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Res
         )));
     }
     let action = match command {
+        "NewVMFromSnapshotCommand"
+        | "NewTemplateFromSnapshotCommand"
+        | "ExportSnapshotAsTemplateCommand" => {
+            let ObjectKey::Snapshot { vm_uuid, .. } = key else {
+                return Err("Select a snapshot.");
+            };
+            let (_, vm) = find_vm(workspace, id, vm_uuid).ok_or("The snapshot is unavailable.")?;
+            if !action_allowed(
+                workspace,
+                id,
+                vm,
+                if command == "ExportSnapshotAsTemplateCommand" {
+                    "export"
+                } else {
+                    "clone"
+                },
+            ) {
+                return Err("The snapshot state does not allow this operation.");
+            }
+            if command == "ExportSnapshotAsTemplateCommand" {
+                UiAction::OpenXvaExport {
+                    connection_id: id.into(),
+                    vm_uuid: vm_uuid.clone(),
+                }
+            } else {
+                UiAction::Propose(
+                    if command == "NewVMFromSnapshotCommand" {
+                        ActionKind::SnapshotToVm
+                    } else {
+                        ActionKind::SnapshotToTemplate
+                    },
+                    vec![(id.into(), vm_uuid.clone())],
+                )
+            }
+        }
+
         "ImportCommand" => UiAction::OpenXvaImport(id.into()),
         "NewVMCommand" | "NewVMFromTemplateCommand" => {
             if !inventory.hosts.iter().any(|host| host.enabled) {
@@ -929,6 +1081,9 @@ fn expand_dynamic(items: &mut [MenuItem], state: &UiState, workspace: &Workspace
 }
 
 pub fn resolve_item(item: &MenuItem, state: &UiState, workspace: &WorkspaceView) -> Resolution {
+    if state.tree_selection.len() > 1 && item.host_ref.is_some() {
+        return Err("This command requires a single selection.");
+    }
     if matches!(
         item.command,
         "StartVMOnHostCommand" | "StartPausedVMOnHostCommand" | "ResumeVMOnHostCommand"
@@ -981,7 +1136,7 @@ pub fn submenu_reason(
     workspace: &WorkspaceView,
 ) -> Option<&'static str> {
     if out_of_scope(item.command) {
-        return Some("Out of scope");
+        return Some("Excluded from this port");
     }
     if item.children.iter().filter(|c| c.label != "---").any(|c| {
         if c.children.is_empty() {

@@ -32,6 +32,9 @@ pub enum Command {
         connection_id: String,
         properties: xen_core::properties::ObjectPropertiesEdit,
     },
+    XvaBatch {
+        requests: Vec<(String, xen_core::xva::XvaRequest)>,
+    },
     XvaTransfer {
         connection_id: String,
         request: xen_core::xva::XvaRequest,
@@ -61,6 +64,10 @@ pub enum Command {
     },
     Remove {
         connection_id: String,
+    },
+    ActionBatch {
+        targets: Vec<(String, String)>,
+        action: VmAction,
     },
     Action {
         connection_id: String,
@@ -883,6 +890,35 @@ fn dispatch(
                     .await;
                 let _ = events.send(Event::ObjectPropertiesSaved { seq, result });
             }
+            Command::XvaBatch { requests } => {
+                let workspace = workspace.clone();
+                let events = events.clone();
+                let _ = events.send(Event::XvaQueued { result: Ok(()) });
+                tokio::spawn(async move {
+                    for (connection_id, request) in requests {
+                        match workspace.start_xva_transfer(connection_id, request).await {
+                            Ok(task) => {
+                                let _ = events.send(Event::ActionQueued);
+                                loop {
+                                    let view = workspace.view().await;
+                                    if view.tasks.iter().find(|t| t.id == task.id).is_none_or(|t| {
+                                        t.status != xen_core::operations::TaskStatus::Running
+                                    }) {
+                                        break;
+                                    }
+                                    tokio::time::sleep(Duration::from_millis(250)).await;
+                                }
+                            }
+                            Err(message) => {
+                                let _ = events.send(Event::Failed {
+                                    context: "export".into(),
+                                    message,
+                                });
+                            }
+                        }
+                    }
+                });
+            }
             Command::XvaTransfer {
                 connection_id,
                 request,
@@ -962,6 +998,37 @@ fn dispatch(
                 let _ = events.send(Event::ConnectionRemoved {
                     connection_id,
                     result,
+                });
+            }
+            Command::ActionBatch { targets, action } => {
+                let workspace = workspace.clone();
+                let events = events.clone();
+                tokio::spawn(async move {
+                    for (connection_id, vm_uuid) in targets {
+                        match workspace
+                            .start_action(connection_id, vm_uuid, action.clone())
+                            .await
+                        {
+                            Ok(task) => {
+                                let _ = events.send(Event::ActionQueued);
+                                loop {
+                                    let view = workspace.view().await;
+                                    if view.tasks.iter().find(|t| t.id == task.id).is_none_or(|t| {
+                                        t.status != xen_core::operations::TaskStatus::Running
+                                    }) {
+                                        break;
+                                    }
+                                    tokio::time::sleep(Duration::from_millis(250)).await;
+                                }
+                            }
+                            Err(error) => {
+                                let _ = events.send(Event::Failed {
+                                    context: "action".into(),
+                                    message: error,
+                                });
+                            }
+                        }
+                    }
                 });
             }
             Command::Action {

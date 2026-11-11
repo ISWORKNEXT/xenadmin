@@ -108,6 +108,11 @@ pub fn show(
                     body.rows(38.0, rows.len(), |mut row| {
                         let (node, depth) = rows[row.index()];
                         let (description, values) = values(node, workspace);
+                        row.set_selected(
+                            node.key
+                                .as_ref()
+                                .is_some_and(|key| super::context_menu::contains(state, key)),
+                        );
                         row.col(|ui| {
                             ui.add_space(depth as f32 * 16.0);
                             if !node.children.is_empty()
@@ -156,6 +161,28 @@ pub fn show(
                                 );
                             });
                         }
+                        if let Some(key) = &node.key {
+                            let siblings: Vec<_> = rows
+                                .iter()
+                                .filter_map(|(n, _)| {
+                                    n.key.clone().map(|key| state::ObjectSelection {
+                                        key,
+                                        title: n.name.clone(),
+                                    })
+                                })
+                                .collect();
+                            super::context_menu::row(
+                                &row.response(),
+                                state,
+                                workspace,
+                                state::ObjectSelection {
+                                    key: key.clone(),
+                                    title: node.name.clone(),
+                                },
+                                &siblings,
+                                actions,
+                            );
+                        }
                         if row.response().double_clicked()
                             && let Some(key) = &node.key
                         {
@@ -190,6 +217,17 @@ fn find(node: &Node, key: &ObjectKey) -> Option<Node> {
     node.children.iter().find_map(|child| find(child, key))
 }
 fn scoped_roots(state: &UiState, workspace: &WorkspaceView, key: &ObjectKey) -> Vec<Node> {
+    if state.tree_selection.len() > 1 {
+        return super::sidebar::objects(workspace, state)
+            .into_iter()
+            .flat_map(|(_, nodes)| nodes)
+            .filter(|n| {
+                n.key
+                    .as_ref()
+                    .is_some_and(|key| state.tree_selection.iter().any(|s| &s.key == key))
+            })
+            .collect();
+    }
     let tree = super::sidebar::build_tree(workspace, state);
     if matches!(key, ObjectKey::Group(_)) {
         return find(&tree, key).map(|n| n.children).unwrap_or_default();
