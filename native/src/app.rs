@@ -1743,6 +1743,17 @@ impl App {
                         }
                     }
                 },
+                Event::DeleteDetails { targets, result } => {
+                    if let Some(intent) = self.state.intent.as_mut()
+                        && intent.kind == ActionKind::Destroy
+                        && intent.targets == targets
+                    {
+                        intent.deletion = match result {
+                            Ok(items) => LoadState::Ready(items),
+                            Err(e) => LoadState::Error(e),
+                        };
+                    }
+                }
                 Event::VmDetails { seq, result } => {
                     if seq == self.state.vm_seq {
                         self.state.vm_state = match result {
@@ -2463,14 +2474,24 @@ impl App {
                         ActionKind::Snapshot
                         | ActionKind::Checkpoint
                         | ActionKind::SnapshotWithQuiesce => {
-                            format!("Snapshot {}", Local::now().format("%Y-%m-%d"))
+                            format!(
+                                "{first_name} snapshot {}",
+                                Local::now().format("%Y-%m-%d %H:%M")
+                            )
                         }
                         _ => String::new(),
                     };
+                    if kind == ActionKind::Destroy {
+                        self.worker.send(Command::DeleteDetails {
+                            targets: targets.clone(),
+                        });
+                    }
                     self.state.intent = Some(Intent {
                         kind,
                         targets,
                         name,
+                        description: String::new(),
+                        deletion: LoadState::Loading,
                         delete_disks: true,
                         delete_snapshots: false,
                         host: None,
@@ -2488,6 +2509,8 @@ impl App {
                         kind,
                         targets,
                         name: first_name,
+                        description: String::new(),
+                        deletion: LoadState::Loading,
                         delete_disks: true,
                         delete_snapshots: false,
                         host: Some((host_ref, host_name)),
@@ -2497,6 +2520,35 @@ impl App {
                     let Some(intent) = self.state.intent.take() else {
                         continue;
                     };
+                    if intent.kind == ActionKind::Destroy {
+                        let LoadState::Ready(items) = intent.deletion else {
+                            self.state.intent = Some(intent);
+                            continue;
+                        };
+                        for item in items {
+                            self.worker.send(Command::Action {
+                                connection_id: item.connection_id,
+                                vm_uuid: item.uuid,
+                                action: xen_core::operations::VmAction::DeleteSelected {
+                                    disk_uuids: item
+                                        .disks
+                                        .into_iter()
+                                        .filter(|(_, checked)| *checked)
+                                        .map(|(d, _)| d.vdi_uuid)
+                                        .collect(),
+                                    snapshot_uuids: item
+                                        .snapshots
+                                        .into_iter()
+                                        .filter(|(_, _, checked)| *checked)
+                                        .map(|(id, _, _)| id)
+                                        .collect(),
+                                },
+                            });
+                        }
+                        self.state.selected.clear();
+                        self.open_object(ObjectKey::Tasks, None);
+                        continue;
+                    }
                     let action = intent.kind.to_action(
                         &intent.name,
                         intent.delete_disks,
@@ -2506,6 +2558,19 @@ impl App {
                             .as_ref()
                             .map(|(reference, _)| reference.as_str()),
                     );
+                    let action = if matches!(
+                        intent.kind,
+                        ActionKind::Snapshot
+                            | ActionKind::Checkpoint
+                            | ActionKind::SnapshotWithQuiesce
+                    ) {
+                        xen_core::operations::VmAction::WithDescription {
+                            action: Box::new(action),
+                            description: intent.description,
+                        }
+                    } else {
+                        action
+                    };
                     let count = intent.targets.len();
                     self.worker.send(Command::ActionBatch {
                         targets: intent.targets,
@@ -2691,6 +2756,8 @@ impl App {
                     self.state.vm_copy = Some(crate::state::VmCopyDialog {
                         connection_id,
                         vm_uuid,
+                        fast_clone: false,
+                        moving: false,
                         request: xen_core::provisioning::CopyVmRequest {
                             name: format!("{} full copy", vm.name),
                             description: vm.description.clone(),
@@ -2698,20 +2765,53 @@ impl App {
                         },
                     });
                 }
+                UiAction::OpenVmMove {
+                    connection_id,
+                    vm_uuid,
+                } => {
+                    let Some((_, vm)) = find_vm(&self.workspace, &connection_id, &vm_uuid) else {
+                        continue;
+                    };
+                    let name = vm.name.clone();
+                    self.state.vm_copy = None;
+                    self.apply(vec![UiAction::OpenVmCopy {
+                        connection_id,
+                        vm_uuid,
+                    }]);
+                    if let Some(dialog) = self.state.vm_copy.as_mut() {
+                        dialog.moving = true;
+                        dialog.request.name = name;
+                    }
+                }
                 UiAction::CloseVmCopy => self.state.vm_copy = None,
                 UiAction::SubmitVmCopy => {
                     let Some(dialog) = self.state.vm_copy.take() else {
                         continue;
                     };
-                    if dialog.request.name.trim().is_empty() || dialog.request.sr_uuid.is_empty() {
+                    if dialog.request.name.trim().is_empty()
+                        || (!dialog.fast_clone && dialog.request.sr_uuid.is_empty())
+                    {
                         self.state.vm_copy = Some(dialog);
                         continue;
                     }
                     self.worker.send(Command::Action {
                         connection_id: dialog.connection_id,
                         vm_uuid: dialog.vm_uuid,
-                        action: xen_core::operations::VmAction::Copy {
-                            request: dialog.request,
+                        action: if dialog.moving {
+                            xen_core::operations::VmAction::Move {
+                                sr_uuid: dialog.request.sr_uuid,
+                            }
+                        } else if dialog.fast_clone {
+                            xen_core::operations::VmAction::WithDescription {
+                                action: Box::new(xen_core::operations::VmAction::Clone {
+                                    name: dialog.request.name,
+                                }),
+                                description: dialog.request.description,
+                            }
+                        } else {
+                            xen_core::operations::VmAction::Copy {
+                                request: dialog.request,
+                            }
                         },
                     });
                     self.open_object(ObjectKey::Tasks, None);

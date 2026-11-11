@@ -490,9 +490,20 @@ pub struct Intent {
     pub kind: ActionKind,
     pub targets: Vec<(String, String)>,
     pub name: String,
+    pub description: String,
+    pub deletion: LoadState<Vec<DeleteVmItem>>,
     pub delete_disks: bool,
     pub delete_snapshots: bool,
     pub host: Option<(String, String)>,
+}
+
+#[derive(Clone)]
+pub struct DeleteVmItem {
+    pub connection_id: String,
+    pub uuid: String,
+    pub name: String,
+    pub disks: Vec<(xen_core::vm::VmDisk, bool)>,
+    pub snapshots: Vec<(String, String, bool)>,
 }
 
 #[derive(Clone)]
@@ -1230,6 +1241,8 @@ pub struct IsoDialog {
 pub struct VmCopyDialog {
     pub connection_id: String,
     pub vm_uuid: String,
+    pub fast_clone: bool,
+    pub moving: bool,
     pub request: xen_core::provisioning::CopyVmRequest,
 }
 
@@ -1742,6 +1755,10 @@ pub enum UiAction {
     LoadVmPerformance,
     SetVmPerfRange(u64),
     OpenVmCopy {
+        connection_id: String,
+        vm_uuid: String,
+    },
+    OpenVmMove {
         connection_id: String,
         vm_uuid: String,
     },

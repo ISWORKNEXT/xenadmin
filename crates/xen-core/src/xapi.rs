@@ -750,6 +750,19 @@ fn vm_record(reference: String, r: &Value, host_names: &HashMap<String, String>)
         resident_on: host_ref,
         snapshot_of: text(r, "snapshot_of"),
         snapshot_time: text(r, "snapshot_time"),
+        parent: text(r, "parent"),
+        folder: text(&r["other_config"], "folder"),
+        custom_fields: r["other_config"]
+            .as_object()
+            .map(|m| {
+                m.iter()
+                    .filter_map(|(k, v)| {
+                        k.strip_prefix("XenCenter.CustomFields.")
+                            .and_then(|name| v.as_str().map(|v| (name.to_owned(), v.to_owned())))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         uuid: text(r, "uuid"),
         name: text(r, "name_label"),
         description: text(r, "name_description"),
@@ -853,6 +866,9 @@ pub struct VirtualMachine {
     pub resident_on: String,
     pub snapshot_of: String,
     pub snapshot_time: String,
+    pub parent: String,
+    pub folder: String,
+    pub custom_fields: Vec<(String, String)>,
     pub disk_count: usize,
     pub interface_count: usize,
     pub uuid: String,

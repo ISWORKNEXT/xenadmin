@@ -327,6 +327,9 @@ pub enum Command {
         vm_uuid: String,
         snapshot_uuids: Vec<String>,
     },
+    DeleteDetails {
+        targets: Vec<(String, String)>,
+    },
     VmDetails {
         seq: u64,
         connection_id: String,
@@ -591,6 +594,10 @@ pub enum Event {
     },
     AdDisabled {
         result: Result<(), String>,
+    },
+    DeleteDetails {
+        targets: Vec<(String, String)>,
+        result: Result<Vec<crate::state::DeleteVmItem>, String>,
     },
     VmDetails {
         seq: u64,
@@ -1595,6 +1602,38 @@ fn dispatch(
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::HostPerformance { seq, result });
+            }
+            Command::DeleteDetails { targets } => {
+                let mut items = Vec::new();
+                let mut error = None;
+                for (connection_id, uuid) in &targets {
+                    match workspace.vm_details(connection_id, uuid).await {
+                        Ok(d) => items.push(crate::state::DeleteVmItem {
+                            connection_id: connection_id.clone(),
+                            uuid: uuid.clone(),
+                            name: d.name,
+                            disks: d
+                                .disks
+                                .into_iter()
+                                .map(|d| {
+                                    let checked = d.owner && !d.shared && !d.is_cd;
+                                    (d, checked)
+                                })
+                                .collect(),
+                            snapshots: d
+                                .snapshots
+                                .into_iter()
+                                .map(|s| (s.uuid, s.name, false))
+                                .collect(),
+                        }),
+                        Err(e) => {
+                            error = Some(e);
+                            break;
+                        }
+                    }
+                }
+                let result = error.map_or(Ok(items), Err);
+                let _ = events.send(Event::DeleteDetails { targets, result });
             }
             Command::VmDetails {
                 seq,

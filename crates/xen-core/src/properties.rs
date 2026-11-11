@@ -53,6 +53,8 @@ pub struct ObjectProperties {
     pub description: String,
     pub tags: Vec<String>,
     pub folder: String,
+    #[serde(default)]
+    pub page_summaries: std::collections::BTreeMap<String, String>,
     pub disk: Option<DiskProperties>,
 }
 
@@ -276,6 +278,45 @@ impl Connection {
 
 fn properties_from_record(target: &ObjectTarget, record: &Value) -> ObjectProperties {
     ObjectProperties {
+        page_summaries: {
+            let mut summaries = std::collections::BTreeMap::new();
+            let alarms = record["other_config"]["perfmon"]
+                .as_str()
+                .unwrap_or_default();
+            summaries.insert(
+                "Alerts".into(),
+                if alarms.is_empty() {
+                    "None configured".into()
+                } else {
+                    "Configured".into()
+                },
+            );
+            let log = record["logging"]["syslog_destination"]
+                .as_str()
+                .unwrap_or_default();
+            summaries.insert(
+                "Log Destination".into(),
+                if log.is_empty() {
+                    "Local".into()
+                } else {
+                    log.into()
+                },
+            );
+            let count = record["other_config"].as_object().map_or(0, |m| {
+                m.keys()
+                    .filter(|k| k.starts_with("XenCenter.CustomFields."))
+                    .count()
+            });
+            summaries.insert(
+                "Custom Fields".into(),
+                if count == 0 {
+                    "None configured".into()
+                } else {
+                    format!("{count} custom fields")
+                },
+            );
+            summaries
+        },
         target: target.clone(),
         folder: record["other_config"]["folder"]
             .as_str()

@@ -1708,7 +1708,15 @@ fn storage(
                             },
                         ] {
                             row.col(|ui| {
-                                ui.label(RichText::new(value).size(11.0));
+                                if ui
+                                    .add(
+                                        egui::Label::new(RichText::new(value).size(11.0))
+                                            .sense(Sense::click()),
+                                    )
+                                    .clicked()
+                                {
+                                    selected = disk.vbd_uuid.clone();
+                                }
                             });
                         }
                         if row.response().clicked() || row.response().secondary_clicked() {
@@ -2136,6 +2144,86 @@ fn snapshots(
         }
     });
     ui.add_space(4.0);
+    let view_id = ui.scope_id().with(("snapshot-tree", &vm.uuid));
+    let mut tree = ui
+        .ctx()
+        .data_mut(|d| d.get_temp::<bool>(view_id))
+        .unwrap_or(true);
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut tree, true, "Tree view");
+        ui.selectable_value(&mut tree, false, "List view");
+    });
+    ui.ctx().data_mut(|d| d.insert_temp(view_id, tree));
+    if tree {
+        ui.columns(2, |columns| {
+            let mut visited = std::collections::HashSet::new();
+            // Include the current VM as a leaf at its actual VM.parent link.
+            let mut nodes = snapshots.clone();
+            nodes.push(vm);
+            for root in nodes
+                .iter()
+                .filter(|s| !nodes.iter().any(|p| p.reference == s.parent))
+            {
+                snapshot_branch(
+                    &mut columns[0],
+                    root,
+                    vm,
+                    &nodes,
+                    0,
+                    &mut visited,
+                    &mut state.snapshot_selection,
+                );
+            }
+            for node in &nodes {
+                if !visited.contains(&node.uuid) {
+                    snapshot_branch(
+                        &mut columns[0],
+                        node,
+                        vm,
+                        &nodes,
+                        0,
+                        &mut visited,
+                        &mut state.snapshot_selection,
+                    );
+                }
+            }
+            let panel = &mut columns[1];
+            let selected = snapshots
+                .iter()
+                .copied()
+                .find(|s| state.snapshot_selection.contains(&s.uuid))
+                .unwrap_or(vm);
+            panel.label(RichText::new(&selected.name).size(15.0).strong());
+            panel.separator();
+            for (key, value) in [
+                ("Name", selected.name.clone()),
+                ("Description", selected.description.clone()),
+                (
+                    "Created",
+                    if selected.uuid == vm.uuid || selected.snapshot_time.is_empty() {
+                        "—".into()
+                    } else {
+                        format::xapi_time(&selected.snapshot_time)
+                    },
+                ),
+                ("Tags", selected.tags.join(", ")),
+                ("Folder", selected.folder.clone()),
+                ("Memory", format::bytes(selected.memory)),
+                ("Disks", selected.disk_count.to_string()),
+            ] {
+                panel.strong(key);
+                panel.label(if value.is_empty() { "—" } else { &value });
+            }
+            panel.strong("Custom Fields");
+            if selected.custom_fields.is_empty() {
+                panel.label("None configured");
+            }
+            for (name, value) in &selected.custom_fields {
+                panel.label(format!("{name}: {value}"));
+            }
+        });
+        return;
+    }
     if snapshots.is_empty() {
         ui.label(
             RichText::new("No snapshots for this VM.")
@@ -2269,6 +2357,46 @@ fn snapshots(
             }
         });
         ui.add_space(3.0);
+    }
+}
+
+fn snapshot_branch(
+    ui: &mut Ui,
+    node: &xen_core::xapi::VirtualMachine,
+    current: &xen_core::xapi::VirtualMachine,
+    nodes: &[&xen_core::xapi::VirtualMachine],
+    depth: usize,
+    visited: &mut std::collections::HashSet<String>,
+    selection: &mut std::collections::HashSet<String>,
+) {
+    if !visited.insert(node.uuid.clone()) {
+        return;
+    }
+    ui.horizontal(|ui| {
+        ui.add_space(depth as f32 * 20.0);
+        ui.label(if depth == 0 { "▣" } else { "└─" });
+        let now = node.uuid == current.uuid;
+        if ui
+            .selectable_label(
+                if now {
+                    selection.is_empty()
+                } else {
+                    selection.contains(&node.uuid)
+                },
+                if now { "Now" } else { &node.name },
+            )
+            .clicked()
+        {
+            if !ui.input(|i| i.modifiers.command) {
+                selection.clear();
+            }
+            if !now && !selection.remove(&node.uuid) {
+                selection.insert(node.uuid.clone());
+            }
+        }
+    });
+    for child in nodes.iter().filter(|child| child.parent == node.reference) {
+        snapshot_branch(ui, child, current, nodes, depth + 1, visited, selection);
     }
 }
 

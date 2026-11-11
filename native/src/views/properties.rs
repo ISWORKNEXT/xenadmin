@@ -80,6 +80,13 @@ fn page_title(dialog: &PropertiesDialog, page: &str) -> String {
 }
 
 fn summary(dialog: &PropertiesDialog, page: &str) -> String {
+    if let Some(summary) = dialog
+        .properties
+        .ready()
+        .and_then(|p| p.page_summaries.get(page))
+    {
+        return summary.clone();
+    }
     match page {
         "General" => dialog
             .properties
@@ -101,7 +108,11 @@ fn summary(dialog: &PropertiesDialog, page: &str) -> String {
             .as_ref()
             .map(|v| {
                 if v.is_hvm {
-                    format!("{} · {}", v.firmware, v.boot_order)
+                    format!(
+                        "{} · {}",
+                        if v.firmware == "uefi" { "UEFI" } else { "BIOS" },
+                        boot_labels(&v.boot_order)
+                    )
                 } else {
                     v.pv_args.clone()
                 }
@@ -135,7 +146,27 @@ fn summary(dialog: &PropertiesDialog, page: &str) -> String {
             .and_then(|p| p.disk.as_ref())
             .map(|d| format!("{} · {}", crate::format::bytes(d.size_bytes), d.sr_name))
             .unwrap_or_default(),
-        _ => "Configuration".into(),
+        "Alerts" => "Not implemented yet".into(),
+        "Home Server" => dialog
+            .original_vm
+            .as_ref()
+            .map(|v| {
+                if dialog.affinity.is_none() {
+                    "Unassigned".into()
+                } else {
+                    v.affinity.clone()
+                }
+            })
+            .unwrap_or_else(|| "Loading…".into()),
+        "Log Destination" | "Power On" | "GPU" | "USB" | "Multipathing" | "Network Settings"
+        | "Clustering" | "Security" | "Read Caching" | "Advanced" => "Not implemented yet".into(),
+        "Automatic Start" => if dialog.pool.as_ref().is_some_and(|p| p.vm_autostart) {
+            "Enabled"
+        } else {
+            "Disabled"
+        }
+        .into(),
+        _ => String::new(),
     }
 }
 
@@ -156,20 +187,20 @@ pub fn show(
         .map(|p| p.name.as_str())
         .unwrap_or("Loading…");
     let mut open = true;
-    egui::Window::new(format!("'{name}' Properties"))
+    egui::Window::new(RichText::new(format!("'{name}' Properties")).size(15.0))
         .id(egui::Id::unique(("properties", state.properties_seq)))
         .open(&mut open)
         .resizable(true)
         .collapsible(false)
-        .default_size([720.0, 540.0])
-        .default_pos(ctx.content_rect().center() - egui::vec2(360.0, 270.0))
+        .default_size([760.0, 560.0])
+        .default_pos(ctx.content_rect().center() - egui::vec2(380.0, 280.0))
         .max_size([
             ctx.content_rect().width() - 40.0,
             ctx.content_rect().height() - 80.0,
         ])
         .min_size([620.0, 420.0])
         .show(ctx, |ui| {
-            let height = (ui.available_height() - 52.0)
+            let height = (ui.available_height() - 72.0)
                 .clamp(300.0, (ctx.content_rect().height() - 150.0).max(300.0));
             ui.horizontal_top(|ui| {
                 ui.allocate_ui_with_layout(
@@ -180,6 +211,7 @@ pub fn show(
                             .max_height(height - 10.0)
                             .id_salt("property-tabs")
                             .show(ui, |ui| {
+                                ui.spacing_mut().item_spacing.y = 0.0;
                                 for page in pages(dialog) {
                                     let selected = dialog.page == page;
                                     let subtext = summary(dialog, &page);
@@ -190,13 +222,15 @@ pub fn show(
                                         } else {
                                             egui::Color32::TRANSPARENT
                                         })
-                                        .inner_margin(8)
+                                        .inner_margin(egui::Margin::symmetric(8, 3))
                                         .show(ui, |ui| {
                                             ui.set_min_width(210.0);
+                                            ui.set_height(32.0);
+                                            ui.spacing_mut().item_spacing.y = 0.0;
                                             ui.label(
                                                 RichText::new(format!(
                                                     "{}  {title}",
-                                                    if page == "General" { "●" } else { "◇" }
+                                                    page_icon(&page)
                                                 ))
                                                 .strong(),
                                             );
@@ -236,7 +270,11 @@ pub fn show(
                     egui::vec2(ui.available_width(), height),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
-                        ui.heading(page_title(dialog, &dialog.page));
+                        ui.label(
+                            RichText::new(page_title(dialog, &dialog.page))
+                                .size(15.0)
+                                .strong(),
+                        );
                         ui.separator();
                         egui::ScrollArea::vertical()
                             .max_height(height - 45.0)
@@ -254,29 +292,39 @@ pub fn show(
                 );
             });
             ui.separator();
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui
-                    .add_enabled(
-                        writable
-                            && dialog.extras_ready
-                            && dialog.original.is_some()
-                            && !dialog.submitting,
-                        widgets::primary_button(if dialog.submitting { "Saving…" } else { "OK" }),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::SaveProperties);
-                }
-                if ui
-                    .add_enabled(!dialog.submitting, egui::Button::new("Cancel"))
-                    .clicked()
-                {
-                    actions.push(UiAction::CloseProperties);
-                }
-                if !writable {
-                    ui.label("This connection is offline or read-only.");
-                }
-            });
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), ui.spacing().interact_size.y),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    ui.add_space(8.0);
+                    if ui
+                        .add_enabled(
+                            writable
+                                && dialog.extras_ready
+                                && dialog.original.is_some()
+                                && !dialog.submitting,
+                            widgets::primary_button(if dialog.submitting {
+                                "Saving…"
+                            } else {
+                                "OK"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        actions.push(UiAction::SaveProperties);
+                    }
+                    if ui
+                        .add_enabled(!dialog.submitting, egui::Button::new("Cancel"))
+                        .clicked()
+                    {
+                        actions.push(UiAction::CloseProperties);
+                    }
+                    if !writable {
+                        ui.label("This connection is offline or read-only.");
+                    }
+                },
+            );
+            ui.add_space(8.0);
         });
     if !open && !dialog.submitting {
         actions.push(UiAction::CloseProperties);
@@ -372,20 +420,66 @@ fn content(ui: &mut egui::Ui, dialog: &mut PropertiesDialog, workspace: &Workspa
             "Boot Options" => {
                 if vm.is_hvm {
                     widgets::field_label(ui, "Boot order");
-                    egui::ComboBox::from_id_salt("properties-boot")
-                        .selected_text(&vm.boot_order)
-                        .show_ui(ui, |ui| {
-                            for (v, label) in [
-                                ("dc", "Disk first"),
-                                ("cd", "CD first"),
-                                ("ncd", "Network first"),
-                            ] {
-                                ui.selectable_value(&mut vm.boot_order, v.into(), label);
+                    let selection_id = ui.scope_id().with("boot-order-selection");
+                    let mut selected = ui
+                        .ctx()
+                        .data_mut(|d| d.get_temp::<char>(selection_id))
+                        .unwrap_or('c');
+                    let mut order: Vec<char> = vm
+                        .boot_order
+                        .chars()
+                        .filter(|c| "cdn".contains(*c))
+                        .collect();
+                    for code in ['c', 'd', 'n'] {
+                        if !order.contains(&code) {
+                            order.push(code);
+                        }
+                    }
+                    for code in &order {
+                        ui.horizontal(|ui| {
+                            let mut enabled = vm.boot_order.contains(*code);
+                            if ui.checkbox(&mut enabled, "").changed() {
+                                if enabled {
+                                    vm.boot_order.push(*code);
+                                } else {
+                                    vm.boot_order.retain(|c| c != *code);
+                                }
+                            }
+                            if ui
+                                .selectable_label(selected == *code, boot_label(*code))
+                                .clicked()
+                            {
+                                selected = *code;
                             }
                         });
+                    }
+                    ui.horizontal(|ui| {
+                        let index = order.iter().position(|c| *c == selected).unwrap_or(0);
+                        if ui
+                            .add_enabled(index > 0, egui::Button::new("Move Up"))
+                            .clicked()
+                        {
+                            order.swap(index, index - 1);
+                        }
+                        if ui
+                            .add_enabled(index + 1 < order.len(), egui::Button::new("Move Down"))
+                            .clicked()
+                        {
+                            order.swap(index, index + 1);
+                        }
+                    });
+                    vm.boot_order = order
+                        .into_iter()
+                        .filter(|c| vm.boot_order.contains(*c))
+                        .collect();
+                    ui.ctx().data_mut(|d| d.insert_temp(selection_id, selected));
                     widgets::field_label(ui, "Firmware");
                     egui::ComboBox::from_id_salt("properties-firmware")
-                        .selected_text(&vm.firmware)
+                        .selected_text(if vm.firmware == "uefi" {
+                            "UEFI"
+                        } else {
+                            "BIOS"
+                        })
                         .show_ui(ui, |ui| {
                             ui.selectable_value(&mut vm.firmware, "bios".into(), "BIOS");
                             ui.selectable_value(&mut vm.firmware, "uefi".into(), "UEFI");
@@ -398,7 +492,24 @@ fn content(ui: &mut egui::Ui, dialog: &mut PropertiesDialog, workspace: &Workspa
                 } else {
                     field(ui, "OS boot parameters", &mut vm.pv_args);
                 }
-                field(ui, "After guest crash", &mut vm.after_crash);
+                widgets::field_label(ui, "After a crash");
+                egui::ComboBox::from_id_salt("properties-after-crash")
+                    .selected_text(crash_label(&vm.after_crash))
+                    .show_ui(ui, |ui| {
+                        for code in [
+                            "restart",
+                            "destroy",
+                            "preserve",
+                            "coredump_and_restart",
+                            "coredump_and_destroy",
+                        ] {
+                            ui.selectable_value(
+                                &mut vm.after_crash,
+                                code.into(),
+                                crash_label(code),
+                            );
+                        }
+                    });
                 ui.checkbox(&mut vm.auto_poweron, "Auto-start VM when the host starts");
                 return;
             }
@@ -538,4 +649,44 @@ fn content(ui: &mut egui::Ui, dialog: &mut PropertiesDialog, workspace: &Workspa
         _ => &["Settings"],
     };
     unavailable(ui, labels);
+}
+
+fn boot_label(code: char) -> &'static str {
+    match code {
+        'c' => "Hard Disk",
+        'd' => "DVD-Drive",
+        'n' => "Network",
+        _ => "Unknown",
+    }
+}
+fn boot_labels(order: &str) -> String {
+    order.chars().map(boot_label).collect::<Vec<_>>().join(", ")
+}
+fn crash_label(code: &str) -> &str {
+    match code {
+        "restart" => "Restart",
+        "destroy" => "Shut down",
+        "preserve" => "Preserve",
+        "coredump_and_restart" => "Restart, recording a core dump",
+        "coredump_and_destroy" => "Shut down, recording a core dump",
+        _ => code,
+    }
+}
+fn page_icon(page: &str) -> &'static str {
+    match page {
+        "General" => "▤",
+        "Custom Fields" => "▦",
+        "CPU" => "▣",
+        "Boot Options" => "↥",
+        "High Availability" => "♥",
+        "Alerts" => "⚠",
+        "Home Server" => "⌂",
+        "GPU" => "▧",
+        "USB" => "⑂",
+        "Advanced" => "⚙",
+        "Log Destination" => "≡",
+        "Power On" => "⏻",
+        "Multipathing" => "⇉",
+        _ => "▥",
+    }
 }

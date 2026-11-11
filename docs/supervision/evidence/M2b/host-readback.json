@@ -1,0 +1,56 @@
+{
+  "vms": [
+    {
+      "uuid": "cef5d0fa-9ef2-c456-dfc0-11884e3fc6da",
+      "name": "zz-parity-M2b-dialogs full copy",
+      "description": "M2b disposable dialog qualification",
+      "snapshot": false,
+      "state": "Halted",
+      "disks": [
+        {
+          "vdi_uuid": "0a0cbf71-10c6-44a0-81f4-e719f88f63bd",
+          "name": "zz-parity-M2b-disk",
+          "size": 1073741824,
+          "sr_uuid": "7a5a8cb4-7052-8de1-7473-4a8d9a36e272"
+        }
+      ]
+    },
+    {
+      "uuid": "c31b43a2-ae70-e7f0-28bf-af1296e2981c",
+      "name": "zz-parity-M2b-dialogs",
+      "description": "M2b disposable dialog qualification",
+      "snapshot": false,
+      "state": "Halted",
+      "disks": [
+        {
+          "vdi_uuid": "f97401a8-f8c2-4151-a9c5-455db72ea837",
+          "name": "zz-parity-M2b-disk",
+          "size": 1073741824,
+          "sr_uuid": "7a5a8cb4-7052-8de1-7473-4a8d9a36e272"
+        }
+      ]
+    },
+    {
+      "uuid": "d5aed7ba-5e0b-2c8e-22f8-8be677eb78fe",
+      "name": "zz-parity-M2b-snapshot",
+      "description": "M2b snapshot description",
+      "snapshot": true,
+      "state": "Halted",
+      "disks": [
+        {
+          "vdi_uuid": "540bf6d2-6bb3-44c8-9faf-c0fb5b2868ef",
+          "name": "zz-parity-M2b-disk",
+          "size": 1073741824,
+          "sr_uuid": "7a5a8cb4-7052-8de1-7473-4a8d9a36e272"
+        }
+      ]
+    }
+  ],
+  "new_vdi_uuids": [
+    "540bf6d2-6bb3-44c8-9faf-c0fb5b2868ef",
+    "f97401a8-f8c2-4151-a9c5-455db72ea837",
+    "0a0cbf71-10c6-44a0-81f4-e719f88f63bd",
+    "1003fdd6-3740-454c-9cca-9f872d4f343d"
+  ],
+  "independent_full_copy_same_sr": true
+}

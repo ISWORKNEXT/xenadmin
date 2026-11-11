@@ -21,10 +21,19 @@ use crate::{
 
 enum VmPreparation {
     Clone,
+    Described {
+        action: Box<VmAction>,
+        description: String,
+    },
+    Move {
+        sr_uuid: String,
+    },
     Copy(crate::provisioning::CopyVmRequest),
     ConvertToTemplate,
     NewVm(crate::provisioning::CreateVmRequest),
-    Snapshot { as_template: bool },
+    Snapshot {
+        as_template: bool,
+    },
 }
 
 const EVENT_CLASSES: &[&str] = &[
@@ -1903,7 +1912,49 @@ impl Workspace {
         } = action
         {
             return self
-                .start_destroy(connection_id, vm_uuid, delete_disks, delete_snapshots)
+                .start_destroy(connection_id, vm_uuid, delete_disks, delete_snapshots, None)
+                .await;
+        }
+        if let VmAction::DeleteSelected {
+            disk_uuids,
+            snapshot_uuids,
+        } = action
+        {
+            return self
+                .start_destroy(
+                    connection_id,
+                    vm_uuid,
+                    true,
+                    true,
+                    Some((disk_uuids, snapshot_uuids)),
+                )
+                .await;
+        }
+        if let VmAction::WithDescription {
+            action,
+            description,
+        } = action
+        {
+            return self
+                .start_vm_preparation(
+                    connection_id,
+                    vm_uuid,
+                    String::new(),
+                    VmPreparation::Described {
+                        action,
+                        description,
+                    },
+                )
+                .await;
+        }
+        if let VmAction::Move { sr_uuid } = action {
+            return self
+                .start_vm_preparation(
+                    connection_id,
+                    vm_uuid,
+                    String::new(),
+                    VmPreparation::Move { sr_uuid },
+                )
                 .await;
         }
         if let VmAction::Copy { request } = action {
@@ -2201,6 +2252,8 @@ impl Workspace {
             object_name,
             action: match &mode {
                 VmPreparation::Clone => "Clone",
+                VmPreparation::Described { action, .. } => action.title(),
+                VmPreparation::Move { .. } => "Move VM",
                 VmPreparation::Copy(_) => "Full copy",
                 VmPreparation::ConvertToTemplate => "Convert to template",
                 VmPreparation::NewVm(_) => "Create VM",
@@ -2232,6 +2285,21 @@ impl Workspace {
         let active_for_task = active.clone();
         tokio::spawn(async move {
             let result = match mode {
+                VmPreparation::Described {
+                    action,
+                    description,
+                } => {
+                    active_for_task
+                        .connection
+                        .described_vm_action(&vm_uuid, &action, &description)
+                        .await
+                }
+                VmPreparation::Move { sr_uuid } => {
+                    active_for_task
+                        .connection
+                        .move_vm_disks(&vm_uuid, &sr_uuid)
+                        .await
+                }
                 VmPreparation::ConvertToTemplate => active_for_task
                     .connection
                     .convert_vm_to_template(&vm_uuid)
@@ -2303,6 +2371,7 @@ impl Workspace {
         vm_uuid: String,
         delete_disks: bool,
         delete_snapshots: bool,
+        selection: Option<(Vec<String>, Vec<String>)>,
     ) -> Result<Operation, String> {
         let active = self.active(&connection_id).await?;
         let lease = active.lifecycle.clone().read_owned().await;
@@ -2362,7 +2431,14 @@ impl Workspace {
         tokio::spawn(async move {
             let result = active_for_task
                 .connection
-                .destroy_vm(&vm_uuid, delete_disks, delete_snapshots)
+                .destroy_vm_selected(
+                    &vm_uuid,
+                    delete_disks,
+                    delete_snapshots,
+                    selection
+                        .as_ref()
+                        .map(|(disks, snapshots)| (disks.as_slice(), snapshots.as_slice())),
+                )
                 .await;
             let result = match result {
                 Ok(()) => match refresh_inventory_cache(&active_for_task).await {

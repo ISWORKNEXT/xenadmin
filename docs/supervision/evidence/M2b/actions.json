@@ -1,0 +1,802 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "initial"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        429,
+        207
+      ],
+      "snap": "01-take-snapshot"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        429,
+        207
+      ],
+      "wait": 1,
+      "snap": "01-take-snapshot"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        587,
+        384
+      ],
+      "key": "Control_L+a"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "BackSpace"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        954,
+        712
+      ],
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "c31b43a2-ae70-e7f0-28bf-af1296e2981c",
+        "name_label": "zz-parity-M2b-dialogs",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "name_description": "M2b disposable dialog qualification",
+        "snapshot_of": "OpaqueRef:NULL",
+        "parent": "OpaqueRef:NULL"
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        559,
+        384
+      ],
+      "text": "zz-parity-M2b-snapshot"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        568,
+        450
+      ],
+      "text": "M2b snapshot description"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "01-take-snapshot"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        953,
+        712
+      ],
+      "wait": 6,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "c31b43a2-ae70-e7f0-28bf-af1296e2981c",
+        "name_label": "zz-parity-M2b-dialogs",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "name_description": "M2b disposable dialog qualification",
+        "snapshot_of": "OpaqueRef:NULL",
+        "parent": "OpaqueRef:1b427f56-d2ee-9bdc-6c11-d39a5887e7ed"
+      },
+      {
+        "uuid": "d5aed7ba-5e0b-2c8e-22f8-8be677eb78fe",
+        "name_label": "zz-parity-M2b-snapshot",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": true,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "name_description": "M2b snapshot description",
+        "snapshot_of": "OpaqueRef:c5bf03a4-9983-b49c-9f46-7d7ab7bf1131",
+        "parent": "OpaqueRef:NULL"
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        153,
+        567
+      ],
+      "wait": 1,
+      "snap": "tree-current"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        126,
+        726
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        158,
+        567
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        427,
+        288
+      ],
+      "snap": "04-snapshot-tree"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        13
+      ],
+      "snap": "vm-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        205,
+        236
+      ],
+      "wait": 1,
+      "snap": "03-copy-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 2,
+      "snap": "03-copy-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        213,
+        235
+      ],
+      "wait": 2,
+      "snap": "03-copy-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        435,
+        288
+      ],
+      "wait": 1,
+      "snap": "04-snapshot-tree"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        13
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        208,
+        236
+      ],
+      "wait": 1,
+      "snap": "03-copy-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        705,
+        628
+      ],
+      "wait": 1,
+      "snap": "03-copy-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        591,
+        669
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        992,
+        679
+      ],
+      "wait": 7,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "cef5d0fa-9ef2-c456-dfc0-11884e3fc6da",
+        "name_label": "zz-parity-M2b-dialogs full copy",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "name_description": "M2b disposable dialog qualification",
+        "snapshot_of": "OpaqueRef:NULL",
+        "parent": "OpaqueRef:NULL"
+      },
+      {
+        "uuid": "c31b43a2-ae70-e7f0-28bf-af1296e2981c",
+        "name_label": "zz-parity-M2b-dialogs",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "name_description": "M2b disposable dialog qualification",
+        "snapshot_of": "OpaqueRef:NULL",
+        "parent": "OpaqueRef:1b427f56-d2ee-9bdc-6c11-d39a5887e7ed"
+      },
+      {
+        "uuid": "d5aed7ba-5e0b-2c8e-22f8-8be677eb78fe",
+        "name_label": "zz-parity-M2b-snapshot",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": true,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456,
+        "name_description": "M2b snapshot description",
+        "snapshot_of": "OpaqueRef:c5bf03a4-9983-b49c-9f46-7d7ab7bf1131",
+        "parent": "OpaqueRef:NULL"
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        124,
+        717
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        159,
+        567
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        13
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        210,
+        580
+      ],
+      "wait": 2,
+      "snap": "properties"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        397,
+        354
+      ],
+      "wait": 1,
+      "snap": "boot-before"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        13
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        210,
+        580
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        403,
+        330
+      ],
+      "wait": 2,
+      "snap": "05-properties-boot"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1045,
+        734
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        533,
+        164
+      ],
+      "wait": 1,
+      "snap": "storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        533,
+        286
+      ],
+      "wait": 1,
+      "snap": "storage-selected"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        165,
+        595
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        13
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        207,
+        284
+      ],
+      "wait": 1,
+      "snap": "move"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        704,
+        567
+      ],
+      "wait": 1,
+      "snap": "move-options"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        635,
+        643
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        988,
+        618
+      ],
+      "wait": 6,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "cef5d0fa-9ef2-c456-dfc0-11884e3fc6da",
+        "name_label": "zz-parity-M2b-dialogs full copy",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "c31b43a2-ae70-e7f0-28bf-af1296e2981c",
+        "name_label": "zz-parity-M2b-dialogs",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "d5aed7ba-5e0b-2c8e-22f8-8be677eb78fe",
+        "name_label": "zz-parity-M2b-snapshot",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": true,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        124,
+        717
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        158,
+        594
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        533,
+        286
+      ],
+      "wait": 2,
+      "snap": "storage-selected"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        161,
+        567
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        161,
+        595
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        13
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        211,
+        549
+      ],
+      "wait": 2,
+      "snap": "02-delete-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        630
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        158,
+        566
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "multi-selection"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        630
+      ],
+      "wait": 2,
+      "snap": "cancelled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "wait": 1,
+      "snap": "multi-selection"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "multi2"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Escape",
+      "wait": 1,
+      "snap": "escaped-unique"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        157,
+        593
+      ],
+      "wait": 1,
+      "snap": "copy-again"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        158,
+        566
+      ],
+      "wait": 1,
+      "snap": "multi-held"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        13
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        211,
+        549
+      ],
+      "wait": 2,
+      "snap": "delete-multi-final"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "menu-durable"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        158,
+        566
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "control": true,
+      "click": [
+        158,
+        593
+      ],
+      "wait": 1,
+      "snap": "multi-working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        181,
+        13
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        211,
+        549
+      ],
+      "wait": 2,
+      "snap": "02-delete-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        554,
+        501
+      ],
+      "wait": 1,
+      "snap": "02-delete-vm"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        975,
+        730
+      ],
+      "wait": 7,
+      "readback": true
+    },
+    "readback": []
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

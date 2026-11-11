@@ -82,6 +82,7 @@ pub struct VmDisk {
     pub physical_utilisation: u64,
     pub read_only: bool,
     pub owner: bool,
+    pub shared: bool,
     pub allowed_operations: Vec<String>,
 }
 
@@ -363,6 +364,9 @@ impl Connection {
                     physical_utilisation: number(vdi, "physical_utilisation"),
                     read_only: vdi["read_only"].as_bool().unwrap_or(false),
                     owner: vbd["other_config"].get("owner").is_some(),
+                    shared: vbds
+                        .values()
+                        .any(|other| other["VDI"] == vbd["VDI"] && other["VM"] != vbd["VM"]),
                     allowed_operations: strings(&vdi["allowed_operations"]),
                 });
             }

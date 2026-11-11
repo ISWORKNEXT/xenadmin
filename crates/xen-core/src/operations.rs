@@ -62,6 +62,17 @@ pub enum VmAction {
     SnapshotWithQuiesce {
         name: String,
     },
+    WithDescription {
+        action: Box<VmAction>,
+        description: String,
+    },
+    DeleteSelected {
+        disk_uuids: Vec<String>,
+        snapshot_uuids: Vec<String>,
+    },
+    Move {
+        sr_uuid: String,
+    },
     ConvertToTemplate,
     Copy {
         request: crate::provisioning::CopyVmRequest,
@@ -94,7 +105,9 @@ impl VmAction {
             Self::ConvertToTemplate => "make_into_template",
             Self::Copy { .. } => "copy",
             Self::Revert => "revert",
-            Self::Destroy { .. } => "destroy",
+            Self::Destroy { .. } | Self::DeleteSelected { .. } => "destroy",
+            Self::WithDescription { action, .. } => action.allowed_operation(),
+            Self::Move { .. } => "migrate_send",
         }
     }
 
@@ -125,7 +138,9 @@ impl VmAction {
             Self::ConvertToTemplate => "Convert to template",
             Self::Copy { .. } => "Full copy",
             Self::Revert => "Revert snapshot",
-            Self::Destroy { .. } => "Delete",
+            Self::Destroy { .. } | Self::DeleteSelected { .. } => "Delete",
+            Self::WithDescription { action, .. } => action.title(),
+            Self::Move { .. } => "Move VM",
         }
     }
 
@@ -162,6 +177,9 @@ impl Connection {
             VmAction::CreateFromSnapshot { .. }
                 | VmAction::ConvertToTemplate
                 | VmAction::Copy { .. }
+                | VmAction::WithDescription { .. }
+                | VmAction::DeleteSelected { .. }
+                | VmAction::Move { .. }
         ) {
             return Err(ApiError::Xen(
                 "This operation requires its configured workspace action.".into(),
@@ -2578,6 +2596,71 @@ impl Connection {
         Ok(())
     }
 
+    pub(crate) async fn described_vm_action(
+        &self,
+        uuid: &str,
+        action: &VmAction,
+        description: &str,
+    ) -> Result<String, ApiError> {
+        if description.chars().count() > crate::properties::MAX_DESCRIPTION_CHARS {
+            return Err(ApiError::Xen("Description is too long.".into()));
+        }
+        let reference = match action {
+            VmAction::Clone { name } => {
+                let cloned_uuid = self.clone_vm(uuid, name).await?;
+                self.request::<String>("VM.get_by_uuid", json!([self.session, cloned_uuid]))
+                    .await?
+            }
+            VmAction::Snapshot { .. }
+            | VmAction::Checkpoint { .. }
+            | VmAction::SnapshotWithQuiesce { .. } => {
+                let task = self.begin_vm_action(uuid, action).await?;
+                decode_ref(&wait_task_value(self, &task).await?).ok_or(ApiError::Protocol)?
+            }
+            _ => {
+                return Err(ApiError::Xen(
+                    "This action does not accept a description.".into(),
+                ));
+            }
+        };
+        self.request::<Value>(
+            "VM.set_name_description",
+            json!([self.session, reference, description]),
+        )
+        .await
+        .map_err(|e| context("Object created, but setting its description failed", e))?;
+        self.request("VM.get_uuid", json!([self.session, reference]))
+            .await
+    }
+
+    pub(crate) async fn move_vm_disks(
+        &self,
+        uuid: &str,
+        sr_uuid: &str,
+    ) -> Result<String, ApiError> {
+        let details = self.vm_details(uuid).await?;
+        if details.power_state != "Halted" || details.is_template || details.is_snapshot {
+            return Err(ApiError::Xen(
+                "Shut down the VM before moving its disks.".into(),
+            ));
+        }
+        for disk in details
+            .disks
+            .iter()
+            .filter(|d| !d.is_cd && !d.empty && d.sr_uuid != sr_uuid)
+        {
+            self.move_disk(uuid, &disk.vbd_uuid, sr_uuid)
+                .await
+                .map_err(|e| {
+                    context(
+                        "Move stopped; previously moved disks remain on the destination SR",
+                        e,
+                    )
+                })?;
+        }
+        Ok(uuid.to_owned())
+    }
+
     /// Delete a VM and, optionally, the disks it owns. Owner VBDs are identified
     /// the same way as upstream XenAdmin: a VBD with an `owner` key in
     /// `other_config`. The suspended-image VDI is removed as well.
@@ -2586,6 +2669,17 @@ impl Connection {
         uuid: &str,
         delete_disks: bool,
         delete_snapshots: bool,
+    ) -> Result<(), ApiError> {
+        self.destroy_vm_selected(uuid, delete_disks, delete_snapshots, None)
+            .await
+    }
+
+    pub(crate) async fn destroy_vm_selected(
+        &self,
+        uuid: &str,
+        delete_disks: bool,
+        delete_snapshots: bool,
+        selection: Option<(&[String], &[String])>,
     ) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(
@@ -2618,11 +2712,38 @@ impl Connection {
             None
         };
 
+        if let Some((disk_ids, snapshot_ids)) = selection {
+            let vdis = self.records("VDI").await?;
+            let owned = vbds
+                .as_ref()
+                .map(|vbds| owner_vdis(vbds, &record, &reference))
+                .unwrap_or_default();
+            let all_vms = self.records("VM").await?;
+            if disk_ids.iter().any(|id| {
+                !owned
+                    .iter()
+                    .any(|r| vdis.get(r).is_some_and(|v| v["uuid"].as_str() == Some(id)))
+            }) || snapshot_ids.iter().any(|id| {
+                !all_vms.values().any(|v| {
+                    v["uuid"].as_str() == Some(id)
+                        && v["snapshot_of"].as_str() == Some(reference.as_str())
+                })
+            }) {
+                return Err(ApiError::Xen(
+                    "The selected disks or snapshots changed. Reopen Delete VM.".into(),
+                ));
+            }
+        }
+
         let mut snapshot_failure = None;
         if delete_snapshots {
             let snapshots = self.records("VM").await?;
             for (snapshot_ref, snapshot) in &snapshots {
-                if snapshot["snapshot_of"].as_str() != Some(reference.as_str()) {
+                if snapshot["snapshot_of"].as_str() != Some(reference.as_str())
+                    || selection.is_some_and(|(_, ids)| {
+                        !ids.iter().any(|id| snapshot["uuid"].as_str() == Some(id))
+                    })
+                {
                     continue;
                 }
                 let snapshot_allowed = snapshot["allowed_operations"]
@@ -2671,9 +2792,20 @@ impl Connection {
         }
 
         let vdis = if delete_disks {
-            vbds.as_ref()
+            let mut vdis = vbds
+                .as_ref()
                 .map(|vbds| owner_vdis(vbds, &record, &reference))
-                .unwrap_or_default()
+                .unwrap_or_default();
+            if let Some((ids, _)) = selection {
+                let records = self.records("VDI").await?;
+                vdis.retain(|r| {
+                    record["suspend_VDI"].as_str() == Some(r)
+                        || records
+                            .get(r)
+                            .is_some_and(|v| ids.iter().any(|id| v["uuid"].as_str() == Some(id)))
+                });
+            }
+            vdis
         } else {
             Vec::new()
         };
@@ -2883,12 +3015,15 @@ fn owner_vdis(vbds: &HashMap<String, Value>, record: &Value, reference: &str) ->
         if vbd["VM"].as_str() != Some(reference) {
             continue;
         }
-        if vbd["other_config"].get("owner").is_none() {
+        if vbd["type"].as_str() == Some("CD") || vbd["other_config"].get("owner").is_none() {
             continue;
         }
         if let Some(vdi) = vbd["VDI"].as_str()
             && !vdi.is_empty()
             && vdi != "OpaqueRef:NULL"
+            && !vbds.values().any(|other| {
+                other["VDI"].as_str() == Some(vdi) && other["VM"].as_str() != Some(reference)
+            })
         {
             vdis.push(vdi.to_owned());
         }
@@ -3020,6 +3155,9 @@ mod tests {
         let vbds: HashMap<String, Value> = serde_json::from_value(json!({
             "vbd-owned": {"VM": "vm", "VDI": "vdi-owned", "other_config": {"owner": ""}},
             "vbd-shared": {"VM": "vm", "VDI": "vdi-shared", "other_config": {}},
+            "vbd-owned-shared": {"VM": "vm", "VDI": "vdi-both", "other_config": {"owner": ""}},
+            "vbd-second-owner": {"VM": "other", "VDI": "vdi-both", "other_config": {"owner": ""}},
+            "vbd-iso": {"VM": "vm", "VDI": "iso", "type": "CD", "other_config": {"owner": ""}},
             "vbd-other-vm": {"VM": "other", "VDI": "vdi-other", "other_config": {"owner": ""}},
             "vbd-empty": {"VM": "vm", "VDI": "OpaqueRef:NULL", "other_config": {"owner": ""}}
         }))

@@ -1,0 +1,15 @@
+{
+  "remaining_M2b_vms": [],
+  "remaining_tracked_vdis": [],
+  "tracked_vdi_uuids": [
+    "0a0cbf71-10c6-44a0-81f4-e719f88f63bd",
+    "1003fdd6-3740-454c-9cca-9f872d4f343d",
+    "540bf6d2-6bb3-44c8-9faf-c0fb5b2868ef",
+    "b5b6cd82-ea64-49f7-891d-b58524c34f75",
+    "f97401a8-f8c2-4151-a9c5-455db72ea837"
+  ],
+  "preexisting_vm_uuid_count_preserved": 68,
+  "preexisting_vdi_uuid_count_preserved": 81,
+  "temporary_sr_removed": true,
+  "xenapi_responding": true
+}

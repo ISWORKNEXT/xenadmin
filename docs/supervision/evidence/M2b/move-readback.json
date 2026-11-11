@@ -1,0 +1,8 @@
+{
+  "vm_uuid": "cef5d0fa-9ef2-c456-dfc0-11884e3fc6da",
+  "destination_sr_uuid": "ecbc4d58-aa27-d2a3-8269-c3b53f7f7d32",
+  "disk_uuid": "b5b6cd82-ea64-49f7-891d-b58524c34f75",
+  "disk_size": 1073741824,
+  "state": "Halted",
+  "old_copy_disk_removed": true
+}

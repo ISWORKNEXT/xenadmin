@@ -125,6 +125,7 @@ pub fn implemented(command: &str) -> bool {
                 | "VMPropertiesCommand"
                 | "SRPropertiesCommand"
                 | "TemplatePropertiesCommand"
+                | "MoveVMCommand"
                 | "CopyVMCommand"
                 | "CopyTemplateCommand"
                 | "ExportCommand"
@@ -162,6 +163,9 @@ pub fn out_of_scope(command: &str) -> bool {
 pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Resolution {
     if out_of_scope(command) {
         return Err("Excluded from this port");
+    }
+    if matches!(command, "MigratetoServer" | "CrossPoolMigrateCommand") {
+        return Err("untested-lab: cross-pool migration is not implemented yet");
     }
     if !implemented(command) {
         return Err("Not implemented yet");
@@ -247,6 +251,9 @@ fn resolve_single(
     use CommandAction::*;
     if out_of_scope(command) {
         return Err("Excluded from this port");
+    }
+    if matches!(command, "MigratetoServer" | "CrossPoolMigrateCommand") {
+        return Err("untested-lab: cross-pool migration is not implemented yet");
     }
     if !implemented(command) {
         return Err("Not implemented yet");
@@ -507,6 +514,19 @@ fn resolve_single(
             }
         }
         "NewSRCommand" => UiAction::OpenSrCreate,
+        "MoveVMCommand" => {
+            let ObjectKey::Vm { vm_uuid, .. } = key else {
+                return Err("Select a VM.");
+            };
+            let (_, vm) = find_vm(workspace, id, vm_uuid).ok_or("The VM is unavailable.")?;
+            if vm.power_state != "Halted" || crate::state::running_task(workspace, id, vm_uuid) {
+                return Err("Shut down the VM before moving its disks.");
+            }
+            UiAction::OpenVmMove {
+                connection_id: id.into(),
+                vm_uuid: vm_uuid.clone(),
+            }
+        }
         "CopyVMCommand" | "CopyTemplateCommand" | "ExportCommand" | "ExportTemplateCommand" => {
             let uuid = match (command, key) {
                 ("CopyVMCommand" | "ExportCommand", ObjectKey::Vm { vm_uuid, .. })

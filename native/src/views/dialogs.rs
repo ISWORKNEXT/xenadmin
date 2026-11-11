@@ -370,9 +370,12 @@ fn intent(
         })
         .collect();
     let count = intent.targets.len();
-    let has_vm_target = intent.targets.iter().any(|(connection_id, vm_uuid)| {
-        find_vm(workspace, connection_id, vm_uuid).is_some_and(|(_, vm)| vm.kind == "vm")
-    });
+    let snapshot_dialog = matches!(
+        intent.kind,
+        crate::state::ActionKind::Snapshot
+            | crate::state::ActionKind::Checkpoint
+            | crate::state::ActionKind::SnapshotWithQuiesce
+    );
     let response = egui::Modal::new(egui::Id::unique("intent-modal"))
         .frame(theme::modal_frame())
         .show(ctx, |ui| {
@@ -381,7 +384,7 @@ fn intent(
                 .host
                 .as_ref()
                 .map(|(_, host)| format!("{} on {}", intent.kind.label(), host))
-                .unwrap_or_else(|| intent.kind.label().to_owned());
+                .unwrap_or_else(|| if snapshot_dialog { "Take Snapshot".into() } else if intent.kind == crate::state::ActionKind::Destroy { "Delete VM".into() } else { intent.kind.label().to_owned() });
             modal_title(
                 ui,
                 &title,
@@ -435,11 +438,20 @@ fn intent(
             if intent.kind==crate::state::ActionKind::ConvertToTemplate {
                 ui.label("Converts this halted VM into a template. Its disks stay attached and the object appears under Templates.");
             }
-            if intent.kind==crate::state::ActionKind::Checkpoint {
-                ui.label("Captures disks and memory. The VM may pause briefly while its state is saved.");
-            }
-            if intent.kind==crate::state::ActionKind::SnapshotWithQuiesce {
-                ui.label("Requires guest tools and a guest that supports quiesced snapshots.");
+            if snapshot_dialog {
+                widgets::field_label(ui, "Description");
+                ui.add(egui::TextEdit::multiline(&mut intent.description).desired_rows(3).desired_width(f32::INFINITY).char_limit(xen_core::properties::MAX_DESCRIPTION_CHARS));
+                for (kind, label, help, unavailable) in [
+                    (crate::state::ActionKind::Snapshot, "Snapshot the virtual machine's disks", "A snapshot of the virtual machine's disks.", "Disk snapshots are not currently available for this VM"),
+                    (crate::state::ActionKind::SnapshotWithQuiesce, "Quiesced snapshot", "Quiesced snapshots need the VSS service to be enabled on the VM", "Quiesced snapshots need Management Agent and VSS to be installed and enabled"),
+                    (crate::state::ActionKind::Checkpoint, "Snapshot the virtual machine's disks and memory", "A snapshot of the virtual machine's disks and memory.", "Disk and memory snapshots are not currently available for this VM"),
+                ] {
+                    let running_required = kind != crate::state::ActionKind::Snapshot;
+                    let enabled = intent.targets.iter().all(|(id, uuid)| find_vm(workspace, id, uuid).is_some_and(|(_, vm)| (!running_required || vm.power_state == "Running") && crate::state::action_allowed(workspace, id, vm, kind.operation())));
+                    ui.add_enabled_ui(enabled, |ui| { ui.radio_value(&mut intent.kind, kind, label); });
+                    let running = intent.targets.iter().all(|(id, uuid)| find_vm(workspace, id, uuid).is_some_and(|(_, vm)| vm.power_state == "Running"));
+                    ui.label(RichText::new(if enabled { help } else if running_required && !running { if kind == crate::state::ActionKind::Checkpoint { "Disk and memory snapshots need the VM to be running" } else { "Quiesced snapshots need the VM to be running" } } else { unavailable }).small().color(dim_fg()));
+                }
             }
             if intent.kind == crate::state::ActionKind::Revert {
                 ui.add_space(8.0);
@@ -452,41 +464,32 @@ fn intent(
                 );
             }
             if intent.kind == crate::state::ActionKind::Destroy {
-                ui.add_space(8.0);
-                ui.label(
-                    RichText::new(
-                        "The object is removed from the host. This cannot be undone.",
-                    )
-                    .size(9.5)
-                    .color(red()),
-                );
-                ui.add_space(4.0);
-                ui.checkbox(
-                    &mut intent.delete_disks,
-                    RichText::new("Delete attached disks owned by this object")
-                        .size(10.0),
-                );
-                ui.label(
-                    RichText::new(
-                        "Disks shared with another VM are never removed.",
-                    )
-                    .size(9.0)
-                    .color(dim_fg()),
-                );
-                if has_vm_target {
-                    ui.add_space(4.0);
-                    ui.checkbox(
-                        &mut intent.delete_snapshots,
-                        RichText::new("Delete snapshots of this VM").size(10.0),
-                    );
-                    ui.label(
-                        RichText::new(
-                            "Snapshots left behind stay in the Snapshots list and keep their disks.",
-                        )
-                        .size(9.0)
-                        .color(dim_fg()),
-                    );
-                }
+                ui.colored_label(red(), "The selected VMs and checked resources will be permanently deleted.");
+                egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
+                    match &mut intent.deletion {
+                        crate::state::LoadState::Ready(items) => for item in items {
+                            ui.strong(&item.name);
+                            ui.horizontal(|ui| {
+                                ui.label("Attached disks");
+                                if ui.small_button("Select All").clicked() { for (d, checked) in &mut item.disks { *checked = d.owner && !d.shared && !d.is_cd; } }
+                                if ui.small_button("Clear All").clicked() { for (_, checked) in &mut item.disks { *checked = false; } }
+                            });
+                            for (disk, checked) in &mut item.disks {
+                                let eligible = disk.owner && !disk.shared && !disk.is_cd;
+                                ui.add_enabled(eligible, egui::Checkbox::new(checked, format!("{} · {} · {}{}", disk.vdi_name, disk.sr_name, crate::format::bytes(disk.virtual_size), if disk.is_cd { " (ISO)" } else if disk.shared { " (shared)" } else if !disk.owner { " (not owned)" } else { "" })));
+                            }
+                            ui.horizontal(|ui| {
+                                ui.label("Snapshots");
+                                if ui.small_button("Select All").clicked() { for (_, _, checked) in &mut item.snapshots { *checked = true; } }
+                                if ui.small_button("Clear All").clicked() { for (_, _, checked) in &mut item.snapshots { *checked = false; } }
+                            });
+                            for (_, name, checked) in &mut item.snapshots { ui.checkbox(checked, name.as_str()); }
+                            ui.separator();
+                        },
+                        crate::state::LoadState::Error(e) => { ui.colored_label(red(), e.as_str()); },
+                        _ => { ui.spinner(); ui.label("Loading disks and snapshots…"); }
+                    }
+                });
             } else if intent.kind.destructive()
                 && !matches!(intent.kind, crate::state::ActionKind::Revert | crate::state::ActionKind::ConvertToTemplate)
             {
@@ -508,14 +511,13 @@ fn intent(
                     close = true;
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let valid_name = !intent.kind.needs_name() || !intent.name.trim().is_empty();
+                    let valid_name = (!intent.kind.needs_name() || !intent.name.trim().is_empty())
+                        && (intent.kind != crate::state::ActionKind::Destroy || matches!(intent.deletion, crate::state::LoadState::Ready(_)))
+                        && (!snapshot_dialog || intent.targets.iter().all(|(id, uuid)| find_vm(workspace, id, uuid).is_some_and(|(_, vm)| crate::state::action_allowed(workspace, id, vm, intent.kind.operation()))));
                     if ui
                         .add_enabled(
                             valid_name,
-                            widgets::primary_button(format!(
-                                "Submit {count} task{}",
-                                if count == 1 { "" } else { "s" }
-                            )),
+                            widgets::primary_button(if snapshot_dialog { "Take Snapshot".to_owned() } else if intent.kind == crate::state::ActionKind::Destroy { "Delete".to_owned() } else { format!("Submit {count} task{}", if count == 1 { "" } else { "s" }) }),
                         )
                         .clicked()
                     {
