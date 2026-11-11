@@ -1,0 +1,30 @@
+name: Collect runner network diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [development]
+    paths:
+      - '.github/workflows/network-diagnostics.yml'
+      - 'tools/audit_ci_network.py'
+permissions:
+  contents: read
+jobs:
+  collect:
+    name: DNS and HTTPS (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect diagnostics without installing packages
+        run: python3 tools/audit_ci_network.py --output artifacts/network.json
+      - name: Upload diagnostic observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-network-${{ matrix.os }}
+          path: artifacts/network.json
+          if-no-files-found: warn
