@@ -75,7 +75,7 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1440.0, 940.0])
             .with_min_inner_size([980.0, 660.0])
-            .with_decorations(false)
+            .with_decorations(true)
             .with_title("Xen Desktop"),
         ..Default::default()
     };

@@ -51,15 +51,6 @@ pub fn show(
             .color(muted_fg()),
         );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if ui
-                .add_enabled(
-                    !state.host_state.is_loading(),
-                    egui::Button::new(RichText::new("Refresh details").size(10.5)),
-                )
-                .clicked()
-            {
-                actions.push(UiAction::ReloadHostDetails);
-            }
             if let Some(details) = state.host_state.ready()
                 && !read_only
             {
@@ -80,19 +71,7 @@ pub fn show(
                             ui.close();
                         }
                     };
-                    prompt(
-                        ui,
-                        if details.enabled {
-                            HostAction::Disable
-                        } else {
-                            HostAction::Enable
-                        },
-                    );
                     prompt(ui, HostAction::Evacuate);
-                    prompt(ui, HostAction::RestartToolstack);
-                    ui.separator();
-                    prompt(ui, HostAction::Reboot);
-                    prompt(ui, HostAction::Shutdown);
                     ui.separator();
                     if ui.button("VM autostart (pool-wide)…").clicked() {
                         actions.push(UiAction::OpenPoolOptions {

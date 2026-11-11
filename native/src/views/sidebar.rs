@@ -18,7 +18,7 @@ const TREE_WIDTH: f32 = 310.0;
 const ROW_HEIGHT: f32 = 28.0;
 
 #[derive(Clone, Copy)]
-enum TreeIcon {
+pub(super) enum TreeIcon {
     Root,
     Pool,
     Host,
@@ -875,7 +875,7 @@ fn tree_row_colored(
     (response, chevron)
 }
 
-fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, color: Color32) {
+pub(super) fn paint_icon(painter: &egui::Painter, rect: Rect, icon: TreeIcon, color: Color32) {
     let stroke = Stroke::new(1.1, color);
     let center = rect.center();
     match icon {

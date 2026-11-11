@@ -128,12 +128,6 @@ pub fn show(
                     title: "Authentication & RBAC".into(),
                 });
             }
-            if ui
-                .add(egui::Button::new(RichText::new("Refresh").size(11.5)))
-                .clicked()
-            {
-                actions.push(UiAction::Refresh(Some(connection_id.clone())));
-            }
             widgets::badge(
                 ui,
                 match status {

@@ -42,26 +42,7 @@ pub fn storage(
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.menu_button(RichText::new("Manage storage…").size(10.5), |ui| {
                 if ui
-                    .add_enabled(
-                        !is_read_only(connection) && !sr.is_default && sr.can_be_default,
-                        egui::Button::new(RichText::new("Set as default storage").size(11.0)),
-                    )
-                    .on_hover_text("Use this storage for new virtual disks. Existing disks keep their location.")
-                    .clicked()
-                {
-                    actions.push(UiAction::PromptSrAction {
-                        connection_id: connection_id.clone(),
-                        sr_uuid: sr.uuid.clone(),
-                        sr_name: sr.name.clone(),
-                        action: SrAction::SetDefault,
-                    });
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection),
-                        egui::Button::new(RichText::new("Scan storage").size(11.0)),
-                    )
+                    .add_enabled(!is_read_only(connection), egui::Button::new("Scan storage"))
                     .clicked()
                 {
                     actions.push(UiAction::PromptSrAction {
@@ -69,99 +50,6 @@ pub fn storage(
                         sr_uuid: sr.uuid.clone(),
                         sr_name: sr.name.clone(),
                         action: SrAction::Scan,
-                    });
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection),
-                        egui::Button::new(RichText::new("Reattach storage repository…").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::OpenSrReattach);
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection) && sr.pbd_attached > 0,
-                        egui::Button::new(RichText::new("Reclaim space (TRIM)").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::PromptSrAction {
-                        connection_id: connection_id.clone(),
-                        sr_uuid: sr.uuid.clone(),
-                        sr_name: sr.name.clone(),
-                        action: SrAction::Trim,
-                    });
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection) && sr.pbd_count > 0,
-                        egui::Button::new(RichText::new("Repair storage attachments").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::RepairSr);
-                    ui.close();
-                }
-                ui.separator();
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection) && sr.pbd_count > 0,
-                        egui::Button::new(
-                            RichText::new("Detach storage repository…")
-                                .size(11.0)
-                                .color(amber()),
-                        ),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::PromptSrAction {
-                        connection_id: connection_id.clone(),
-                        sr_uuid: sr.uuid.clone(),
-                        sr_name: sr.name.clone(),
-                        action: SrAction::Detach,
-                    });
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection),
-                        egui::Button::new(
-                            RichText::new("Forget storage repository…")
-                                .size(11.0)
-                                .color(amber()),
-                        ),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::PromptSrAction {
-                        connection_id: connection_id.clone(),
-                        sr_uuid: sr.uuid.clone(),
-                        sr_name: sr.name.clone(),
-                        action: SrAction::Forget,
-                    });
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection),
-                        egui::Button::new(
-                            RichText::new("Destroy storage repository…")
-                                .size(11.0)
-                                .color(red()),
-                        ),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::PromptSrAction {
-                        connection_id: connection_id.clone(),
-                        sr_uuid: sr.uuid.clone(),
-                        sr_name: sr.name.clone(),
-                        action: SrAction::Destroy,
                     });
                     ui.close();
                 }
@@ -809,8 +697,8 @@ fn header(
     subtitle: &str,
     uuid: &str,
     read_only: bool,
-    connection_id: &str,
-    actions: &mut Vec<UiAction>,
+    _connection_id: &str,
+    _actions: &mut Vec<UiAction>,
 ) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(Vec2::splat(42.0), Sense::hover());
@@ -836,12 +724,6 @@ fn header(
             ui.label(RichText::new(subtitle).size(9.5).color(muted_fg()));
         });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if ui
-                .add(egui::Button::new(RichText::new("Refresh").size(10.5)))
-                .clicked()
-            {
-                actions.push(UiAction::Refresh(Some(connection_id.to_owned())));
-            }
             if read_only {
                 widgets::badge(ui, "Read-only", amber());
             }

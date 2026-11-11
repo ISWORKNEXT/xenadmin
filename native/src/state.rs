@@ -1380,6 +1380,10 @@ pub struct XvaDialog {
 }
 
 pub struct UiState {
+    pub toolbar_visible: bool,
+    pub selection_history: Vec<ObjectKey>,
+    pub history_index: usize,
+    pub navigating_history: bool,
     pub properties: Option<PropertiesDialog>,
     pub properties_seq: u64,
     pub xva_dialog: Option<XvaDialog>,
@@ -1504,6 +1508,10 @@ pub struct UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
+            toolbar_visible: true,
+            selection_history: vec![ObjectKey::Home],
+            history_index: 0,
+            navigating_history: false,
             properties: None,
             properties_seq: 0,
             xva_dialog: None,
@@ -1658,6 +1666,7 @@ pub enum UiAction {
         key: ObjectKey,
         title: String,
     },
+    NavigateHistory(bool),
     ActivateTab(usize),
     CloseTab(usize),
     ToggleTreeNode(String),

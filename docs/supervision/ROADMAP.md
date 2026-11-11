@@ -10,7 +10,7 @@ Issues: S1 #1, S2 #2, S3 #3, S4 #4, S5 #5, M2 #6, M3 #7, M4 #8, M5 #9, M6 #10, M
 |---|---|
 | S1 | Window frame: OS decorations, menu bar with the full upstream menu tree, toolbar, status bar. Existing actions wired; missing ones disabled |
 | S2 | Navigation pane: Infrastructure tree per `MainWindowTreeBuilder`, View-menu filters, nav buttons (Infrastructure, Objects, Organization Views, Saved Searches, Notifications); selection drives the right pane |
-| S3 | Per-object tab sets per `MainWindow.GetNewTabPages` (Home, General, Memory, Storage, Networking, NICs, Console, Performance, Snapshots, HA, WLB, Search); existing detail content rehomed |
+| S3 | Per-object tab sets per `MainWindow.GetNewTabPages` (Home, General, Memory, Storage, Networking, NICs, GPU, USB, Console, Performance, Snapshots, Search; rules in `upstream-tabs-tree.md`); existing detail content rehomed |
 | S4 | Context menus built from the same command set as the menu bar, with upstream enable rules and disabled-reason tooltips |
 | S5 | Notifications: Alerts, Updates, Events (task history with filters) |
 

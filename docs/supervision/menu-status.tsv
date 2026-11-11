@@ -1,0 +1,123 @@
+menu	item	upstream_command	status	ui_action
+File	Import...	ImportCommand	wired	OpenXvaImport
+File	Import Search...	ImportSearchCommand	disabled-not-implemented	
+File	Import Server List...	ImportServerList	disabled-not-implemented	
+File	Export Server List...	ExportServerList	disabled-not-implemented	
+File	Exit	Exit	wired	ViewportCommand::Close
+View	Custom Templates	CustomTemplates	disabled-not-implemented	
+View	Xen Desktop Templates	XenDesktopTemplates	disabled-not-implemented	
+View	Local Storage	LocalStorage	disabled-not-implemented	
+View	Hidden Objects	HiddenObjects	disabled-not-implemented	
+View	Toolbar	Toolbar	wired	toolbar_visible
+View	Theme		wired	submenu
+View > Theme	Light / Dark	Theme	wired	theme::toggle
+View	Zoom		wired	submenu
+View > Zoom	Zoom In	ZoomIn	wired	Context::set_zoom_factor
+View > Zoom	Zoom Out	ZoomOut	wired	Context::set_zoom_factor
+View > Zoom	Reset Zoom	ZoomReset	wired	Context::set_zoom_factor
+View	Refresh	Refresh	wired	Refresh + selected detail refresh
+Pool	New Pool...	NewPoolCommand	disabled-not-implemented	
+Pool	Add Server	AddServer	disabled-not-implemented	
+Pool	Remove Server	RemoveServer	disabled-not-implemented	
+Pool	Reconnect As...	PoolReconnectAsCommand	disabled-out-of-scope	
+Pool	Disconnect	DisconnectPoolCommand	wired	Disconnect
+Pool	vApps...	VMGroupCommandVM_appliance	disabled-not-implemented	
+Pool	High Availability	HACommand	wired	submenu
+Pool > High Availability	Configure HA...	HAConfigureCommand	wired	OpenHaEnable
+Pool > High Availability	Disable HA	HADisableCommand	wired	PromptHaDisable
+Pool	Disaster Recovery	DRCommand	wired	submenu
+Pool > Disaster Recovery	Configure...	DRConfigureCommand	wired	OpenDrTaskDialog
+Pool > Disaster Recovery	Disaster Recovery Wizard...	DisasterRecoveryCommand	disabled-not-implemented	
+Pool	VM Snapshot Schedule Policies...	VMGroupCommandVMSS	wired	OpenObject(PoolStatus)
+Pool	Export Resource Data...	ExportResourceReportCommand	disabled-not-implemented	
+Pool	Workload Balancing	WlbCommand	wired	submenu
+Pool > Workload Balancing	View Workload Reports...	ViewWorkloadReportsCommand	disabled-not-implemented	
+Pool > Workload Balancing	Disconnect Workload Balancing Server	DisconnectWlbServerCommand	wired	PromptWlbDeconfigure
+Pool	Change Server Password...	ChangeHostPasswordCommand	disabled-not-implemented	
+Pool	Rotate Pool Secret	RotatePoolSecretCommand	disabled-not-implemented	
+Pool	Enable Certificate Verification	EnableTlsVerificationCommand	disabled-out-of-scope	
+Pool	Make into standalone server	DeletePoolCommand	disabled-not-implemented	
+Pool	Properties	PoolPropertiesCommand	wired	OpenProperties
+Server	Add...	AddHostCommand	wired	ConnectState::empty
+Server	Reboot	RebootHostCommand	wired	PromptHostAction
+Server	Power On	PowerOnHostCommand	wired	PromptHostAction
+Server	Shut Down	ShutDownHostCommand	wired	PromptHostAction
+Server	Restart Toolstack	RestartToolstackCommand	wired	PromptHostAction
+Server	Connect/Disconnect	Connect/Disconnect	wired	submenu
+Server > Connect/Disconnect	Connect	ReconnectHostCommand	wired	Reconnect
+Server > Connect/Disconnect	Disconnect	DisconnectHostCommand	wired	Disconnect
+Server > Connect/Disconnect	Reconnect As...	HostReconnectAsCommand	disabled-out-of-scope	
+Server > Connect/Disconnect	Connect All	ConnectAllHostsCommand	wired	Reconnect (each offline connection)
+Server > Connect/Disconnect	Disconnect All	DisconnectAllHostsCommand	wired	Disconnect (each online connection)
+Server	Add to Pool	AddtoPool	disabled-not-implemented	
+Server	Remove From Pool	RemoveHostFromPoolCommand	disabled-not-implemented	
+Server	Back Up...	BackupHostCommand	disabled-not-implemented	
+Server	Restore From Backup...	RestoreHostFromBackupCommand	disabled-not-implemented	
+Server	Certificate	CertificateCommand	disabled-out-of-scope	submenu
+Server > Certificate	Install Certificate...	InstallCertificateCommand	disabled-out-of-scope	
+Server > Certificate	Reset Certificate	ResetCertificateCommand	disabled-out-of-scope	
+Server	Enter Maintenance Mode	HostMaintenanceModeCommand	wired	PromptHostAction
+Server	Control Domain Memory...	ChangeControlDomainMemoryCommand	disabled-not-implemented	
+Server	Password	HostPasswordCommand	disabled-not-implemented	submenu
+Server > Password	Change...	ChangeHostPasswordCommand	disabled-not-implemented	
+Server > Password	Forget Password	ForgetSavedPasswordCommand	disabled-not-implemented	
+Server	Destroy	DestroyHostCommand	disabled-not-implemented	
+Server	Remove from Xen Desktop	RemoveHostCommand	wired	ConfirmRemove
+Server	Properties	HostPropertiesCommand	wired	OpenProperties
+VM	New VM...	NewVMCommand	wired	OpenNewVmWizard
+VM	Start/Shut down	Start/Shutdown	wired	submenu
+VM > Start/Shut down	Start	StartVMCommand	wired	Propose
+VM > Start/Shut down	Shut Down	ShutDownVMCommand	wired	Propose
+VM > Start/Shut down	Resume	ResumeVMCommand	wired	Propose
+VM > Start/Shut down	Suspend	SuspendVMCommand	wired	Propose
+VM > Start/Shut down	Reboot	RebootVMCommand	wired	Propose
+VM > Start/Shut down	Start in Recovery Mode	VMRecoveryModeCommand	disabled-not-implemented	
+VM > Start/Shut down	Force Shut Down	ForceVMShutDownCommand	wired	Propose
+VM > Start/Shut down	Force Reboot	ForceVMRebootCommand	wired	Propose
+VM > Start/Shut down	Start vApp	VappStartCommand	disabled-not-implemented	
+VM > Start/Shut down	Shut Down vApp	VappShutDownCommand	disabled-not-implemented	
+VM	Resume on Server	ResumeVMOnHostCommand	wired	submenu
+VM > Resume on Server	<selected server>	ResumeVMOnHostCommand	wired	ProposeOnHost(Resume)
+VM	Migrate to Server	MigratetoServer	disabled-not-implemented	
+VM	Start on Server	StartVMOnHostCommand	wired	submenu
+VM > Start on Server	<selected server>	StartVMOnHostCommand	wired	ProposeOnHost(Start)
+VM	Assign to Snapshot Schedule...	AssigntoSnapshotSchedule...	disabled-not-implemented	
+VM	Assign to vApp	AssigntovApp	disabled-not-implemented	
+VM	Copy VM	CopyVMCommand	wired	OpenVmCopy
+VM	Move VM	MoveVMCommand	disabled-not-implemented	
+VM	Take a Snapshot	TakeSnapshotCommand	wired	Propose
+VM	Convert to Template	ConvertVMToTemplateCommand	wired	Propose
+VM	Export...	ExportCommand	wired	OpenXvaExport
+VM	Trusted Platform Module Manager...	VtpmCommand	disabled-not-implemented	
+VM	Disable Changed Block Tracking	DisableChangedBlockTrackingCommand	disabled-not-implemented	
+VM	Enable PVS-Accelerator...	EnablePvsReadCachingCommand	disabled-not-implemented	
+VM	Disable PVS-Accelerator	DisablePvsReadCachingCommand	disabled-not-implemented	
+VM	Install XenServer VM Tools...	Install XenServer VM Tools...	disabled-not-implemented	
+VM	Send Ctrl+Alt+Del	SendCtrlAltDel	wired	ConsoleKey (six key transitions)
+VM	Delete VM	DeleteVMCommand	wired	Propose
+VM	Properties	VMPropertiesCommand	wired	OpenProperties
+Storage	New Storage...	NewSRCommand	wired	OpenSrCreate
+Storage	Repair...	RepairSRCommand	wired	RepairSr
+Storage	Set as Default	SetAsDefaultSRCommand	wired	PromptSrAction
+Storage	Virtual Disks	VirtualDiskCommand	wired	submenu
+Storage > Virtual Disks	New Virtual Disk...	AddVirtualDiskCommand	wired	OpenAddDisk
+Storage > Virtual Disks	Attach Virtual Disk...	AttachVirtualDiskCommand	wired	OpenAttachVdi
+Storage	Reclaim freed space	TrimSRCommand	wired	PromptSrAction
+Storage	Detach	DetachSRCommand	wired	PromptSrAction
+Storage	Reattach...	ReattachSRCommand	wired	OpenSrReattach
+Storage	Forget	ForgetSRCommand	wired	PromptSrAction
+Storage	Destroy	DestroySRCommand	wired	PromptSrAction
+Storage	Properties	SRPropertiesCommand	wired	OpenProperties
+Templates	Create VM From Selection	CreateVMFromTemplateCommand	wired	submenu
+Templates > Create VM From Selection	New VM wizard...	NewVMFromTemplateCommand	wired	OpenNewVmWizard
+Templates > Create VM From Selection	Quick Create	InstantVMFromTemplateCommand	disabled-not-implemented	
+Templates	Export to File...	ExportTemplateCommand	wired	OpenXvaExport
+Templates	Copy...	CopyTemplateCommand	wired	OpenVmCopy
+Templates	Delete Template	DeleteTemplateCommand	wired	Propose
+Templates	Properties	TemplatePropertiesCommand	wired	OpenProperties
+Tools	Options...	Options	disabled-not-implemented	
+Help	View Xen Desktop Log Files	ViewXenDesktopLogFiles	disabled-not-implemented	
+Help	Check for Xen Desktop Updates	CheckforXenDesktopUpdates	disabled-not-implemented	
+Help	Xen Desktop on the Web	XenDesktopontheWeb	disabled-not-implemented	
+Help	Xen Desktop Plugins online	XenDesktopPluginsonline	disabled-not-implemented	
+Help	About	About	disabled-not-implemented	

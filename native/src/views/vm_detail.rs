@@ -153,7 +153,7 @@ fn header(
     is_template: bool,
     is_snapshot: bool,
     read_only: bool,
-    state: &UiState,
+    _state: &UiState,
     actions: &mut Vec<UiAction>,
 ) {
     ui.horizontal(|ui| {
@@ -199,15 +199,6 @@ fn header(
             });
         });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if ui
-                .add(egui::Button::new(RichText::new("Refresh").size(11.5)))
-                .clicked()
-            {
-                actions.push(UiAction::ReloadVmDetails);
-                if state.vm_subtab == VmTab::Performance {
-                    actions.push(UiAction::LoadVmPerformance);
-                }
-            }
             if !is_template && !is_snapshot {
                 if ui
                     .add(widgets::primary_button("Console"))
@@ -522,7 +513,15 @@ fn action_bar(
                     );
                     ui.separator();
                 }
-                for kind in ActionKind::MENU {
+                for kind in ActionKind::MENU.into_iter().filter(|kind| {
+                    matches!(
+                        kind,
+                        ActionKind::StartPaused
+                            | ActionKind::Checkpoint
+                            | ActionKind::SnapshotWithQuiesce
+                            | ActionKind::Clone
+                    )
+                }) {
                     let allowed = action_allowed(workspace, connection_id, vm, kind.operation());
                     let color = if kind.destructive() { red() } else { fg() };
                     if ui

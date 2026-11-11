@@ -247,6 +247,15 @@ impl App {
         let index = index.min(self.state.object_tabs.len() - 1);
         self.state.active_tab = index;
         let key = self.state.object_tabs[index].key.clone();
+        if !self.state.navigating_history
+            && self.state.selection_history.get(self.state.history_index) != Some(&key)
+        {
+            self.state
+                .selection_history
+                .truncate(self.state.history_index + 1);
+            self.state.selection_history.push(key.clone());
+            self.state.history_index = self.state.selection_history.len() - 1;
+        }
         self.state.tree_selection = Some(key.clone());
         if let Some(connection_id) = key.connection_id() {
             self.state
@@ -2352,6 +2361,18 @@ impl App {
                 }
                 UiAction::OpenObject { key, title } => {
                     self.open_object(key, Some(title));
+                }
+                UiAction::NavigateHistory(forward) => {
+                    let index = if forward {
+                        (self.state.history_index + 1).min(self.state.selection_history.len() - 1)
+                    } else {
+                        self.state.history_index.saturating_sub(1)
+                    };
+                    let key = self.state.selection_history[index].clone();
+                    self.state.history_index = index;
+                    self.state.navigating_history = true;
+                    self.open_object(key, None);
+                    self.state.navigating_history = false;
                 }
                 UiAction::ActivateTab(index) => {
                     self.activate_tab(index);
@@ -5963,11 +5984,11 @@ impl eframe::App for App {
 
         let mut actions = Vec::new();
 
-        views::chrome::titlebar(ui, &mut self.state, &self.workspace, &mut actions);
-        views::chrome::toolbar(ui, &mut self.state, &self.workspace, &mut actions);
+        views::shell::menubar(ui, &mut self.state, &self.workspace, &mut actions);
+        views::shell::toolbar(ui, &mut self.state, &self.workspace, &mut actions);
+        views::shell::statusbar(ui, &self.state, &self.workspace);
         views::sidebar::show(ui, &mut self.state, &self.workspace, &mut actions);
         views::chrome::object_tabs(ui, &mut self.state, &self.workspace, &mut actions);
-        views::chrome::footer(ui, &mut self.state, &self.workspace);
 
         egui::CentralPanel::default()
             .frame(
@@ -5984,7 +6005,6 @@ impl eframe::App for App {
                     });
             });
 
-        views::chrome::resize_edges(ui);
         let ctx = ui.ctx().clone();
         views::dialogs::show(&ctx, &mut self.state, &self.workspace, &mut actions);
         widgets::toasts(&ctx, &self.state, &mut actions);
