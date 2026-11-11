@@ -1,0 +1,60 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        414,
+        410
+      ],
+      "snap": "windows-wizard-source"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        602
+      ],
+      "snap": "windows-wizard-name",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        623
+      ],
+      "snap": "windows-defaults"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "size": [
+        1000,
+        720
+      ],
+      "snap": "windows-defaults-small",
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        158,
+        613
+      ],
+      "snap": "windows-cancelled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

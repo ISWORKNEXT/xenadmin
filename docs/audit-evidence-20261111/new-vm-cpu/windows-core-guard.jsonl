@@ -1,0 +1,1 @@
+{"check":"windows-template-separate-cpu-guard","error":"This source or host does not support separate initial and maximum vCPU counts. Use equal counts.","invalid_sr_prevents_clone_if_guard_regresses":true,"source_unchanged":true,"source_uuid":"7774689b-4ca1-4dea-8545-dddd6b64c17f","status":"VERIFIED"}

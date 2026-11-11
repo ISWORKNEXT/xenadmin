@@ -1,0 +1,131 @@
+{
+  "conclusion": "success",
+  "headSha": "544ebd970d4e31dedbc4a95077deb66408035807",
+  "jobs": [
+    {
+      "completedAt": "2026-11-11T13:42:51Z",
+      "conclusion": "success",
+      "databaseId": 130558726066,
+      "name": "Typecheck, lint and test",
+      "startedAt": "2026-11-11T13:40:48Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-11T13:40:50Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-11T13:40:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:40:55Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "startedAt": "2026-11-11T13:40:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:40:57Z",
+          "conclusion": "success",
+          "name": "Install Rust",
+          "number": 3,
+          "startedAt": "2026-11-11T13:40:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:41:07Z",
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2",
+          "number": 4,
+          "startedAt": "2026-11-11T13:40:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:41:27Z",
+          "conclusion": "success",
+          "name": "Install native dependencies",
+          "number": 5,
+          "startedAt": "2026-11-11T13:41:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:41:28Z",
+          "conclusion": "success",
+          "name": "Format",
+          "number": 6,
+          "startedAt": "2026-11-11T13:41:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:42:11Z",
+          "conclusion": "success",
+          "name": "Tests",
+          "number": 7,
+          "startedAt": "2026-11-11T13:41:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:42:24Z",
+          "conclusion": "success",
+          "name": "Clippy",
+          "number": 8,
+          "startedAt": "2026-11-11T13:42:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:42:29Z",
+          "conclusion": "success",
+          "name": "Build",
+          "number": 9,
+          "startedAt": "2026-11-11T13:42:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:42:39Z",
+          "conclusion": "success",
+          "name": "Native clipboard regression (X11)",
+          "number": 10,
+          "startedAt": "2026-11-11T13:42:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:42:40Z",
+          "conclusion": "success",
+          "name": "Upload native clipboard evidence",
+          "number": 11,
+          "startedAt": "2026-11-11T13:42:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:42:49Z",
+          "conclusion": "success",
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "number": 21,
+          "startedAt": "2026-11-11T13:42:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:42:50Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 22,
+          "startedAt": "2026-11-11T13:42:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T13:42:50Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 23,
+          "startedAt": "2026-11-11T13:42:50Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ISWORKNEXT/xenadmin/actions/runs/43031298486/job/130558726066"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/ISWORKNEXT/xenadmin/actions/runs/43031298486"
+}

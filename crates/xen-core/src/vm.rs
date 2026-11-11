@@ -27,6 +27,7 @@ pub struct VmDetails {
     pub cpu_weight: String,
     pub cores_per_socket: String,
     pub max_cores_per_socket: u64,
+    pub supports_vcpu_hotplug: bool,
     pub can_hotplug_vcpus: bool,
     pub memory_static_max: u64,
     pub memory_static_min: u64,
@@ -477,6 +478,16 @@ impl Connection {
                 .unwrap_or("1")
                 .to_owned(),
             max_cores_per_socket: cpu_topology_limit,
+            supports_vcpu_hotplug: !is_windows_guest(&vm, guests.as_ref())
+                && hosts.as_ref().is_some_and(|hosts| {
+                    !hosts.is_empty()
+                        && hosts.values().all(|host| {
+                            matches!(
+                                host["license_params"]["restrict_set_vcpus_number_live"].as_str(),
+                                Some("false")
+                            )
+                        })
+                }),
             can_hotplug_vcpus: vcpu_hotplug_allowed(&vm, guests.as_ref()),
             memory_static_max: number(&vm, "memory_static_max"),
             memory_static_min: number(&vm, "memory_static_min"),
@@ -633,7 +644,7 @@ fn display(value: &Value) -> String {
     }
 }
 
-pub(crate) fn vcpu_hotplug_allowed(vm: &Value, guests: Option<&Records>) -> bool {
+fn is_windows_guest(vm: &Value, guests: Option<&Records>) -> bool {
     let current = related(guests, &text(vm, "guest_metrics"));
     let previous_ref = vm["last_booted_record"]
         .as_str()
@@ -674,11 +685,14 @@ pub(crate) fn vcpu_hotplug_allowed(vm: &Value, guests: Option<&Records>) -> bool
             .to_ascii_lowercase()
             .contains("netscaler")
     });
-    let windows = !known_non_windows
+    !known_non_windows
         && !text(vm, "HVM_boot_policy").is_empty()
-        && matches!(vm["platform"]["viridian"].as_str(), Some("true" | "1"));
+        && matches!(vm["platform"]["viridian"].as_str(), Some("true" | "1"))
+}
+
+pub(crate) fn vcpu_hotplug_allowed(vm: &Value, guests: Option<&Records>) -> bool {
     vm["power_state"].as_str() == Some("Running")
-        && !windows
+        && !is_windows_guest(vm, guests)
         && strings(&vm["allowed_operations"])
             .iter()
             .any(|op| op == "changing_VCPUs_live")

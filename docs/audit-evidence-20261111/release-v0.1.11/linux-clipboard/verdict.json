@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "expected": "clipboard-ทดสอบ-café-Δ",
+  "actual": "clipboard-ทดสอบ-café-Δ",
+  "provider_consumer_verified": true,
+  "host_point": [
+    700,
+    378
+  ],
+  "binary": "/tmp/xen-release-v0.1.11-20261111/xen-desktop-v0.1.11-linux-x86_64/xen-desktop",
+  "binary_sha256": "1afb09fd6c192d7af4058f058a1a13c17feb5f33f7456dbe3b9ea5745b42934c",
+  "pid": 3720631,
+  "display": ":98",
+  "credentials_used": false,
+  "host_connection_submitted": false
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "published-linux-host",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

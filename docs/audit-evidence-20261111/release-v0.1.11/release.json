@@ -1,0 +1,51 @@
+{
+  "assets": [
+    {
+      "apiUrl": "https://api.github.com/repos/ISWORKNEXT/xenadmin/releases/assets/735702356",
+      "contentType": "application/octet-stream",
+      "createdAt": "2026-11-11T13:53:12Z",
+      "digest": "sha256:69270de2b471b76010ff24b5eda8b44d299cb38849a62552903a1dfa78ac82e6",
+      "downloadCount": 0,
+      "id": "RA_kwDOVkkdls4r2e1U",
+      "label": "",
+      "name": "SHA256SUMS",
+      "size": 211,
+      "state": "uploaded",
+      "updatedAt": "2026-11-11T13:53:12Z",
+      "url": "https://github.com/ISWORKNEXT/xenadmin/releases/download/v0.1.11/SHA256SUMS"
+    },
+    {
+      "apiUrl": "https://api.github.com/repos/ISWORKNEXT/xenadmin/releases/assets/735702358",
+      "contentType": "application/gzip",
+      "createdAt": "2026-11-11T13:53:12Z",
+      "digest": "sha256:c8018757d4b49caf7a9dddbd3fa7290b8e3a14fd3121c3de7d5762ade3c09591",
+      "downloadCount": 0,
+      "id": "RA_kwDOVkkdls4r2e1W",
+      "label": "",
+      "name": "xen-desktop-v0.1.11-linux-x86_64.tar.gz",
+      "size": 13389143,
+      "state": "uploaded",
+      "updatedAt": "2026-11-11T13:53:13Z",
+      "url": "https://github.com/ISWORKNEXT/xenadmin/releases/download/v0.1.11/xen-desktop-v0.1.11-linux-x86_64.tar.gz"
+    },
+    {
+      "apiUrl": "https://api.github.com/repos/ISWORKNEXT/xenadmin/releases/assets/735702357",
+      "contentType": "application/zip",
+      "createdAt": "2026-11-11T13:53:12Z",
+      "digest": "sha256:1b6f9e1d28454151c043ced0fa26434f0b5c2ab018e957bf6211f3695462c79d",
+      "downloadCount": 0,
+      "id": "RA_kwDOVkkdls4r2e1V",
+      "label": "",
+      "name": "xen-desktop-v0.1.11-windows-x86_64.zip",
+      "size": 11657608,
+      "state": "uploaded",
+      "updatedAt": "2026-11-11T13:53:13Z",
+      "url": "https://github.com/ISWORKNEXT/xenadmin/releases/download/v0.1.11/xen-desktop-v0.1.11-windows-x86_64.zip"
+    }
+  ],
+  "isDraft": false,
+  "isPrerelease": false,
+  "publishedAt": "2026-11-11T13:53:14Z",
+  "tagName": "v0.1.11",
+  "url": "https://github.com/ISWORKNEXT/xenadmin/releases/tag/v0.1.11"
+}

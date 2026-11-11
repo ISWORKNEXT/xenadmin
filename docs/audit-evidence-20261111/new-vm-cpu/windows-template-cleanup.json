@@ -1,0 +1,11 @@
+{
+  "all_inventory_sets_match": true,
+  "counts": {
+    "vm_uuids": 74,
+    "vdi_uuids": 88,
+    "sr_uuids": 6,
+    "pbd_uuids": 6,
+    "network_uuids": 2
+  },
+  "no_vdi_destroy_called": true
+}

@@ -870,7 +870,28 @@ impl App {
                     {
                         wizard.template = match result {
                             Ok(details) => {
-                                wizard.draft.vcpus = details.vcpus_at_startup.max(1);
+                                wizard.draft.vcpus_max = if details.supports_vcpu_hotplug {
+                                    details.vcpus_max.max(1)
+                                } else {
+                                    details.vcpus_at_startup.max(1)
+                                };
+                                wizard.draft.vcpus_at_startup =
+                                    details.vcpus_at_startup.clamp(1, wizard.draft.vcpus_max);
+                                wizard.draft.cores_per_socket = Some(
+                                    details
+                                        .cores_per_socket
+                                        .parse()
+                                        .ok()
+                                        .filter(|&cores| {
+                                            xen_core::vm::validate_cpu_topology(
+                                                wizard.draft.vcpus_max,
+                                                cores,
+                                                0,
+                                            )
+                                            .is_ok()
+                                        })
+                                        .unwrap_or(1),
+                                );
                                 wizard.draft.memory_mib = details
                                     .memory_dynamic_max
                                     .div_ceil(1024 * 1024)
@@ -2250,7 +2271,9 @@ impl App {
                             source: source.clone(),
                             name: String::new(),
                             description: String::new(),
-                            vcpus: 1,
+                            vcpus_max: 1,
+                            vcpus_at_startup: 1,
+                            cores_per_socket: None,
                             memory_mib: 1024,
                             sr_uuid: String::new(),
                             new_disk_gib: Some(20),

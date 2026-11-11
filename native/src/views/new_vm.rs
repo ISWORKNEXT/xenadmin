@@ -206,8 +206,54 @@ fn page(
             }
         }
         2 => {
-            widgets::field_label(ui, "vCPUs");
-            ui.add(egui::DragValue::new(&mut draft.vcpus).range(1..=256));
+            widgets::field_label(ui, "Maximum vCPUs");
+            let previous_max = draft.vcpus_max;
+            ui.add(egui::DragValue::new(&mut draft.vcpus_max).range(1..=256));
+            if draft.vcpus_max != previous_max {
+                draft.vcpus_at_startup = if draft.vcpus_at_startup == previous_max {
+                    draft.vcpus_max
+                } else {
+                    draft.vcpus_at_startup.min(draft.vcpus_max)
+                };
+            }
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Initial vCPUs");
+            let hotplug = wizard
+                .template
+                .ready()
+                .is_some_and(|source| source.supports_vcpu_hotplug);
+            if !hotplug {
+                draft.vcpus_at_startup = draft.vcpus_max;
+            }
+            ui.add_enabled(
+                hotplug,
+                egui::DragValue::new(&mut draft.vcpus_at_startup).range(1..=draft.vcpus_max),
+            );
+            ui.add_space(8.0);
+            widgets::field_label(ui, "Cores per socket");
+            let cores = draft.cores_per_socket.unwrap_or(1);
+            egui::ComboBox::from_id_salt("new-vm-topology")
+                .selected_text(cores.to_string())
+                .show_ui(ui, |ui| {
+                    for value in 1..=draft.vcpus_max {
+                        if xen_core::vm::validate_cpu_topology(draft.vcpus_max, value, 0).is_ok() {
+                            ui.selectable_value(
+                                &mut draft.cores_per_socket,
+                                Some(value),
+                                format!(
+                                    "{value} cores / socket · {} sockets",
+                                    draft.vcpus_max / value
+                                ),
+                            );
+                        }
+                    }
+                });
+            if xen_core::vm::validate_cpu_topology(draft.vcpus_max, cores, 0).is_err() {
+                error = Some(
+                    "Choose a topology that divides the CPU maximum and uses at most 16 sockets.",
+                );
+            }
+            ui.label(RichText::new("Physical host limits are checked for the selected storage and home server when creating the VM. Runtime CPU hot-add requires guest support.").small().color(theme::muted_fg()));
             ui.add_space(12.0);
             widgets::field_label(ui, "Memory (MiB)");
             let minimum = wizard
@@ -407,7 +453,14 @@ fn page(
                 ),
                 ("Name", draft.name.clone()),
                 ("Description", draft.description.clone()),
-                ("vCPUs", draft.vcpus.to_string()),
+                ("Maximum vCPUs", draft.vcpus_max.to_string()),
+                ("Initial vCPUs", draft.vcpus_at_startup.to_string()),
+                (
+                    "Cores per socket",
+                    draft
+                        .cores_per_socket
+                        .map_or_else(|| "Inherit source".into(), |cores| cores.to_string()),
+                ),
                 ("Memory", format!("{} MiB", draft.memory_mib)),
                 (
                     "Storage",

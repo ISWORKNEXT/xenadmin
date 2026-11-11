@@ -25,6 +25,8 @@ struct Input {
     qualify_default_sr: bool,
     #[serde(default)]
     qualify_cpu_settings: bool,
+    #[serde(default)]
+    qualify_creation_cpu: bool,
 }
 
 fn ssh_json(script: &str) -> Result<Value, Error> {
@@ -215,7 +217,9 @@ async fn exercise(
             source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-source"),
             description: "Owned storage qualification VM".into(),
-            vcpus: 1,
+            vcpus_max: 1,
+            vcpus_at_startup: 1,
+            cores_per_socket: None,
             memory_mib: 256,
             sr_uuid: original_sr.uuid.clone(),
             new_disk_gib: None,
@@ -530,6 +534,29 @@ async fn exercise(
     }
     let mut snapshot_uuid = None;
     if input.snapshot_wizard {
+        let creation_cpu_source = if input.qualify_creation_cpu {
+            c.update_vm_resources(
+                &source,
+                &xen_core::operations::VmResourceUpdate {
+                    vcpus_max: 4,
+                    vcpus_at_startup: 2,
+                    memory_static_max_mib: 256,
+                    memory_dynamic_min_mib: 256,
+                    memory_dynamic_max_mib: 256,
+                    boot_order: None,
+                    firmware: None,
+                    secure_boot: None,
+                    boot_policy: None,
+                    after_crash: None,
+                    cpu_weight: None,
+                    cores_per_socket: Some(2),
+                },
+            )
+            .await?;
+            Some(cpu_state(&source, prefix, false)?)
+        } else {
+            None
+        };
         let task = c
             .begin_vm_action(
                 &source,
@@ -549,7 +576,9 @@ async fn exercise(
             source: xen_core::provisioning::VmCreationSource::Snapshot(snapshot.uuid.clone()),
             name: format!("{prefix}-configured"),
             description: "Configured from an owned snapshot".into(),
-            vcpus: 2,
+            vcpus_max: if input.qualify_creation_cpu { 6 } else { 2 },
+            vcpus_at_startup: if input.qualify_creation_cpu { 3 } else { 2 },
+            cores_per_socket: input.qualify_creation_cpu.then_some(1),
             memory_mib: 384,
             sr_uuid: target.uuid.clone(),
             new_disk_gib: None,
@@ -567,6 +596,29 @@ async fn exercise(
             return Err("Wrong source kind was admitted".into());
         }
         request.source = xen_core::provisioning::VmCreationSource::Snapshot(snapshot.uuid.clone());
+        if input.qualify_creation_cpu {
+            let before = crate::snapshot()?;
+            for (maximum, initial, cores) in [
+                (6, 0, Some(1)),
+                (6, 7, Some(1)),
+                (6, 3, Some(4)),
+                (3, 2, None),
+            ] {
+                request.vcpus_max = maximum;
+                request.vcpus_at_startup = initial;
+                request.cores_per_socket = cores;
+                if c.create_configured_vm(&request).await.is_ok() || crate::snapshot()? != before {
+                    return Err("Invalid creation CPU request wrote objects".into());
+                }
+            }
+            request.vcpus_max = 6;
+            request.vcpus_at_startup = 3;
+            request.cores_per_socket = Some(1);
+            println!(
+                "{}",
+                json!({"check":"creation-cpu-invalid-preclone","zero_initial_rejected":true,"initial_above_max_rejected":true,"nondividing_topology_rejected":true,"invalid_inherited_topology_rejected":true,"all_inventory_sets_unchanged":true,"status":"VERIFIED"})
+            );
+        }
         let output = c.create_configured_vm(&request).await?;
         let details = c.vm_details(&output).await?;
         let output_disk = details
@@ -578,8 +630,11 @@ async fn exercise(
         if details.is_template
             || details.is_snapshot
             || details.power_state != "Halted"
-            || details.vcpus_at_startup != 2
-            || details.vcpus_max != 2
+            || details.vcpus_at_startup != request.vcpus_at_startup
+            || details.vcpus_max != request.vcpus_max
+            || request
+                .cores_per_socket
+                .is_some_and(|cores| details.cores_per_socket != cores.to_string())
             || details.memory_static_max != 384 * 1024 * 1024
             || details.memory_dynamic_min != 384 * 1024 * 1024
             || details.memory_dynamic_max != 384 * 1024 * 1024
@@ -599,11 +654,20 @@ async fn exercise(
         }
         println!(
             "{}",
-            json!({"check":"configured-snapshot-vm","source_snapshot_uuid":snapshot.uuid,"uuid":output,"readback":probe,"vcpus":2,"memory_mib":384,"network_uuid":request.network_uuid,"affinity_host_uuid":request.affinity_host_uuid,"wrong_source_kind_rejected":true,"status":"VERIFIED"})
+            json!({"check":"configured-snapshot-vm","source_snapshot_uuid":snapshot.uuid,"uuid":output,"readback":probe,"vcpus_max":request.vcpus_max,"vcpus_at_startup":request.vcpus_at_startup,"cores_per_socket":details.cores_per_socket,"memory_mib":384,"network_uuid":request.network_uuid,"affinity_host_uuid":request.affinity_host_uuid,"wrong_source_kind_rejected":true,"status":"VERIFIED"})
         );
+        if let Some(before) = creation_cpu_source {
+            if cpu_state(&source, prefix, false)? != before {
+                return Err("Creation changed source CPU/maps/metadata".into());
+            }
+            println!(
+                "{}",
+                json!({"check":"creation-cpu-source-preserved","state":before,"exact_match":true,"status":"VERIFIED"})
+            );
+        }
         if input.qualify_retained_failure {
             request.name = format!("{prefix}-failed-config");
-            request.vcpus = u64::MAX;
+            request.vcpus_max = u64::MAX;
             let failure = c
                 .create_configured_vm(&request)
                 .await

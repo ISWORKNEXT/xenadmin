@@ -1,0 +1,18 @@
+{
+  "status": "VERIFIED",
+  "vm_uuid": "938bc5bb-bb61-d167-9d03-ea57530cb6b5",
+  "name": "zz-parity-storage-01a1cad7-3c58-72bb-b953-b1aeb2d6a163-cpu-ui",
+  "description": "สร้าง VM พร้อม CPU topology จริง",
+  "vcpus_max": 4,
+  "vcpus_at_startup": 1,
+  "cores_per_socket": "4",
+  "memory_mib": 512,
+  "network_uuids": [
+    "30afc560-17ec-23ce-75b3-e263801787ed"
+  ],
+  "affinity_host_uuid": "f2347fdf-e320-4d3b-994b-7eb12f860c58",
+  "disk_uuid": "6fef8daa-ef70-4196-861a-78057b830372",
+  "sr_uuid": "b48f3686-f568-072a-9c8e-c455b3ec77ca",
+  "bytes": 33554432,
+  "sha256": "3d340b5a4dd59c3dfcfbaefb475dbd2ec82902a34ee27ad31a2c6dcd057f52fb"
+}

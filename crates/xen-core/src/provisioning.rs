@@ -27,7 +27,9 @@ pub struct CreateVmRequest {
     pub source: VmCreationSource,
     pub name: String,
     pub description: String,
-    pub vcpus: u64,
+    pub vcpus_max: u64,
+    pub vcpus_at_startup: u64,
+    pub cores_per_socket: Option<u64>,
     pub memory_mib: u64,
     pub sr_uuid: String,
     pub new_disk_gib: Option<u64>,
@@ -556,7 +558,9 @@ impl Connection {
         }
         if request.name.trim().is_empty()
             || request.name.chars().count() > 255
-            || request.vcpus == 0
+            || request.vcpus_max == 0
+            || request.vcpus_at_startup == 0
+            || request.vcpus_at_startup > request.vcpus_max
             || request.memory_mib == 0
             || request.memory_mib.checked_mul(1024 * 1024).is_none()
             || request
@@ -598,9 +602,18 @@ impl Connection {
             ));
         }
         crate::properties::validate_description_change(&details.description, &request.description)?;
-        if request.vcpus != details.vcpus_max {
-            let cores=details.cores_per_socket.parse().map_err(|_|ApiError::Xen("The source CPU topology is invalid. Correct the source topology before changing CPU count.".into()))?;
-            crate::vm::validate_cpu_topology(request.vcpus, cores, details.max_cores_per_socket)?;
+        if request.vcpus_at_startup != request.vcpus_max && !details.supports_vcpu_hotplug {
+            return Err(ApiError::Xen("This source or host does not support separate initial and maximum vCPU counts. Use equal counts.".into()));
+        }
+        if request.cores_per_socket.is_some() || request.vcpus_max != details.vcpus_max {
+            let cores = match request.cores_per_socket {
+                Some(cores) => cores,
+                None => details.cores_per_socket.parse().map_err(|_| ApiError::Xen(
+                    "The source CPU topology is invalid. Select a valid topology for the new VM.".into()
+                ))?,
+            };
+            // Physical limits are checked by Resources against final placement below.
+            crate::vm::validate_cpu_topology(request.vcpus_max, cores, 0)?;
         }
         if request.memory_mib * 1024 * 1024 < details.memory_static_min {
             return Err(ApiError::Xen(
@@ -795,24 +808,6 @@ impl Connection {
             edited,
         })
         .await?;
-        self.update_vm_resources(
-            uuid,
-            &crate::operations::VmResourceUpdate {
-                vcpus_max: request.vcpus,
-                vcpus_at_startup: request.vcpus,
-                memory_static_max_mib: request.memory_mib,
-                memory_dynamic_min_mib: request.memory_mib,
-                memory_dynamic_max_mib: request.memory_mib,
-                boot_order: None,
-                firmware: None,
-                secure_boot: None,
-                boot_policy: None,
-                after_crash: None,
-                cpu_weight: None,
-                cores_per_socket: None,
-            },
-        )
-        .await?;
         self.update_vm_ha(uuid, "", 0, 0, request.affinity_host_uuid.as_deref())
             .await?;
         let details = self.vm_details(uuid).await?;
@@ -873,6 +868,24 @@ impl Connection {
                 .await?;
             }
         }
+        self.update_vm_resources(
+            uuid,
+            &crate::operations::VmResourceUpdate {
+                vcpus_max: request.vcpus_max,
+                vcpus_at_startup: request.vcpus_at_startup,
+                memory_static_max_mib: request.memory_mib,
+                memory_dynamic_min_mib: request.memory_mib,
+                memory_dynamic_max_mib: request.memory_mib,
+                boot_order: None,
+                firmware: None,
+                secure_boot: None,
+                boot_policy: None,
+                after_crash: None,
+                cpu_weight: None,
+                cores_per_socket: request.cores_per_socket,
+            },
+        )
+        .await?;
         Ok(())
     }
 }

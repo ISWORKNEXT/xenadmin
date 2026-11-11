@@ -1,0 +1,22 @@
+{
+  "tag": "v0.1.11",
+  "commit": "544ebd970d4e31dedbc4a95077deb66408035807",
+  "url": "https://github.com/ISWORKNEXT/xenadmin/releases/tag/v0.1.11",
+  "verified_assets": [
+    {
+      "name": "xen-desktop-v0.1.11-linux-x86_64.tar.gz",
+      "sha256": "c8018757d4b49caf7a9dddbd3fa7290b8e3a14fd3121c3de7d5762ade3c09591",
+      "bytes": 13389143,
+      "published_asset_digest_matches": true
+    },
+    {
+      "name": "xen-desktop-v0.1.11-windows-x86_64.zip",
+      "sha256": "1b6f9e1d28454151c043ced0fa26434f0b5c2ab018e957bf6211f3695462c79d",
+      "bytes": 11657608,
+      "published_asset_digest_matches": true
+    }
+  ],
+  "linux_binary": "/tmp/xen-release-v0.1.11-20261111/xen-desktop-v0.1.11-linux-x86_64/xen-desktop",
+  "linux_binary_sha256": "1afb09fd6c192d7af4058f058a1a13c17feb5f33f7456dbe3b9ea5745b42934c",
+  "ci_and_release_success": true
+}
