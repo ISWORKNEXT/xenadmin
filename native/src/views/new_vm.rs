@@ -1,17 +1,67 @@
-use egui::{Align, Layout, RichText};
+use egui::RichText;
 use xen_core::workspace::WorkspaceView;
 
 use crate::state::{LoadState, UiAction, UiState, connection_inventory, find_connection};
 use crate::{format, theme, widgets};
 
-const STEPS: [&str; 6] = [
-    "Source",
-    "Name",
-    "Resources",
-    "Storage & media",
-    "Networking",
-    "Review",
-];
+use super::wizard::{Frame, Outcome, Step};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Page {
+    Template,
+    Name,
+    InstallationMedia,
+    HomeServer,
+    CpuMemory,
+    Storage,
+    Networking,
+    GuestSetup,
+    Finish,
+}
+
+impl Page {
+    fn step(self) -> Step {
+        let (title, description) = match self {
+            Self::Template => ("Template", "Select a template on which to base the new VM."),
+            Self::Name => ("Name", "Enter a name and description for the new VM."),
+            Self::InstallationMedia => (
+                "Installation Media",
+                "Choose the installation media for the operating system.",
+            ),
+            Self::HomeServer => ("Home Server", "Choose a home server for the new VM."),
+            Self::CpuMemory => (
+                "CPU & Memory",
+                "Allocate processors and memory to the new VM.",
+            ),
+            Self::Storage => ("Storage", "Configure the virtual disks for the new VM."),
+            Self::Networking => ("Networking", "Configure the virtual network interfaces."),
+            Self::GuestSetup => (
+                "Guest Setup",
+                "Configure networking and login inside the supported guest.",
+            ),
+            Self::Finish => ("Finish", "Review the settings and create the new VM."),
+        };
+        Step { title, description }
+    }
+}
+
+fn pages(installed: bool, guest: bool) -> Vec<Page> {
+    let mut pages = vec![Page::Template, Page::Name];
+    if !installed {
+        pages.push(Page::InstallationMedia);
+    }
+    pages.extend([
+        Page::HomeServer,
+        Page::CpuMemory,
+        Page::Storage,
+        Page::Networking,
+    ]);
+    if guest {
+        pages.push(Page::GuestSetup);
+    }
+    pages.push(Page::Finish);
+    pages
+}
 
 pub fn show(
     ctx: &egui::Context,
@@ -33,142 +83,96 @@ pub fn show(
         });
         return;
     };
-    let guest = wizard
-        .template
-        .ready()
-        .is_some_and(|vm| vm.guest_support.enabled);
-    let mut steps = STEPS.to_vec();
-    if guest {
-        steps.insert(5, "Guest Setup");
+    let template = wizard.template.ready();
+    let pages = pages(
+        template.is_some_and(|vm| vm.disks.iter().any(|disk| !disk.is_cd)),
+        template.is_some_and(|vm| vm.guest_support.enabled),
+    );
+    let steps: Vec<_> = pages.iter().map(|page| page.step()).collect();
+    let mut frame = std::mem::take(&mut wizard.frame);
+    let old_step = frame.step;
+    let error = wizard.error.clone();
+    let outcome = Frame {
+        id: "new-vm-wizard",
+        title: "New VM",
+        steps: &steps,
+        busy: wizard.submitting,
+        dirty: !wizard.draft.name.is_empty() || frame.step > 0,
+        error: error.as_deref(),
     }
-    let mut close = false;
-    let response = egui::Modal::new(egui::Id::unique("new-vm-wizard"))
-        .frame(theme::modal_frame())
-        .show(ctx, |ui| {
-            ui.set_width(680.0);
-            ui.heading("New virtual machine");
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                for (index, label) in steps.iter().enumerate() {
-                    if index > 0 {
-                        ui.label("›");
-                    }
-                    if index == wizard.step {
-                        ui.label(RichText::new(*label).strong().color(theme::accent()));
-                    } else {
-                        ui.label(RichText::new(*label).color(theme::muted_fg()));
-                    }
-                }
-            });
-            ui.separator();
-            let mut error = None;
-            egui::ScrollArea::vertical()
-                .max_height((ctx.content_rect().height() - 250.0).max(180.0))
-                .show(ui, |ui| {
-                    ui.add_enabled_ui(!wizard.submitting, |ui| {
-                        error = page(ui, wizard, inventory, actions);
-                    });
-                });
-            ui.add_space(10.0);
-            if let Some(message) = &wizard.error {
-                ui.colored_label(theme::red(), message);
-            }
-            if let Some(message) = error {
-                ui.label(RichText::new(message).color(theme::muted_fg()));
-            }
-            ui.separator();
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(!wizard.submitting, egui::Button::new("Cancel"))
-                    .clicked()
-                {
-                    close = true;
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if wizard.step == steps.len() - 1 {
-                        if ui
-                            .add_enabled(!wizard.submitting, widgets::primary_button("Create VM"))
-                            .clicked()
-                        {
-                            actions.push(UiAction::CreateNewVm);
-                        }
-                    } else if ui
-                        .add_enabled(
-                            !wizard.submitting && error.is_none(),
-                            widgets::primary_button("Next"),
-                        )
-                        .clicked()
-                    {
-                        wizard.step += 1;
-                        wizard.error = None;
-                    }
-                    if ui
-                        .add_enabled(
-                            !wizard.submitting && wizard.step > 0,
-                            egui::Button::new("Back"),
-                        )
-                        .clicked()
-                    {
-                        wizard.step -= 1;
-                        wizard.error = None;
-                    }
-                    if wizard.submitting {
-                        ui.spinner();
-                        ui.label("Queuing creation…");
-                    }
-                });
-            });
-        });
-    if (close || response.should_close()) && !wizard.submitting {
-        actions.push(UiAction::CloseNewVmWizard);
+    .show(ctx, &mut frame, |ui, step| {
+        page(ui, wizard, pages[step], inventory, actions)
+    });
+    if frame.step != old_step {
+        wizard.error = None;
+    }
+    wizard.frame = frame;
+    match outcome {
+        Outcome::Cancel => actions.push(UiAction::CloseNewVmWizard),
+        Outcome::Finish => actions.push(UiAction::CreateNewVm),
+        Outcome::None => {}
     }
 }
 
 fn page(
     ui: &mut egui::Ui,
     wizard: &mut crate::state::NewVmWizard,
+    current: Page,
     inventory: &xen_core::xapi::Inventory,
     actions: &mut Vec<UiAction>,
 ) -> Option<&'static str> {
     let mut error = None;
     let draft = &mut wizard.draft;
-    match wizard.step {
-        0 => {
-            widgets::field_label(ui, "Source");
-            let selected = inventory
-                .templates
-                .iter()
-                .chain(&inventory.snapshots)
-                .find(|vm| vm.uuid == draft.source.uuid())
-                .map_or("Select a template or snapshot", |vm| vm.name.as_str());
-            egui::ComboBox::from_id_salt("new-vm-template")
-                .selected_text(selected)
-                .width(620.0)
-                .show_ui(ui, |ui| {
-                    for template in inventory
-                        .templates
-                        .iter()
-                        .chain(&inventory.snapshots)
-                        .filter(|vm| vm.allowed_operations.iter().any(|op| op == "clone"))
-                    {
-                        if ui
-                            .selectable_label(template.uuid == draft.source.uuid(), &template.name)
-                            .clicked()
-                        {
-                            actions.push(UiAction::SelectNewVmSource(
-                                if template.kind == "snapshot" {
-                                    xen_core::provisioning::VmCreationSource::Snapshot(
-                                        template.uuid.clone(),
-                                    )
-                                } else {
-                                    xen_core::provisioning::VmCreationSource::Template(
-                                        template.uuid.clone(),
-                                    )
-                                },
-                            ));
+    match current {
+        Page::Template => {
+            ui.add(
+                egui::TextEdit::singleline(&mut wizard.template_search)
+                    .hint_text("Search templates")
+                    .desired_width(f32::INFINITY),
+            );
+            let search = wizard.template_search.to_lowercase();
+            egui::ScrollArea::vertical()
+                .id_salt("template-list")
+                .max_height(210.0)
+                .show(ui, |ui| {
+                    for group in ["Windows", "Linux", "Other", "Snapshots"] {
+                        let mut templates: Vec<_> = inventory
+                            .templates
+                            .iter()
+                            .chain(&inventory.snapshots)
+                            .filter(|vm| vm.allowed_operations.iter().any(|op| op == "clone"))
+                            .filter(|vm| template_group(&vm.name, &vm.kind) == group)
+                            .filter(|vm| vm.name.to_lowercase().contains(&search))
+                            .collect();
+                        templates.sort_by_key(|vm| vm.name.to_lowercase());
+                        if templates.is_empty() {
+                            continue;
+                        }
+                        ui.label(RichText::new(group).strong());
+                        for template in templates {
+                            if ui
+                                .selectable_label(
+                                    template.uuid == draft.source.uuid(),
+                                    &template.name,
+                                )
+                                .clicked()
+                            {
+                                actions.push(UiAction::SelectNewVmSource(
+                                    if template.kind == "snapshot" {
+                                        xen_core::provisioning::VmCreationSource::Snapshot(
+                                            template.uuid.clone(),
+                                        )
+                                    } else {
+                                        xen_core::provisioning::VmCreationSource::Template(
+                                            template.uuid.clone(),
+                                        )
+                                    },
+                                ));
+                            }
                         }
                     }
                 });
+            ui.separator();
             match &wizard.template {
                 LoadState::Ready(details) => {
                     ui.add_space(12.0);
@@ -194,7 +198,7 @@ fn page(
                 }
             }
         }
-        1 => {
+        Page::Name => {
             widgets::field_label(ui, "VM name");
             ui.add(
                 egui::TextEdit::singleline(&mut draft.name)
@@ -213,7 +217,7 @@ fn page(
                 error = Some("Enter a VM name.");
             }
         }
-        2 => {
+        Page::CpuMemory => {
             widgets::field_label(ui, "Maximum vCPUs");
             let previous_max = draft.vcpus_max;
             ui.add(egui::DragValue::new(&mut draft.vcpus_max).range(1..=256));
@@ -280,28 +284,77 @@ fn page(
                     .range(minimum..=maximum)
                     .speed(64),
             );
+        }
+        Page::InstallationMedia => {
             ui.add_space(12.0);
-            widgets::field_label(ui, "Home server");
-            let selected = draft
-                .affinity_host_uuid
-                .as_ref()
-                .and_then(|uuid| inventory.hosts.iter().find(|host| &host.uuid == uuid))
-                .map_or("Automatic placement", |host| host.name.as_str());
-            egui::ComboBox::from_id_salt("new-vm-home")
+            widgets::field_label(ui, "Installation ISO");
+            let selected = wizard
+                .template
+                .ready()
+                .and_then(|vm| {
+                    vm.isos
+                        .iter()
+                        .find(|iso| Some(&iso.uuid) == draft.iso_uuid.as_ref())
+                })
+                .map_or("Keep source media", |iso| iso.name.as_str());
+            egui::ComboBox::from_id_salt("new-vm-iso")
                 .selected_text(selected)
-                .width(620.0)
+                .width(ui.available_width())
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut draft.affinity_host_uuid, None, "Automatic placement");
-                    for host in inventory.hosts.iter().filter(|host| host.enabled) {
-                        ui.selectable_value(
-                            &mut draft.affinity_host_uuid,
-                            Some(host.uuid.clone()),
-                            &host.name,
-                        );
+                    ui.selectable_value(&mut draft.iso_uuid, None, "Keep source media");
+                    if let Some(details) = wizard.template.ready() {
+                        for iso in &details.isos {
+                            ui.selectable_value(
+                                &mut draft.iso_uuid,
+                                Some(iso.uuid.clone()),
+                                format!("{} · {}", iso.name, iso.sr_name),
+                            );
+                        }
                     }
                 });
         }
-        3 => {
+        Page::HomeServer => {
+            ui.add_space(12.0);
+            widgets::field_label(ui, "Home server");
+            let mut assigned = draft.affinity_host_uuid.is_some();
+            ui.radio_value(&mut assigned, false, "Don't assign this VM a home server");
+            ui.radio_value(&mut assigned, true, "Place the VM on this server");
+            if !assigned {
+                draft.affinity_host_uuid = None;
+            } else if draft.affinity_host_uuid.is_none() {
+                draft.affinity_host_uuid = inventory
+                    .hosts
+                    .iter()
+                    .find(|host| host.enabled)
+                    .map(|host| host.uuid.clone());
+            }
+            ui.add_space(12.0);
+            ui.add_enabled_ui(assigned, |ui| {
+                egui::Grid::new("home-server-list")
+                    .striped(true)
+                    .show(ui, |ui| {
+                        ui.strong("Server");
+                        ui.strong("Free memory");
+                        ui.end_row();
+                        for host in &inventory.hosts {
+                            ui.add_enabled_ui(host.enabled, |ui| {
+                                ui.selectable_value(
+                                    &mut draft.affinity_host_uuid,
+                                    Some(host.uuid.clone()),
+                                    &host.name,
+                                );
+                            });
+                            ui.label(format::bytes(host.memory_free));
+                            ui.end_row();
+                        }
+                    });
+            });
+            if assigned && draft.affinity_host_uuid.is_none() {
+                error = Some("Select an available home server.");
+            }
+        }
+
+        Page::Storage => {
             widgets::field_label(ui, "Storage repository");
             let selected = inventory
                 .storage
@@ -310,7 +363,7 @@ fn page(
                 .map_or("Select storage", |sr| sr.name.as_str());
             egui::ComboBox::from_id_salt("new-vm-sr")
                 .selected_text(selected)
-                .width(620.0)
+                .width(ui.available_width())
                 .show_ui(ui, |ui| {
                     for sr in inventory.storage.iter().filter(|sr| {
                         sr.content_type != "iso"
@@ -336,113 +389,197 @@ fn page(
             if existing > 0 {
                 ui.label(format!("Keep the source's {existing} existing disks and place their copies on the selected storage."));
             }
-            if let Some(template) = wizard.template.ready()
-                && existing == 0
-            {
-                for disk in &template.provision_disks {
-                    ui.label(format!(
-                        "Installation disk {} · {}",
-                        disk.device,
-                        format::bytes(disk.size)
-                    ));
+            let blueprint = wizard
+                .template
+                .ready()
+                .map_or(&[][..], |vm| vm.provision_disks.as_slice());
+            let installation = existing == 0 && !blueprint.is_empty();
+            egui::Grid::new("new-vm-disks")
+                .striped(true)
+                .show(ui, |ui| {
+                    ui.strong("Disk");
+                    ui.strong("Size");
+                    ui.end_row();
+                    if let Some(template) = wizard.template.ready() {
+                        for disk in template.disks.iter().filter(|disk| !disk.is_cd) {
+                            ui.label(format!("Source disk {}", disk.userdevice));
+                            ui.label(format::bytes(disk.virtual_size));
+                            ui.end_row();
+                        }
+                    }
+                    for (index, disk) in blueprint.iter().enumerate().filter(|_| existing == 0) {
+                        ui.label(format!("Installation disk {}", disk.device));
+                        ui.label(if index == 0 {
+                            draft.new_disk_gib.map_or_else(
+                                || format::bytes(disk.size),
+                                |size| format!("{size} GiB"),
+                            )
+                        } else {
+                            format::bytes(disk.size)
+                        });
+                        ui.end_row();
+                    }
+                    if !installation && let Some(size) = draft.new_disk_gib {
+                        ui.label("New disk");
+                        ui.label(format!("{size} GiB"));
+                        ui.end_row();
+                    }
+                });
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        !installation && draft.new_disk_gib.is_none(),
+                        egui::Button::new("Add…"),
+                    )
+                    .clicked()
+                {
+                    draft.new_disk_gib = Some(20);
+                    wizard.edit_disk = true;
                 }
-            }
-            let mut add = draft.new_disk_gib.is_some();
-            let installation = wizard.template.ready().is_some_and(|vm| {
-                vm.disks.iter().all(|disk| disk.is_cd) && !vm.provision_disks.is_empty()
+                if ui
+                    .add_enabled(
+                        installation || draft.new_disk_gib.is_some(),
+                        egui::Button::new("Edit…"),
+                    )
+                    .clicked()
+                {
+                    if draft.new_disk_gib.is_none() {
+                        draft.new_disk_gib = blueprint
+                            .first()
+                            .map(|disk| disk.size.div_ceil(1024 * 1024 * 1024));
+                    }
+                    wizard.edit_disk = true;
+                }
+                if ui
+                    .add_enabled(
+                        !installation && draft.new_disk_gib.is_some(),
+                        egui::Button::new("Delete"),
+                    )
+                    .clicked()
+                {
+                    draft.new_disk_gib = None;
+                    wizard.edit_disk = false;
+                }
             });
-            if ui
-                .checkbox(
-                    &mut add,
-                    if installation {
-                        "Customize first installation disk size"
+            if wizard.edit_disk
+                && let Some(size) = draft.new_disk_gib.as_mut()
+            {
+                ui.horizontal(|ui| {
+                    ui.label(if installation {
+                        "First installation disk size"
                     } else {
-                        "Add a new disk"
-                    },
+                        "New disk size"
+                    });
+                    ui.add(egui::DragValue::new(size).range(1..=1_048_576));
+                    ui.label("GiB");
+                    if ui.button("Apply").clicked() {
+                        wizard.edit_disk = false;
+                    }
+                });
+            }
+            let mut diskless = !installation && existing == 0 && draft.new_disk_gib.is_none();
+            if ui
+                .add_enabled(
+                    !installation && existing == 0,
+                    egui::Checkbox::new(&mut diskless, "Create a diskless VM"),
                 )
                 .changed()
             {
-                draft.new_disk_gib = add.then_some(20);
+                draft.new_disk_gib = if diskless { None } else { Some(20) };
             }
-            if let Some(size) = draft.new_disk_gib.as_mut() {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(size).range(1..=1_048_576));
-                    ui.label("GiB");
-                });
-            }
-            ui.add_space(12.0);
-            widgets::field_label(ui, "Installation ISO");
-            let selected = wizard
-                .template
-                .ready()
-                .and_then(|vm| {
-                    vm.isos
-                        .iter()
-                        .find(|iso| Some(&iso.uuid) == draft.iso_uuid.as_ref())
-                })
-                .map_or("Keep source media", |iso| iso.name.as_str());
-            egui::ComboBox::from_id_salt("new-vm-iso")
-                .selected_text(selected)
-                .width(620.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut draft.iso_uuid, None, "Keep source media");
-                    if let Some(details) = wizard.template.ready() {
-                        for iso in &details.isos {
-                            ui.selectable_value(
-                                &mut draft.iso_uuid,
-                                Some(iso.uuid.clone()),
-                                format!("{} · {}", iso.name, iso.sr_name),
-                            );
-                        }
-                    }
-                });
             if draft.sr_uuid.is_empty() {
                 error = Some("Select storage for the VM disks.");
             }
         }
-        4 => {
-            widgets::field_label(ui, "Guest network");
-            let selected = draft
-                .network_uuid
-                .as_ref()
-                .and_then(|uuid| {
-                    inventory
+        Page::Networking => {
+            widgets::field_label(ui, "Virtual network interfaces");
+            let network = draft.network_uuid.as_ref().and_then(|uuid| {
+                inventory
+                    .networks
+                    .iter()
+                    .find(|network| &network.uuid == uuid)
+            });
+            egui::Grid::new("new-vm-vifs").striped(true).show(ui, |ui| {
+                ui.strong("Interface");
+                ui.strong("Network");
+                ui.end_row();
+                if let Some(network) = network {
+                    ui.label("0");
+                    ui.label(&network.name);
+                    ui.end_row();
+                }
+            });
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(draft.network_uuid.is_none(), egui::Button::new("Add…"))
+                    .clicked()
+                {
+                    draft.network_uuid = inventory
                         .networks
                         .iter()
-                        .find(|network| &network.uuid == uuid)
-                })
-                .map_or("No network interfaces", |network| network.name.as_str());
-            egui::ComboBox::from_id_salt("new-vm-network")
-                .selected_text(selected)
-                .width(620.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut draft.network_uuid, None, "No network interfaces");
-                    for network in inventory
-                        .networks
-                        .iter()
-                        .filter(|network| network.bridge != "xenapi")
-                    {
-                        ui.selectable_value(
-                            &mut draft.network_uuid,
-                            Some(network.uuid.clone()),
-                            &network.name,
-                        );
-                    }
-                });
-            ui.add_space(12.0);
-            ui.label("Choose one guest network or create the VM without network interfaces. This selection replaces the source's interfaces.");
+                        .find(|network| network.bridge != "xenapi")
+                        .map(|network| network.uuid.clone());
+                    wizard.edit_network = true;
+                }
+                if ui
+                    .add_enabled(
+                        draft.network_uuid.is_some(),
+                        egui::Button::new("Properties…"),
+                    )
+                    .clicked()
+                {
+                    wizard.edit_network = true;
+                }
+                if ui
+                    .add_enabled(draft.network_uuid.is_some(), egui::Button::new("Delete"))
+                    .clicked()
+                {
+                    draft.network_uuid = None;
+                    wizard.edit_network = false;
+                }
+            });
+            if wizard.edit_network {
+                let selected = draft
+                    .network_uuid
+                    .as_ref()
+                    .and_then(|uuid| {
+                        inventory
+                            .networks
+                            .iter()
+                            .find(|network| &network.uuid == uuid)
+                    })
+                    .map_or("No network interfaces", |network| network.name.as_str());
+                egui::ComboBox::from_id_salt("new-vm-network")
+                    .selected_text(selected)
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut draft.network_uuid, None, "No network interfaces");
+                        for network in inventory
+                            .networks
+                            .iter()
+                            .filter(|network| network.bridge != "xenapi")
+                        {
+                            ui.selectable_value(
+                                &mut draft.network_uuid,
+                                Some(network.uuid.clone()),
+                                &network.name,
+                            );
+                        }
+                    });
+                if ui.button("Apply").clicked() {
+                    wizard.edit_network = false;
+                }
+            }
         }
-        5 if wizard
-            .template
-            .ready()
-            .is_some_and(|vm| vm.guest_support.enabled) =>
-        {
+        Page::GuestSetup => {
             let support = &wizard.template.ready().unwrap().guest_support;
             let setup = draft.guest_setup.get_or_insert_with(Default::default);
             super::guest_setup::fields(ui, setup, support);
             error = setup.validate(support).err();
         }
-        _ => {
+        Page::Finish => {
             ui.checkbox(
                 &mut draft.start_automatically,
                 "Start the new VM automatically",
@@ -544,4 +681,41 @@ fn page(
         }
     }
     error
+}
+
+fn template_group(name: &str, kind: &str) -> &'static str {
+    if kind == "snapshot" {
+        return "Snapshots";
+    }
+    let name = name.to_lowercase();
+    if name.contains("windows") {
+        "Windows"
+    } else if [
+        "debian", "ubuntu", "centos", "fedora", "rhel", "red hat", "suse", "oracle", "linux",
+        "rocky", "alma",
+    ]
+    .iter()
+    .any(|os| name.contains(os))
+    {
+        "Linux"
+    } else {
+        "Other"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn installed_guests_skip_media_and_keep_guest_setup_before_finish() {
+        let steps = pages(true, true);
+        assert!(!steps.contains(&Page::InstallationMedia));
+        assert!(steps[2] == Page::HomeServer);
+        assert!(steps[steps.len() - 2] == Page::GuestSetup);
+        assert!(steps[steps.len() - 1] == Page::Finish);
+        let stock = pages(false, false);
+        assert!(stock[2] == Page::InstallationMedia);
+        assert!(!stock.contains(&Page::GuestSetup));
+    }
 }

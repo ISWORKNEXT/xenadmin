@@ -1093,6 +1093,7 @@ pub struct SrIntroduceDialog {
 }
 
 pub struct SrCreateDialog {
+    pub frame: crate::views::wizard::WizardState,
     pub connection_id: String,
     pub hosts: Vec<(String, String)>,
     pub host_uuid: Option<String>,
@@ -1395,9 +1396,12 @@ impl VmResourceEditState {
 }
 
 pub struct NewVmWizard {
+    pub frame: crate::views::wizard::WizardState,
+    pub template_search: String,
+    pub edit_disk: bool,
+    pub edit_network: bool,
     pub connection_id: String,
     pub draft: xen_core::provisioning::CreateVmRequest,
-    pub step: usize,
     pub template: LoadState<VmDetails>,
     pub error: Option<String>,
     pub submitting: bool,

@@ -2302,6 +2302,10 @@ impl App {
                         continue;
                     }
                     self.state.new_vm = Some(crate::state::NewVmWizard {
+                        frame: Default::default(),
+                        template_search: String::new(),
+                        edit_disk: false,
+                        edit_network: false,
                         connection_id,
                         draft: xen_core::provisioning::CreateVmRequest {
                             guest_setup: None,
@@ -2319,7 +2323,6 @@ impl App {
                             iso_uuid: None,
                             affinity_host_uuid: None,
                         },
-                        step: 0,
                         template: LoadState::Idle,
                         error: None,
                         submitting: false,
@@ -4770,6 +4773,7 @@ impl App {
                         continue;
                     }
                     self.state.sr_create_dialog = Some(crate::state::SrCreateDialog {
+                        frame: Default::default(),
                         connection_id,
                         host_uuid: hosts.first().map(|(uuid, _)| uuid.clone()),
                         hosts,

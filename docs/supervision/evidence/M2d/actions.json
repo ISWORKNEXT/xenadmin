@@ -1,0 +1,451 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "exec": "w=window(); w.set_input_focus(X.RevertToParent,X.CurrentTime); dpy.sync()"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        170
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        578,
+        55
+      ],
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        678,
+        290
+      ],
+      "text": "Other install media"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        640,
+        354
+      ],
+      "wait": 1,
+      "snap": "01-template"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        300
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2d-vm",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "source=Path(repo/'tools/audit_native_clicks_live.py').read_text(); start=source.index(' def text(value):'); end=source.index(' def snap(name):',start); import textwrap; exec(textwrap.dedent(source[start:end]).replace('time.sleep(0.08)','time.sleep(0.3)'),globals())"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        312
+      ],
+      "key": "Control_L+a"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "BackSpace"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Return",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        980,
+        775
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        670,
+        290
+      ],
+      "key": "Control_L+a",
+      "text": "Other install media",
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        354
+      ],
+      "wait": 1,
+      "snap": "01-template"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        312
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M2d-vm",
+      "wait": 1,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "lab=rpc('session.login_with_password',[os.environ['XEN_DEV_USER'],password,'1.0','M2d verification']); original_vms=rpc('VM.get_all_records',[lab]); source_ref=next(r for r,v in original_vms.items() if v['name_label']=='Other install media' and v['is_a_template']); source_before=original_vms[source_ref]; assert not any(v['name_label']=='zz-parity-M2d-vm' for v in original_vms.values()); print('M2d baseline captured; test name unused',flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Return",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "02-home-server"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        520,
+        363
+      ],
+      "snap": "02-home-server"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        537,
+        562
+      ],
+      "key": "Control_L+a",
+      "text": "1024"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        824,
+        313
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        670,
+        352
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        620,
+        450
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        630,
+        489
+      ],
+      "key": "Control_L+a",
+      "text": "1"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        721,
+        489
+      ],
+      "snap": "03-storage"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        545,
+        325
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        544,
+        360
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        543,
+        476
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "snap": "04-finish"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        762
+      ],
+      "wait": 6,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "66411f23-b2e1-75cb-c5fc-5d5382034edd",
+        "name_label": "zz-parity-M2d-vm",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 1073741824,
+        "memory_dynamic_min": 1073741824,
+        "memory_dynamic_max": 1073741824
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "vms=rpc('VM.get_all_records',[lab]); matches=[(r,v) for r,v in vms.items() if v['name_label']=='zz-parity-M2d-vm']; assert len(matches)==1; owned_ref,owned=matches[0]; assert owned_ref not in original_vms and owned['power_state']=='Halted'; vbds=[rpc('VBD.get_record',[lab,b]) for b in owned['VBDs']]; disks=[rpc('VDI.get_record',[lab,b['VDI']]) for b in vbds if b['type']=='Disk' and not b['empty']]; vifs=[rpc('VIF.get_record',[lab,v]) for v in owned['VIFs']]; nets=[rpc('network.get_record',[lab,v['network']]) for v in vifs]; assert len(disks)==1 and int(disks[0]['virtual_size'])==1073741824; assert len(vifs)==1 and nets[0]['name_label']=='Pool-wide network 0'; assert int(owned['VCPUs_max'])==1 and int(owned['VCPUs_at_startup'])==1 and int(owned['memory_dynamic_max'])==1073741824; verdict={k:owned[k] for k in ['uuid','name_label','power_state','VCPUs_max','VCPUs_at_startup','memory_dynamic_min','memory_dynamic_max']}; verdict.update(disk_size_bytes=disks[0]['virtual_size'],disk_uuid=disks[0]['uuid'],vif_count=len(vifs),network_uuid=nets[0]['uuid'],network_name=nets[0]['name_label'],empty_name_next_rejected=True,enter_advanced_valid_name=True); (out/'host-readback.json').write_text(json.dumps(verdict,indent=2)+'\\n'); print(json.dumps(verdict),flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "owned=rpc('VM.get_record',[lab,owned_ref]); assert owned['name_label']=='zz-parity-M2d-vm' and owned_ref not in original_vms and owned['power_state']=='Halted' and not owned['is_a_template']; disk_refs=[b['VDI'] for b in vbds if b['type']=='Disk' and not b['empty']]; assert all(rpc('VBD.get_VM',[lab,b])==owned_ref for vdi in disk_refs for b in rpc('VDI.get_VBDs',[lab,vdi])); assert all(d['name_label'].startswith('zz-parity-M2d-') for d in disks); rpc('VM.destroy',[lab,owned_ref]); [rpc('VDI.destroy',[lab,vdi]) for vdi in disk_refs]; remaining=rpc('VM.get_all_records',[lab]); remaining_disks=rpc('VDI.get_all_records',[lab]); assert owned_ref not in remaining and not any(d['uuid']==disks[0]['uuid'] for d in remaining_disks.values()); source_after=rpc('VM.get_record',[lab,source_ref]); fields=['uuid','name_label','is_a_template','power_state','other_config','xenstore_data','VBDs','VIFs','VCPUs_max','memory_static_max']; assert all(source_before[k]==source_after[k] for k in fields); assert all(r in remaining for r in original_vms); cleanup={'vm_uuid':owned['uuid'],'destroyed_disk_uuid':disks[0]['uuid'],'vm_and_disk_absent':True,'source_template_unchanged':True,'preexisting_vm_refs_preserved':True}; (out/'cleanup.json').write_text(json.dumps(cleanup,indent=2)+chr(10)); (out/'host-readback.json').write_text(json.dumps(verdict,indent=2)+chr(10)); print(json.dumps(cleanup),flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        127,
+        170
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        470,
+        54
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        115,
+        724
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        127,
+        170
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        470,
+        54
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        650,
+        312
+      ],
+      "text": "x"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Escape",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        620,
+        774
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "verdict.update(new_sr_shared_frame_opened=True,escape_prompt_observed=True); (out/'host-readback.json').write_text(json.dumps(verdict,indent=2)+chr(10)); assert all(password.encode() not in p.read_bytes() for p in out.iterdir() if p.is_file()); rpc('session.logout',[lab]); print('Evidence secret scan passed',flush=True)"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

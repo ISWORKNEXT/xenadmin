@@ -1,0 +1,18 @@
+{
+  "uuid": "66411f23-b2e1-75cb-c5fc-5d5382034edd",
+  "name_label": "zz-parity-M2d-vm",
+  "power_state": "Halted",
+  "VCPUs_max": 1,
+  "VCPUs_at_startup": 1,
+  "memory_dynamic_min": 1073741824,
+  "memory_dynamic_max": 1073741824,
+  "disk_size_bytes": 1073741824,
+  "disk_uuid": "28c9997a-da3f-48c8-9062-21b55be90e53",
+  "vif_count": 1,
+  "network_uuid": "30afc560-17ec-23ce-75b3-e263801787ed",
+  "network_name": "Pool-wide network 0",
+  "empty_name_next_rejected": true,
+  "enter_advanced_valid_name": true,
+  "new_sr_shared_frame_opened": true,
+  "escape_prompt_observed": true
+}

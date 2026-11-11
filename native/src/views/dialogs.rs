@@ -3762,121 +3762,98 @@ fn vlan_create_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
 }
 
 fn sr_create_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
-    let mut close = false;
-    let mut save = false;
     let Some(dialog) = state.sr_create_dialog.as_mut() else {
         return;
     };
-    let response = egui::Modal::new(egui::Id::unique("sr-create-modal"))
-        .frame(theme::modal_frame())
-        .show(ctx, |ui| {
-            ui.set_width(600.0);
-            modal_title(
-                ui,
-                "Create storage repository",
-                "Creates a host-local, file-backed SR at an existing absolute path.",
-            );
-            widgets::field_label(ui, "Name");
-            ui.add_enabled(
-                !dialog.submitting,
-                egui::TextEdit::singleline(&mut dialog.name)
-                    .desired_width(f32::INFINITY)
-                    .char_limit(255)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Description");
-            ui.add_enabled(
-                !dialog.submitting,
-                egui::TextEdit::multiline(&mut dialog.description)
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(2)
-                    .char_limit(1024)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Host");
-            let host_label = dialog
-                .host_uuid
-                .as_ref()
-                .and_then(|uuid| dialog.hosts.iter().find(|(id, _)| id == uuid))
-                .map(|(_, name)| name.as_str())
-                .unwrap_or("Select a host");
-            ui.add_enabled_ui(!dialog.submitting, |ui| {
-                egui::ComboBox::from_id_salt("sr-create-host")
-                    .selected_text(RichText::new(host_label).size(11.0))
-                    .width(ui.available_width())
-                    .show_ui(ui, |ui| {
-                        for (uuid, name) in &dialog.hosts {
-                            if ui
-                                .selectable_label(
-                                    dialog.host_uuid.as_deref() == Some(uuid.as_str()),
-                                    RichText::new(name).size(11.0),
-                                )
-                                .clicked()
-                            {
-                                dialog.host_uuid = Some(uuid.clone());
-                            }
+    let mut frame = std::mem::take(&mut dialog.frame);
+    let error = dialog.error.clone();
+    let outcome = super::wizard::Frame {
+        id: "sr-create-wizard",
+        title: "New Storage Repository",
+        steps: &[super::wizard::Step {
+            title: "Storage repository",
+            description: "Create a host-local, file-backed SR at an existing absolute path.",
+        }],
+        busy: dialog.submitting,
+        dirty: !dialog.name.is_empty()
+            || !dialog.description.is_empty()
+            || !dialog.location.is_empty(),
+        error: error.as_deref(),
+    }
+    .show(ctx, &mut frame, |ui, _| {
+        widgets::field_label(ui, "Name");
+        ui.add_enabled(
+            !dialog.submitting,
+            egui::TextEdit::singleline(&mut dialog.name)
+                .desired_width(f32::INFINITY)
+                .char_limit(255)
+                .margin(egui::Margin::symmetric(8, 5)),
+        );
+        ui.add_space(8.0);
+        widgets::field_label(ui, "Description");
+        ui.add_enabled(
+            !dialog.submitting,
+            egui::TextEdit::multiline(&mut dialog.description)
+                .desired_width(f32::INFINITY)
+                .desired_rows(2)
+                .char_limit(1024)
+                .margin(egui::Margin::symmetric(8, 5)),
+        );
+        ui.add_space(8.0);
+        widgets::field_label(ui, "Host");
+        let host_label = dialog
+            .host_uuid
+            .as_ref()
+            .and_then(|uuid| dialog.hosts.iter().find(|(id, _)| id == uuid))
+            .map(|(_, name)| name.as_str())
+            .unwrap_or("Select a host");
+        ui.add_enabled_ui(!dialog.submitting, |ui| {
+            egui::ComboBox::from_id_salt("sr-create-host")
+                .selected_text(RichText::new(host_label).size(11.0))
+                .width(ui.available_width())
+                .show_ui(ui, |ui| {
+                    for (uuid, name) in &dialog.hosts {
+                        if ui
+                            .selectable_label(
+                                dialog.host_uuid.as_deref() == Some(uuid.as_str()),
+                                RichText::new(name).size(11.0),
+                            )
+                            .clicked()
+                        {
+                            dialog.host_uuid = Some(uuid.clone());
                         }
-                    });
-            });
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Location on host");
-            ui.add_enabled(
-                !dialog.submitting,
-                egui::TextEdit::singleline(&mut dialog.location)
-                    .desired_width(f32::INFINITY)
-                    .hint_text("/var/tmp/xen-storage")
-                    .char_limit(255)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.label(
-                RichText::new("The path must be absolute and should be dedicated to this SR.")
-                    .size(9.0)
-                    .color(dim_fg()),
-            );
-            if let Some(error) = &dialog.error {
-                ui.add_space(8.0);
-                ui.label(RichText::new(error).size(10.0).color(red()));
-            }
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(
-                        !dialog.submitting,
-                        egui::Button::new(RichText::new("Cancel").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    close = true;
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui
-                        .add_enabled(
-                            !dialog.submitting
-                                && !dialog.name.trim().is_empty()
-                                && !dialog.location.trim().is_empty(),
-                            widgets::primary_button(if dialog.submitting {
-                                "Creating…"
-                            } else {
-                                "Create storage"
-                            }),
-                        )
-                        .clicked()
-                    {
-                        save = true;
                     }
                 });
-            });
         });
-    if response.should_close() && !dialog.submitting {
-        close = true;
-    }
-    if save {
-        actions.push(UiAction::SaveSrCreate);
-    }
-    if close {
-        actions.push(UiAction::CloseSrCreate);
+        ui.add_space(8.0);
+        widgets::field_label(ui, "Location on host");
+        ui.add_enabled(
+            !dialog.submitting,
+            egui::TextEdit::singleline(&mut dialog.location)
+                .desired_width(f32::INFINITY)
+                .hint_text("/var/tmp/xen-storage")
+                .char_limit(255)
+                .margin(egui::Margin::symmetric(8, 5)),
+        );
+        ui.label(
+            RichText::new("The path must be absolute and should be dedicated to this SR.")
+                .size(9.0)
+                .color(dim_fg()),
+        );
+
+        if dialog.name.trim().is_empty() {
+            Some("Enter a storage repository name.")
+        } else if !dialog.location.trim().starts_with('/') {
+            Some("Enter an absolute location on the host.")
+        } else {
+            None
+        }
+    });
+    dialog.frame = frame;
+    match outcome {
+        super::wizard::Outcome::Cancel => actions.push(UiAction::CloseSrCreate),
+        super::wizard::Outcome::Finish => actions.push(UiAction::SaveSrCreate),
+        super::wizard::Outcome::None => {}
     }
 }
 

@@ -1,0 +1,7 @@
+{
+  "vm_uuid": "66411f23-b2e1-75cb-c5fc-5d5382034edd",
+  "destroyed_disk_uuid": "28c9997a-da3f-48c8-9062-21b55be90e53",
+  "vm_and_disk_absent": true,
+  "source_template_unchanged": true,
+  "preexisting_vm_refs_preserved": true
+}
