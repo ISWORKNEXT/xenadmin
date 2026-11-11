@@ -47,7 +47,7 @@ pub fn show(
             super::search_page::show(ui, state, workspace, actions);
         }
         ObjectKey::Vdi { .. } => super::resource_page::vdi(ui, state, workspace, actions),
-        ObjectKey::Tasks => workspace_page(ui, state, workspace, actions),
+        ObjectKey::Tasks => super::tasks::show(ui, state, workspace, actions),
         ObjectKey::Pool(_) => super::pool_page::show(ui, state, workspace, actions),
         ObjectKey::Host { .. } => super::infrastructure_page::show(ui, state, workspace, actions),
         ObjectKey::Vm { .. } | ObjectKey::Template { .. } | ObjectKey::Snapshot { .. } => {

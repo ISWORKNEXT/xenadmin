@@ -553,16 +553,10 @@ impl RawInventory {
             })
             .collect();
         tasks.sort_by_key(|task| std::cmp::Reverse(task.started_at));
-        tasks.truncate(100);
+
         let mut alerts: Vec<_> = self
             .messages
             .iter()
-            .filter(|(_, message)| {
-                message["priority"]
-                    .as_u64()
-                    .or_else(|| message["priority"].as_str().and_then(|p| p.parse().ok()))
-                    .is_some_and(|priority| (1..=4).contains(&priority))
-            })
             .map(|(reference, message)| PoolAlert {
                 reference: reference.clone(),
                 uuid: text(message, "uuid"),
@@ -582,7 +576,7 @@ impl RawInventory {
                 .cmp(&right.priority)
                 .then(right.time.cmp(&left.time))
         });
-        alerts.truncate(100);
+
         let mut navigation = HashMap::new();
         for records in [
             &self.pools,

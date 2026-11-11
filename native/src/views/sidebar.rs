@@ -489,37 +489,56 @@ pub fn show(
                 .inner_margin(Margin::symmetric(10, 8)),
         )
         .show(ui, |ui| {
-            let response = widgets::search_field(ui, &mut state.tree_query, "Search tree…");
-            if state.focus_search {
-                response.request_focus();
-                state.focus_search = false;
-            }
-            ui.add_space(4.0);
-            ui.spacing_mut().item_spacing.y = 0.0;
-            let tree = build_tree(workspace, state);
-            let height = (ui.available_height() - 192.0).max(80.0);
-            egui::ScrollArea::vertical()
-                .id_salt("navigation-tree")
-                .max_height(height)
-                .min_scrolled_height(height)
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    draw_node(ui, state, workspace, &tree, &[], 0, "", actions);
-                    if tree.children.is_empty()
-                        && !matches!(
-                            state.navigation_mode,
-                            NavigationMode::Infrastructure
-                                | NavigationMode::Objects
-                                | NavigationMode::Notifications
-                        )
-                    {
-                        ui.label(
-                            RichText::new("No objects available in this view.")
-                                .size(11.0)
-                                .color(dim_fg()),
-                        );
+            if state.navigation_mode == NavigationMode::Notifications {
+                let (alerts, events) = super::tasks::counts(state, workspace);
+                let height = (ui.available_height() - 192.0).max(80.0);
+                ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
+                    ui.set_min_height(height);
+                    for (is_alerts, label) in [
+                        (true, format!("Alerts ({alerts})")),
+                        (false, format!("Events ({events})")),
+                    ] {
+                        if ui
+                            .selectable_label(state.notifications.alerts == is_alerts, label)
+                            .clicked()
+                        {
+                            super::tasks::open(state, is_alerts, actions);
+                        }
                     }
                 });
+            } else {
+                let response = widgets::search_field(ui, &mut state.tree_query, "Search tree…");
+                if state.focus_search {
+                    response.request_focus();
+                    state.focus_search = false;
+                }
+                ui.add_space(4.0);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                let tree = build_tree(workspace, state);
+                let height = (ui.available_height() - 192.0).max(80.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("navigation-tree")
+                    .max_height(height)
+                    .min_scrolled_height(height)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        draw_node(ui, state, workspace, &tree, &[], 0, "", actions);
+                        if tree.children.is_empty()
+                            && !matches!(
+                                state.navigation_mode,
+                                NavigationMode::Infrastructure
+                                    | NavigationMode::Objects
+                                    | NavigationMode::Notifications
+                            )
+                        {
+                            ui.label(
+                                RichText::new("No objects available in this view.")
+                                    .size(11.0)
+                                    .color(dim_fg()),
+                            );
+                        }
+                    });
+            }
             ui.with_layout(Layout::top_down(Align::Min), |ui| {
                 ui.spacing_mut().item_spacing.y = 4.0;
                 ui.separator();
@@ -531,6 +550,12 @@ pub fn show(
                         .add(nav_button(ui, label, state.navigation_mode == mode))
                         .clicked()
                     {
+                        if state.navigation_mode == NavigationMode::Notifications {
+                            actions.push(UiAction::OpenObject {
+                                key: ObjectKey::Home,
+                                title: "Xen Desktop".into(),
+                            });
+                        }
                         state.navigation_mode = mode;
                     }
                 }
@@ -589,16 +614,8 @@ pub fn show(
                         }
                     }
                 });
-                let failed = workspace
-                    .tasks
-                    .iter()
-                    .filter(|t| t.status == xen_core::operations::TaskStatus::Failed)
-                    .count();
-                let label = if failed > 0 {
-                    format!("Notifications ({failed})")
-                } else {
-                    "Notifications".into()
-                };
+                let (alerts, events) = super::tasks::counts(state, workspace);
+                let label = format!("Notifications ({})", alerts + events);
                 if ui
                     .add(nav_button(
                         ui,
@@ -607,11 +624,7 @@ pub fn show(
                     ))
                     .clicked()
                 {
-                    state.navigation_mode = NavigationMode::Notifications;
-                    actions.push(UiAction::OpenObject {
-                        key: ObjectKey::Tasks,
-                        title: "Activity & tasks".into(),
-                    });
+                    super::tasks::open(state, true, actions);
                 }
             });
         });

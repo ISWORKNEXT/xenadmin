@@ -53,16 +53,6 @@ pub fn connection_color(status: &str) -> Color32 {
     }
 }
 
-pub fn task_color(status: &str) -> Color32 {
-    match status {
-        "running" => accent(),
-        "succeeded" => green(),
-        "failed" => red(),
-        "cancelled" => amber(),
-        _ => purple(),
-    }
-}
-
 pub fn resource_bar(ui: &mut Ui, used: u64, total: u64, color: Color32, height: f32) {
     let width = ui.available_width().max(10.0);
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());

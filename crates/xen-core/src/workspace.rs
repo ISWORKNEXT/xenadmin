@@ -2560,6 +2560,35 @@ impl Workspace {
         Ok(())
     }
 
+    pub async fn cancel_external_task(
+        &self,
+        connection_id: &str,
+        reference: &str,
+    ) -> Result<(), String> {
+        let active = self.active(connection_id).await?;
+        let _lease = active.lifecycle.read().await;
+        if active.connection.settings.read_only {
+            return Err("This connection is read-only.".into());
+        }
+        let inventory = active
+            .connection
+            .inventory()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !inventory
+            .tasks
+            .iter()
+            .any(|t| t.reference == reference && t.status == "pending" && t.can_cancel)
+        {
+            return Err("The host does not allow cancelling this task.".into());
+        }
+        active
+            .connection
+            .cancel_task(reference)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
     pub async fn cancel_task(&self, id: &str) -> Result<(), String> {
         let (connection_id, reference, local_cancel) = {
             let tasks = self.tasks.lock().await;

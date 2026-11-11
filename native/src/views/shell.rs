@@ -6,7 +6,7 @@ use crate::{
     theme,
 };
 use egui::{Align, Button, Frame, Layout, RichText, Ui, ViewportCommand};
-use xen_core::{operations::TaskStatus, workspace::WorkspaceView};
+use xen_core::workspace::WorkspaceView;
 
 pub fn menubar(
     ui: &mut Ui,
@@ -57,6 +57,12 @@ pub fn menubar(
             });
         });
 }
+pub(super) fn compact_menu(ui: &mut Ui) {
+    ui.style_mut().override_font_id = Some(egui::FontId::proportional(11.0));
+    ui.spacing_mut().interact_size.y = 22.0;
+    ui.spacing_mut().button_padding = egui::vec2(4.0, 0.0);
+    ui.spacing_mut().item_spacing.y = 0.0;
+}
 pub(super) fn render_items(
     ui: &mut Ui,
     items: &[MenuItem],
@@ -64,57 +70,66 @@ pub(super) fn render_items(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
-    for item in items {
-        if item.label == "---" {
-            ui.separator();
-            continue;
-        }
-        if !item.children.is_empty() {
-            // A submenu is navigable when at least one descendant can run.
-            let reason = model::submenu_reason(item, state, workspace);
-            let response = ui
-                .add_enabled_ui(reason.is_none(), |ui| {
-                    ui.menu_button(&item.label, |ui| {
-                        render_items(ui, &item.children, state, workspace, actions)
-                    });
-                })
-                .response;
-            if let Some(reason) = reason {
-                response.on_disabled_hover_text(reason);
-            }
-        } else {
-            let resolution = model::resolve_item(item, state, workspace);
-            let checked = match item.command {
-                "CustomTemplates" => Some(state.tree_preferences.custom_templates),
-                "XenDesktopTemplates" => Some(state.tree_preferences.default_templates),
-                "LocalStorage" => Some(state.tree_preferences.local_storage),
-                "HiddenObjects" => Some(state.tree_preferences.hidden_objects),
-                _ => None,
-            };
-            let label = if let Some(checked) = checked {
-                format!("{} {}", if checked { "✓" } else { "  " }, item.label)
-            } else if item.command == "Toolbar" {
-                format!("{} Toolbar", if state.toolbar_visible { "✓" } else { "  " })
-            } else {
-                item.label.clone()
-            };
-            let response = ui.add_enabled(
-                resolution.is_ok(),
-                Button::new(RichText::new(label).size(11.0)),
-            );
-            match resolution {
-                Ok(action) if response.clicked() => {
-                    perform(action, ui.ctx(), state, workspace, actions);
-                    ui.close();
+    compact_menu(ui);
+    let max_height = (ui.ctx().content_rect().height() - 20.0).max(22.0);
+    ui.set_max_height(max_height);
+    egui::ScrollArea::vertical()
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
+        .max_height(max_height)
+        .show(ui, |ui| {
+            for item in items {
+                if item.label == "---" {
+                    ui.add(egui::Separator::default().spacing(7.0));
+                    continue;
                 }
-                Err(reason) => {
-                    response.on_disabled_hover_text(reason);
+                if !item.children.is_empty() {
+                    // A submenu is navigable when at least one descendant can run.
+                    let reason = model::submenu_reason(item, state, workspace);
+                    let response = ui
+                        .add_enabled_ui(reason.is_none(), |ui| {
+                            ui.menu_button(RichText::new(&item.label).size(11.0), |ui| {
+                                render_items(ui, &item.children, state, workspace, actions)
+                            });
+                        })
+                        .response;
+                    if let Some(reason) = reason {
+                        response.on_disabled_hover_text(reason);
+                    }
+                } else {
+                    let resolution = model::resolve_item(item, state, workspace);
+                    let checked = match item.command {
+                        "CustomTemplates" => Some(state.tree_preferences.custom_templates),
+                        "XenDesktopTemplates" => Some(state.tree_preferences.default_templates),
+                        "LocalStorage" => Some(state.tree_preferences.local_storage),
+                        "HiddenObjects" => Some(state.tree_preferences.hidden_objects),
+                        _ => None,
+                    };
+                    let label = if let Some(checked) = checked {
+                        format!("{} {}", if checked { "✓" } else { "  " }, item.label)
+                    } else if item.command == "Toolbar" {
+                        format!("{} Toolbar", if state.toolbar_visible { "✓" } else { "  " })
+                    } else {
+                        item.label.clone()
+                    };
+                    let response = ui.add_enabled(
+                        resolution.is_ok(),
+                        Button::new(RichText::new(label).size(11.0)),
+                    );
+                    match resolution {
+                        Ok(action) if response.clicked() => {
+                            perform(action, ui.ctx(), state, workspace, actions);
+                            ui.close();
+                        }
+                        Err(reason) => {
+                            response.on_disabled_hover_text(reason);
+                        }
+                        _ => {}
+                    }
                 }
-                _ => {}
             }
-        }
-    }
+        });
 }
+
 fn perform(
     action: CommandAction,
     ctx: &egui::Context,
@@ -218,7 +233,8 @@ pub fn toolbar(
                         }
                     }
                     let can = |command| model::resolve(command, state, workspace).is_ok();
-                    let start = can("StartVMCommand");
+                    let start = matches!(model::selection(state), crate::state::ObjectKey::Vm { connection_id, vm_uuid }
+                        if crate::state::find_vm(workspace, connection_id, vm_uuid).is_some_and(|(_, vm)| vm.power_state == "Halted"));
                     let power = can("PowerOnHostCommand");
                     let resume = can("ResumeVMCommand");
                     let unpause = can("UnPauseVMCommand");
@@ -307,7 +323,12 @@ fn toolbar_button(
         _ => {}
     }
 }
-pub fn statusbar(ui: &mut Ui, state: &UiState, workspace: &WorkspaceView) {
+pub fn statusbar(
+    ui: &mut Ui,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
+) {
     egui::Panel::bottom("status-bar")
         .exact_size(26.0)
         .frame(Frame::NONE.fill(theme::panel()))
@@ -349,16 +370,15 @@ pub fn statusbar(ui: &mut Ui, state: &UiState, workspace: &WorkspaceView) {
                     },
                 );
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if let Some(task) = workspace
-                        .tasks
-                        .iter()
-                        .find(|task| matches!(task.status, TaskStatus::Running))
-                    {
-                        ui.add(
-                            egui::ProgressBar::new(task.progress as f32)
-                                .desired_width(130.0)
-                                .show_percentage(),
+                    if let Some((title, progress)) = super::tasks::running(workspace) {
+                        let response = ui.add(
+                            egui::ProgressBar::new(progress)
+                                .desired_width(160.0)
+                                .text(format!("{} {:.0}%", title, progress * 100.0)),
                         );
+                        if response.interact(egui::Sense::click()).clicked() {
+                            super::tasks::open(state, false, actions);
+                        }
                         ui.spinner();
                     } else if !state.busy.is_empty() {
                         ui.spinner();

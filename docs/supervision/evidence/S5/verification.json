@@ -1,0 +1,38 @@
+{
+  "unit": "S5",
+  "toolchain": "cargo/rustc 1.99.1",
+  "checks": {
+    "fmt": "passed",
+    "clippy": "passed",
+    "workspace_tests": {
+      "passed": 122,
+      "failed": 0,
+      "ignored": 1
+    },
+    "build": "passed",
+    "git_diff_check": "passed"
+  },
+  "ui_environment": "Real xen-native with dev host 192.168.8.170, isolated Xvfb :98, existing tools/audit_native_clicks_live.py used interactively without adding an audit tool",
+  "screenshots": [
+    "01-alerts.png",
+    "02-events.png",
+    "03-events-failed.png"
+  ],
+  "happy_path": "Native Take Snapshot click produced a successful task and a snapshot confirmed by XenAPI snapshot_of. Native Start on the diskless PV test VM was observed In progress, then Failed / INTERNAL_ERROR; Failed filter isolated it. Status-bar progress was clicked while Events was already selected; navigation from a different page was not proven.",
+  "alert_dismissal": "Native Actions > Dismiss removed message zz-parity-S5; message.get_all_records confirmed absence.",
+  "csv": "Native Export saved a UTF-8 CSV, parsed as 540 records and five upstream columns; multiline quote escaping covered by a unit test.",
+  "menus": "Full VM context menu fit on screen; consistent font, 22 logical px items and 7 px separators. Halted Start remained visible when disabled. Labels tested against split single-letter words.",
+  "rejection": "Final binary: Go To was disabled for an alert whose object no longer exists; clicking it left Alerts selected.",
+  "retained_command": "Check again remains under Events row Actions for unreachable tasks.",
+  "cleanup": "Test VM, its snapshot, explicit alert and generated snapshot message removed; XenAPI readback confirms absence and host answers. Snapshot received the default UI name because XTest text entry lost characters; its recorded UUID and snapshot_of were checked, then it was renamed zz-parity-S5-snapshot before removal.",
+  "limitations": [
+    "Events screenshots precede the final table width adjustment, six-column row-selection layout and per-host filter choices. Final Alerts screenshot is from the final build.",
+    "Running state was captured for the failed Start; the snapshot completed before the Events screenshot.",
+    "Live cancellation, bulk dismissal, Help/Go To success, date/server filtering, and the 1000-entry cap were not exercised.",
+    "The created test VM required VM.update_allowed_operations to refresh stale allowed_operations inherited from its source template.",
+    "Local operation dates and host message/task dates differed by approximately seven hours; timestamp handling was left unchanged.",
+    "Status-bar navigation from a different page was not verified. The snapshot was observed completed, while running progress was observed on the failed Start."
+  ],
+  "git": "No commit, push, tag or GitHub issue changes. Unrelated untracked M2a-properties-dialog.md left untouched.",
+  "status": "PARTIAL: implementation complete; required same-task running-to-completed observation and final Events UI revision were not fully qualified within the verification budget."
+}

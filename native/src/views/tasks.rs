@@ -1,16 +1,302 @@
+//! Notifications pages, backed by the workspace history and XenAPI inventory.
 use std::collections::HashSet;
 
-use egui::{Align, Frame, Layout, RichText, Stroke, Ui};
-use xen_core::{operations::TaskStatus, workspace::WorkspaceView, xapi::ExternalTask};
+use chrono::TimeZone;
+use egui::{RichText, Ui};
+use xen_core::{operations::TaskStatus, workspace::WorkspaceView};
 
-use crate::format;
 use crate::state::{
-    UiAction, UiState, connection_id, connection_inventory, connection_name, scoped_tasks,
-    task_status_label,
+    ObjectKey, UiAction, UiState, connection_id, connection_inventory, connection_name,
+    is_read_only,
 };
-use crate::theme;
-use crate::theme::*;
-use crate::widgets;
+
+#[derive(Default)]
+pub struct Notifications {
+    pub alerts: bool,
+    severity: String,
+    status: String,
+    server: String,
+    days: u64,
+    selected: HashSet<String>,
+    expanded: HashSet<String>,
+    dismissed: HashSet<String>,
+    export: Option<String>,
+    export_filtered: bool,
+    export_error: String,
+    overwrite: bool,
+    help: Option<(String, String)>,
+}
+
+enum NotificationAction {
+    Cancel(String),
+    Check(String),
+    Dismiss {
+        connection_id: String,
+        message_uuid: String,
+    },
+    CancelExternal {
+        connection_id: String,
+        reference: String,
+    },
+}
+impl NotificationAction {
+    fn action(&self) -> UiAction {
+        match self {
+            Self::Cancel(id) => UiAction::CancelTask(id.clone()),
+            Self::Check(id) => UiAction::CheckTask(id.clone()),
+            Self::Dismiss {
+                connection_id,
+                message_uuid,
+            } => UiAction::DismissAlert {
+                connection_id: connection_id.clone(),
+                message_uuid: message_uuid.clone(),
+            },
+            Self::CancelExternal {
+                connection_id,
+                reference,
+            } => UiAction::CancelExternalTask {
+                connection_id: connection_id.clone(),
+                reference: reference.clone(),
+            },
+        }
+    }
+}
+
+struct Entry {
+    id: String,
+    connection: String,
+    server: String,
+    location: String,
+    host: String,
+    title: String,
+    body: String,
+    status: String,
+    time: u64,
+    progress: f32,
+    cancel: Option<NotificationAction>,
+    dismiss: Option<NotificationAction>,
+    target: Option<ObjectKey>,
+    running: bool,
+    local: bool,
+}
+
+fn severity(priority: u64) -> &'static str {
+    match priority {
+        1 => "Critical",
+        2 => "Major",
+        3 => "Warning",
+        4 => "Minor",
+        5 => "Information",
+        _ => "Unknown",
+    }
+}
+
+fn target(workspace: &WorkspaceView, id: &str, uuid: &str) -> Option<ObjectKey> {
+    let inv = crate::state::find_connection(workspace, id).and_then(connection_inventory)?;
+    let connection_id = id.to_owned();
+    if inv.vms.iter().any(|v| v.uuid == uuid) {
+        Some(ObjectKey::Vm {
+            connection_id,
+            vm_uuid: uuid.into(),
+        })
+    } else if inv.hosts.iter().any(|h| h.uuid == uuid) {
+        Some(ObjectKey::Host {
+            connection_id,
+            host_uuid: uuid.into(),
+        })
+    } else if inv.storage.iter().any(|s| s.uuid == uuid) {
+        Some(ObjectKey::Storage {
+            connection_id,
+            sr_uuid: uuid.into(),
+        })
+    } else if inv.pool_id == uuid {
+        Some(ObjectKey::Pool(connection_id))
+    } else {
+        None
+    }
+}
+
+fn entries(workspace: &WorkspaceView, alerts: bool) -> Vec<Entry> {
+    let mut result = Vec::new();
+    let owned: HashSet<_> = workspace
+        .tasks
+        .iter()
+        .map(|t| (t.connection_id.as_str(), t.remote_ref.as_str()))
+        .collect();
+    if !alerts {
+        for t in &workspace.tasks {
+            let running = matches!(t.status, TaskStatus::Running | TaskStatus::Unreachable);
+            result.push(Entry {
+                id: format!("local:{}", t.id),
+                connection: t.connection_id.clone(),
+                server: t.connection_name.clone(),
+                location: t.connection_name.clone(),
+                host: crate::state::find_vm(workspace, &t.connection_id, &t.vm_uuid)
+                    .map(|(_, vm)| vm.host_name.clone())
+                    .unwrap_or_default(),
+                title: format!("{} · {}", t.action, t.object_name),
+                body: t.message.clone(),
+                status: match t.status {
+                    TaskStatus::Running | TaskStatus::Unreachable => "In progress",
+                    TaskStatus::Succeeded => "Completed",
+                    TaskStatus::Failed => "Failed",
+                    TaskStatus::Cancelled => "Cancelled",
+                }
+                .into(),
+                time: t.started_at,
+                progress: t.progress as f32,
+                running,
+                local: true,
+                cancel: (t.can_cancel && t.status == TaskStatus::Running)
+                    .then(|| NotificationAction::Cancel(t.id.clone())),
+                dismiss: (t.status == TaskStatus::Unreachable)
+                    .then(|| NotificationAction::Check(t.id.clone())),
+                target: target(workspace, &t.connection_id, &t.vm_uuid),
+            });
+        }
+    }
+    for c in &workspace.connections {
+        let Some(inv) = connection_inventory(c) else {
+            continue;
+        };
+        let id = connection_id(c);
+        let name = connection_name(c);
+        if alerts {
+            for a in &inv.alerts {
+                result.push(Entry {
+                    id: format!("alert:{id}:{}", a.uuid),
+                    connection: id.into(),
+                    server: name.clone(),
+                    location: inv
+                        .hosts
+                        .iter()
+                        .find(|h| h.uuid == a.obj_uuid)
+                        .map(|h| h.name.clone())
+                        .unwrap_or_else(|| inv.pool_name.clone()),
+                    host: inv
+                        .hosts
+                        .iter()
+                        .find(|h| h.uuid == a.obj_uuid)
+                        .map(|h| h.name.clone())
+                        .or_else(|| {
+                            inv.vms
+                                .iter()
+                                .find(|v| v.uuid == a.obj_uuid)
+                                .map(|v| v.host_name.clone())
+                        })
+                        .unwrap_or_default(),
+                    title: a.name.clone(),
+                    body: a.body.clone(),
+                    status: severity(a.priority).into(),
+                    time: a.time,
+                    progress: 0.0,
+                    running: false,
+                    local: false,
+                    cancel: None,
+                    dismiss: (!is_read_only(c)).then(|| NotificationAction::Dismiss {
+                        connection_id: id.into(),
+                        message_uuid: a.uuid.clone(),
+                    }),
+                    target: target(workspace, id, &a.obj_uuid),
+                });
+            }
+        } else {
+            for t in &inv.tasks {
+                if owned.contains(&(id, t.reference.as_str())) {
+                    continue;
+                }
+                let running = t.status == "pending";
+                result.push(Entry {
+                    id: format!("remote:{id}:{}", t.uuid),
+                    connection: id.into(),
+                    server: name.clone(),
+                    location: if t.host_name.is_empty() {
+                        name.clone()
+                    } else {
+                        t.host_name.clone()
+                    },
+                    host: t.host_name.clone(),
+                    title: t.name.clone(),
+                    body: if t.error.is_empty() {
+                        t.task_type.clone()
+                    } else {
+                        t.error.clone()
+                    },
+                    status: match t.status.as_str() {
+                        "pending" => "In progress",
+                        "success" => "Completed",
+                        "failure" => "Failed",
+                        "cancelled" => "Cancelled",
+                        other => other,
+                    }
+                    .into(),
+                    time: t.started_at,
+                    progress: t.progress as f32,
+                    running,
+                    local: false,
+                    cancel: (running && t.can_cancel && !is_read_only(c)).then(|| {
+                        NotificationAction::CancelExternal {
+                            connection_id: id.into(),
+                            reference: t.reference.clone(),
+                        }
+                    }),
+                    dismiss: None,
+                    target: Some(ObjectKey::Pool(id.into())),
+                });
+            }
+        }
+    }
+    result.sort_by_key(|e| std::cmp::Reverse(e.time));
+    result
+}
+
+pub fn running(workspace: &WorkspaceView) -> Option<(String, f32)> {
+    entries(workspace, false)
+        .into_iter()
+        .find(|e| e.running)
+        .map(|e| (e.title, e.progress))
+}
+
+pub fn counts(state: &UiState, workspace: &WorkspaceView) -> (usize, usize) {
+    let count = |alerts| {
+        entries(workspace, alerts)
+            .iter()
+            .filter(|e| !state.notifications.dismissed.contains(&e.id))
+            .count()
+    };
+    (count(true), count(false))
+}
+
+pub fn open(state: &mut UiState, alerts: bool, actions: &mut Vec<UiAction>) {
+    state.navigation_mode = super::sidebar::NavigationMode::Notifications;
+    state.notifications.alerts = alerts;
+    actions.push(UiAction::OpenObject {
+        key: ObjectKey::Tasks,
+        title: if alerts { "Alerts" } else { "Events" }.into(),
+    });
+}
+
+fn matches(e: &Entry, n: &Notifications, alerts: bool) -> bool {
+    let status = if alerts { &n.severity } else { &n.status };
+    (status.is_empty() || status == &e.status)
+        && (n.server.is_empty()
+            || n.server == e.connection
+            || n.server
+                .split_once('\n')
+                .is_some_and(|(connection, host)| connection == e.connection && host == e.host))
+        && (n.days == 0
+            || e.time >= (chrono::Utc::now().timestamp() as u64).saturating_sub(n.days * 86400))
+}
+
+fn dismiss(e: &Entry, n: &mut Notifications, alerts: bool, actions: &mut Vec<UiAction>) {
+    if alerts {
+        if let Some(action) = &e.dismiss {
+            actions.push(action.action());
+        }
+    } else if !e.running {
+        n.dismissed.insert(e.id.clone());
+    }
+}
 
 pub fn show(
     ui: &mut Ui,
@@ -18,225 +304,373 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
-    let tasks = scoped_tasks(workspace, &state.scope);
-    let owned: HashSet<&str> = tasks
+    let n = &mut state.notifications;
+    let alerts = n.alerts;
+    let all = entries(workspace, alerts);
+    let visible: Vec<_> = all
         .iter()
-        .filter(|task| !task.remote_ref.is_empty())
-        .map(|task| task.remote_ref.as_str())
+        .filter(|e| !n.dismissed.contains(&e.id) && matches(e, n, alerts))
         .collect();
-    let mut external: Vec<(&ExternalTask, String)> = workspace
-        .connections
-        .iter()
-        .filter(|connection| {
-            state
-                .scope
-                .connection_id()
-                .is_none_or(|id| id == connection_id(connection))
-        })
-        .filter_map(|connection| {
-            let name = connection_name(connection).to_owned();
-            connection_inventory(connection).map(|inventory| {
-                inventory
-                    .tasks
-                    .iter()
-                    .filter(|task| !owned.contains(task.reference.as_str()))
-                    .map(move |task| (task, name.clone()))
-            })
-        })
-        .flatten()
-        .collect();
-    external.sort_by_key(|entry| std::cmp::Reverse(entry.0.started_at));
-    let mut card = theme::card_frame();
-    card = card.inner_margin(egui::Margin::same(14));
-    card.show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        widgets::panel_heading(
-            ui,
-            &format!("Activity & tasks  {}", tasks.len()),
-            "XenAPI task results, not assumed success from a button click",
-            |_ui| {},
+    ui.heading(if alerts { "Alerts" } else { "Events" });
+    ui.horizontal_wrapped(|ui| {
+        ui.menu_button(
+            if alerts {
+                "Filter by Severity ▾"
+            } else {
+                "Filter by Status ▾"
+            },
+            |ui| {
+                super::shell::compact_menu(ui);
+                let filter = if alerts {
+                    &mut n.severity
+                } else {
+                    &mut n.status
+                };
+                ui.selectable_value(filter, String::new(), "All");
+                for label in if alerts {
+                    &[
+                        "Critical",
+                        "Major",
+                        "Warning",
+                        "Minor",
+                        "Information",
+                        "Unknown",
+                    ][..]
+                } else {
+                    &["In progress", "Completed", "Failed", "Cancelled"][..]
+                } {
+                    ui.selectable_value(filter, (*label).into(), *label);
+                }
+            },
         );
-        ui.add_space(4.0);
-        if tasks.is_empty() {
-            widgets::empty_state(
-                ui,
-                "No operations yet",
-                "VM actions appear here with their connection, progress and result.",
-            );
-        } else {
-            for task in tasks {
-                task_row(ui, task, actions);
-            }
-        }
-
-        if !external.is_empty() {
-            ui.add_space(12.0);
-            widgets::panel_heading(
-                ui,
-                &format!("Host tasks  {}", external.len()),
-                "XenAPI tasks reported by the host, including other clients",
-                |_ui| {},
-            );
-            ui.add_space(4.0);
-            for (task, connection) in external.iter().take(60) {
-                external_task_row(ui, task, connection);
-            }
-        }
-    });
-}
-
-fn external_task_row(ui: &mut Ui, task: &ExternalTask, connection: &str) {
-    let (label, color) = match task.status.as_str() {
-        "pending" => ("running", accent()),
-        "success" => ("succeeded", green()),
-        "failure" => ("failed", red()),
-        "cancelled" => ("cancelled", dim_fg()),
-        other => (other, muted_fg()),
-    };
-    Frame::NONE
-        .fill(panel_2())
-        .stroke(Stroke::new(1.0, border_soft()))
-        .corner_radius(egui::CornerRadius::same(8))
-        .inner_margin(egui::Margin::symmetric(12, 9))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                widgets::dot(ui, color, 8.0);
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 2.0;
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(&task.name).size(11.5).strong());
-                        ui.label(RichText::new(label).size(9.5).color(color));
-                        if task.status == "pending" {
-                            ui.label(
-                                RichText::new(format!("{:.0}%", task.progress * 100.0))
-                                    .monospace()
-                                    .size(9.0)
-                                    .color(muted_fg()),
-                            );
-                        }
-                    });
-                    ui.label(
-                        RichText::new(format!(
-                            "{} · {}{}",
-                            connection,
-                            if task.host_name.is_empty() {
-                                "unknown host"
-                            } else {
-                                &task.host_name
-                            },
-                            if task.started_at > 0 {
-                                format!(" · started {}", format::short_time(task.started_at))
-                            } else {
-                                String::new()
-                            }
-                        ))
-                        .size(9.0)
-                        .color(dim_fg()),
-                    );
-                    if task.status == "pending" {
-                        ui.scope(|ui| {
-                            ui.set_width((ui.available_width() - 8.0).max(120.0));
-                            widgets::resource_bar(
-                                ui,
-                                (task.progress.clamp(0.0, 1.0) * 1000.0) as u64,
-                                1000,
-                                accent(),
-                                4.0,
-                            );
-                        });
-                    }
-                    if !task.error.is_empty() {
-                        ui.label(RichText::new(&task.error).size(9.5).color(red()));
-                    }
-                });
-            });
-        });
-    ui.add_space(6.0);
-}
-
-fn task_row(ui: &mut Ui, task: &xen_core::workspace::Operation, actions: &mut Vec<UiAction>) {
-    let label = task_status_label(task.status);
-    let color = widgets::task_color(label);
-    Frame::NONE
-        .fill(panel_2())
-        .stroke(Stroke::new(1.0, border_soft()))
-        .corner_radius(egui::CornerRadius::same(8))
-        .inner_margin(egui::Margin::symmetric(12, 9))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                widgets::dot(ui, color, 8.0);
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 2.0;
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new(format!("{} · {}", task.action, task.object_name))
-                                .size(11.5)
-                                .strong(),
+        ui.menu_button("Filter by Server ▾", |ui| {
+            super::shell::compact_menu(ui);
+            ui.selectable_value(&mut n.server, String::new(), "All Servers");
+            for c in &workspace.connections {
+                ui.selectable_value(&mut n.server, connection_id(c).into(), connection_name(c));
+                if let Some(inv) = connection_inventory(c) {
+                    for host in &inv.hosts {
+                        ui.selectable_value(
+                            &mut n.server,
+                            format!("{}\n{}", connection_id(c), host.name),
+                            &host.name,
                         );
-                        ui.label(RichText::new(label).size(9.5).color(color));
-                        if task.status == TaskStatus::Running {
-                            ui.label(
-                                RichText::new(format!("{:.0}%", task.progress * 100.0))
-                                    .monospace()
-                                    .size(9.0)
-                                    .color(muted_fg()),
-                            );
-                        }
-                    });
-                    ui.label(
-                        RichText::new(format!(
-                            "{} · started {}",
-                            task.connection_name,
-                            format::short_time(task.started_at)
-                        ))
-                        .size(9.0)
-                        .color(dim_fg()),
-                    );
-                    if task.status == TaskStatus::Running {
-                        ui.scope(|ui| {
-                            ui.set_width((ui.available_width() - 8.0).max(120.0));
-                            widgets::resource_bar(
-                                ui,
-                                (task.progress.clamp(0.0, 1.0) * 1000.0) as u64,
-                                1000,
-                                accent(),
-                                4.0,
-                            );
-                        });
                     }
-                    if !task.message.is_empty() {
-                        ui.label(RichText::new(&task.message).size(9.5).color(
-                            if task.status == TaskStatus::Failed {
-                                red()
-                            } else {
-                                muted_fg()
-                            },
-                        ));
+                }
+            }
+        });
+        ui.menu_button("Filter by Date ▾", |ui| {
+            super::shell::compact_menu(ui);
+            for (days, label) in [
+                (0, "All Dates"),
+                (3, "Last 3 days"),
+                (7, "Last 7 days"),
+                (30, "Last 30 days"),
+            ] {
+                ui.selectable_value(&mut n.days, days, label);
+            }
+        });
+        if alerts {
+            if ui.button("Refresh").clicked() {
+                actions.push(UiAction::Refresh(None));
+            }
+            if ui
+                .add_enabled(!all.is_empty(), egui::Button::new("Export"))
+                .clicked()
+            {
+                n.export = Some("alerts.csv".into());
+                n.overwrite = false;
+                n.export_error.clear();
+            }
+        }
+        ui.menu_button("Dismiss ▾", |ui| {
+            super::shell::compact_menu(ui);
+            let eligible = |e: &&Entry| !e.running && (!alerts || e.dismiss.is_some());
+            if ui
+                .add_enabled(
+                    visible.iter().any(eligible),
+                    egui::Button::new("Dismiss All"),
+                )
+                .clicked()
+            {
+                for e in &visible {
+                    dismiss(e, n, alerts, actions);
+                }
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    visible
+                        .iter()
+                        .any(|e| eligible(e) && n.selected.contains(&e.id)),
+                    egui::Button::new("Dismiss Selected"),
+                )
+                .clicked()
+            {
+                for e in &visible {
+                    if n.selected.contains(&e.id) {
+                        dismiss(e, n, alerts, actions);
+                    }
+                }
+                ui.close();
+            }
+        });
+    });
+    let filter = if alerts { &n.severity } else { &n.status };
+    if !filter.is_empty() || !n.server.is_empty() || n.days != 0 {
+        ui.label(format!(
+            "{} · {} · {}",
+            if filter.is_empty() { "All" } else { filter },
+            if n.server.is_empty() {
+                "All Servers"
+            } else {
+                "Selected Server"
+            },
+            if n.days == 0 {
+                "All Dates".into()
+            } else {
+                format!("Last {} days", n.days)
+            }
+        ));
+    }
+    ui.separator();
+    if visible.len() > 1000 {
+        ui.label("Showing first 1000 entries");
+    }
+    let width = (ui.available_width() - 520.0).max(100.0);
+    egui::Grid::new("notifications-table")
+        .num_columns(6)
+        .striped(true)
+        .min_col_width(10.0)
+        .show(ui, |ui| {
+            for text in ["", "", "Message", "Server / Pool", "Date", "Actions"] {
+                ui.strong(text);
+            }
+            ui.end_row();
+            for e in visible.iter().take(1000) {
+                let mut expanded = n.expanded.contains(&e.id);
+                if ui.small_button(if expanded { "▾" } else { "▸" }).clicked() {
+                    expanded = !expanded;
+                    if expanded {
+                        n.expanded.insert(e.id.clone());
+                    } else {
+                        n.expanded.remove(&e.id);
+                    }
+                }
+                let color = match e.status.as_str() {
+                    "Critical" | "Major" | "Failed" => crate::theme::red(),
+                    "Completed" => crate::theme::green(),
+                    "In progress" => crate::theme::accent(),
+                    _ => crate::theme::muted_fg(),
+                };
+                ui.label(RichText::new(if alerts { "⚠" } else { "●" }).color(color))
+                    .on_hover_text(&e.status);
+                ui.vertical(|ui| {
+                    ui.set_width(width);
+                    if ui
+                        .selectable_label(
+                            n.selected.contains(&e.id),
+                            RichText::new(&e.title).strong(),
+                        )
+                        .clicked()
+                    {
+                        let selected = n.selected.contains(&e.id);
+                        if !ui.input(|i| i.modifiers.ctrl || i.modifiers.command) {
+                            n.selected.clear();
+                        }
+                        if selected {
+                            n.selected.remove(&e.id);
+                        } else {
+                            n.selected.insert(e.id.clone());
+                        }
+                    }
+                    if expanded {
+                        ui.label(&e.body);
+                    }
+                    if e.running {
+                        ui.add(egui::ProgressBar::new(e.progress).show_percentage());
                     }
                 });
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if task.status == TaskStatus::Unreachable
-                        && ui
-                            .add(egui::Button::new(RichText::new("Check again").size(10.0)))
-                            .clicked()
-                    {
-                        actions.push(UiAction::CheckTask(task.id.clone()));
-                    }
-                    if task.can_cancel
-                        && task.status == TaskStatus::Running
-                        && ui
-                            .add(
-                                egui::Button::new(RichText::new("Cancel task").size(10.0))
-                                    .stroke(Stroke::new(1.0, with_alpha(red(), 120))),
+                ui.add_sized([150.0, 22.0], egui::Label::new(&e.location).truncate())
+                    .on_hover_text(&e.server);
+                ui.label(date(e.time));
+                ui.push_id(&e.id, |ui| {
+                    ui.menu_button("Actions ▾", |ui| {
+                        super::shell::compact_menu(ui);
+                        if alerts && ui.button("Help").clicked() {
+                            n.help = Some((e.title.clone(), e.body.clone()));
+                            ui.close();
+                        }
+                        if let Some(action) = &e.cancel
+                            && ui.button("Cancel").clicked()
+                        {
+                            actions.push(action.action());
+                            ui.close();
+                        }
+                        if e.local
+                            && e.running
+                            && let Some(action) = &e.dismiss
+                            && ui.button("Check again").clicked()
+                        {
+                            actions.push(action.action());
+                            ui.close();
+                        }
+                        if ui
+                            .add_enabled(
+                                !e.running && (!alerts || e.dismiss.is_some()),
+                                egui::Button::new("Dismiss"),
                             )
                             .clicked()
-                    {
-                        actions.push(UiAction::CancelTask(task.id.clone()));
+                        {
+                            dismiss(e, n, alerts, actions);
+                            ui.close();
+                        }
+                        if ui
+                            .add_enabled(e.target.is_some(), egui::Button::new("Go To"))
+                            .clicked()
+                        {
+                            if let Some(key) = &e.target {
+                                actions.push(UiAction::OpenObject {
+                                    key: key.clone(),
+                                    title: e.title.clone(),
+                                });
+                            }
+                            ui.close();
+                        }
+                    });
+                });
+                ui.end_row();
+            }
+        });
+    if visible.is_empty() {
+        ui.label(if alerts {
+            "No alerts to display."
+        } else {
+            "No events to display."
+        });
+    }
+    if let Some((title, body)) = &n.help {
+        let mut open = true;
+        egui::Window::new("Alert Help").open(&mut open).show(ui.ctx(), |ui| { ui.heading(title); ui.label(body); ui.label("Select Go To to inspect the affected object. Dismiss removes this alert from the server."); });
+        if !open {
+            n.help = None;
+        }
+    }
+    if let Some(path) = &mut n.export {
+        let mut close = false;
+        egui::Window::new("Export Alerts")
+            .collapsible(false)
+            .show(ui.ctx(), |ui| {
+                ui.label("CSV file");
+                ui.text_edit_singleline(path);
+                ui.checkbox(&mut n.export_filtered, "Export filtered alerts only");
+                if std::path::Path::new(path).exists() {
+                    ui.checkbox(&mut n.overwrite, "Replace existing file");
+                }
+                ui.label(&n.export_error);
+                ui.horizontal(|ui| {
+                    if ui.button("Save").clicked() {
+                        let rows: Vec<_> = all
+                            .iter()
+                            .filter(|e| !n.export_filtered || visible.iter().any(|v| v.id == e.id))
+                            .collect();
+                        let data = csv(&rows);
+                        use std::io::Write;
+                        let result = std::fs::OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .truncate(n.overwrite)
+                            .create_new(!n.overwrite)
+                            .open(path.as_str())
+                            .and_then(|mut f| f.write_all(data.as_bytes()));
+                        match result {
+                            Ok(()) => close = true,
+                            Err(e) => n.export_error = e.to_string(),
+                        }
+                    }
+                    if ui.button("Cancel").clicked() {
+                        close = true;
                     }
                 });
             });
-        });
-    ui.add_space(6.0);
+        if close {
+            n.export = None;
+        }
+    }
+}
+
+fn date(time: u64) -> String {
+    chrono::Local
+        .timestamp_opt(time as i64, 0)
+        .single()
+        .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|| "—".into())
+}
+
+fn csv(entries: &[&Entry]) -> String {
+    let mut result = "Title,Severity,Description,Applies To,Timestamp\r\n".to_owned();
+    for e in entries {
+        let date = date(e.time);
+        let row = [&e.title, &e.status, &e.body, &e.location, &date]
+            .map(|s| format!("\"{}\"", s.replace('"', "\"\"")));
+        result.push_str(&row.join(","));
+        result.push_str("\r\n");
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn workspace() -> WorkspaceView {
+        WorkspaceView {
+            connections: vec![],
+            tasks: vec![xen_core::workspace::Operation {
+                id: "one".into(),
+                connection_id: "lab".into(),
+                connection_name: "Lab".into(),
+                vm_uuid: "vm".into(),
+                remote_ref: "task".into(),
+                object_name: "VM".into(),
+                action: "Snapshot".into(),
+                status: TaskStatus::Running,
+                progress: 0.5,
+                message: "Details, with \"quotes\"\nand a newline".into(),
+                can_cancel: true,
+                started_at: chrono::Utc::now().timestamp() as u64,
+            }],
+        }
+    }
+    #[test]
+    fn events_filter_and_dismiss_preserve_running_work() {
+        let mut workspace = workspace();
+        let mut n = Notifications {
+            status: "Failed".into(),
+            ..Default::default()
+        };
+        let rows = entries(&workspace, false);
+        assert!(!matches(&rows[0], &n, false));
+        let mut actions = vec![];
+        dismiss(&rows[0], &mut n, false, &mut actions);
+        assert!(n.dismissed.is_empty());
+        assert!(rows[0].cancel.is_some());
+        workspace.tasks[0].status = TaskStatus::Failed;
+        let rows = entries(&workspace, false);
+        assert!(matches(&rows[0], &n, false));
+        assert!(rows[0].cancel.is_none());
+        dismiss(&rows[0], &mut n, false, &mut actions);
+        assert!(n.dismissed.contains(&rows[0].id));
+        n.server = "another-server".into();
+        assert!(!matches(&rows[0], &n, false));
+    }
+    #[test]
+    fn alert_csv_quotes_multiline_bodies_and_uses_upstream_severities() {
+        let rows = entries(&workspace(), false);
+        let exported = csv(&[&rows[0]]);
+        assert!(exported.starts_with("Title,Severity,Description,Applies To,Timestamp\r\n"));
+        assert!(exported.contains("\"Details, with \"\"quotes\"\"\nand a newline\""));
+        assert_eq!(severity(3), "Warning");
+        assert_eq!(severity(4), "Minor");
+        assert_eq!(severity(5), "Information");
+    }
 }

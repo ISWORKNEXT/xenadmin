@@ -77,6 +77,10 @@ pub enum Command {
     CheckTask {
         task_id: String,
     },
+    CancelExternalTask {
+        connection_id: String,
+        reference: String,
+    },
     CancelTask {
         task_id: String,
     },
@@ -1049,6 +1053,18 @@ fn dispatch(
             Command::CheckTask { task_id } => {
                 let result = workspace.check_task(&task_id).await;
                 let _ = events.send(Event::TaskFinished { task_id, result });
+            }
+            Command::CancelExternalTask {
+                connection_id,
+                reference,
+            } => {
+                let result = workspace
+                    .cancel_external_task(&connection_id, &reference)
+                    .await;
+                let _ = events.send(Event::TaskFinished {
+                    task_id: reference,
+                    result,
+                });
             }
             Command::CancelTask { task_id } => {
                 let result = workspace.cancel_task(&task_id).await;

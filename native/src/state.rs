@@ -36,7 +36,7 @@ impl View {
             View::Templates => "Templates",
             View::Storage => "Storage",
             View::Networks => "Networks",
-            View::Tasks => "Activity & tasks",
+            View::Tasks => "Events",
         }
     }
 
@@ -1390,6 +1390,7 @@ pub struct UiState {
     pub selection: Option<ObjectSelection>,
     pub tree_selection: Vec<ObjectSelection>,
     pub tree_anchor: Option<ObjectKey>,
+    pub notifications: crate::views::tasks::Notifications,
     pub navigation_mode: crate::views::sidebar::NavigationMode,
     pub tree_initialized: HashSet<String>,
     pub tree_preferences: crate::config::TreePreferences,
@@ -1528,6 +1529,7 @@ impl Default for UiState {
                 key: ObjectKey::Home,
                 title: "Home".into(),
             }),
+            notifications: Default::default(),
             navigation_mode: Default::default(),
             tree_initialized: HashSet::new(),
             tree_preferences: crate::config::load_ui_preferences().tree,
@@ -1696,6 +1698,10 @@ pub enum UiAction {
     CloseIntent,
     CheckTask(String),
     CancelTask(String),
+    CancelExternalTask {
+        connection_id: String,
+        reference: String,
+    },
     OpenHostDetails {
         connection_id: String,
         host_uuid: String,
@@ -1751,10 +1757,6 @@ pub enum UiAction {
     },
     CloseIsoDialog,
     SaveIso,
-    #[expect(
-        dead_code,
-        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
-    )]
     DismissAlert {
         connection_id: String,
         message_uuid: String,

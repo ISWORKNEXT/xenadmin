@@ -108,10 +108,13 @@ impl App {
         if let Some(view) = startup_view {
             let tab = match view {
                 View::Overview => None,
-                View::Tasks => Some(ObjectSelection {
-                    key: ObjectKey::Tasks,
-                    title: "Activity & tasks".into(),
-                }),
+                View::Tasks => {
+                    state.navigation_mode = views::sidebar::NavigationMode::Notifications;
+                    Some(ObjectSelection {
+                        key: ObjectKey::Tasks,
+                        title: "Events".into(),
+                    })
+                }
                 view => {
                     let kind = match view {
                         View::Vms => ListKind::Vms,
@@ -231,11 +234,19 @@ impl App {
                     kind.title().into()
                 }
             }
-            ObjectKey::Tasks => "Activity & tasks".into(),
+            ObjectKey::Tasks => "Events".into(),
         }
     }
 
     fn open_object(&mut self, key: ObjectKey, title: Option<String>) {
+        if matches!(key, ObjectKey::Tasks) {
+            if title.is_none() {
+                self.state.notifications.alerts = false;
+            }
+            self.state.navigation_mode = views::sidebar::NavigationMode::Notifications;
+        } else if self.state.navigation_mode == views::sidebar::NavigationMode::Notifications {
+            self.state.navigation_mode = views::sidebar::NavigationMode::Infrastructure;
+        }
         let title = title.unwrap_or_else(|| self.object_title(&key));
         self.state.tree_selection.clear();
         self.state.tree_anchor = None;
@@ -929,7 +940,7 @@ impl App {
                         self.state.new_vm = None;
                         self.open_object(ObjectKey::Tasks, None);
                         self.state.toasts.push(Toast::new(
-                            "VM creation queued. Follow progress in Activity & tasks.",
+                            "VM creation queued. Follow progress in Events.",
                             ToastKind::Info,
                         ));
                     }
@@ -2551,7 +2562,7 @@ impl App {
                     self.open_object(ObjectKey::Tasks, None);
                     self.state.toasts.push(Toast::new(
                         format!(
-                            "{count} task{} submitted. Track progress in Activity & tasks.",
+                            "{count} task{} submitted. Track progress in Events.",
                             if count == 1 { "" } else { "s" }
                         ),
                         ToastKind::Success,
@@ -2560,6 +2571,15 @@ impl App {
                 UiAction::CloseIntent => self.state.intent = None,
                 UiAction::CheckTask(id) => {
                     self.worker.send(Command::CheckTask { task_id: id });
+                }
+                UiAction::CancelExternalTask {
+                    connection_id,
+                    reference,
+                } => {
+                    self.worker.send(Command::CancelExternalTask {
+                        connection_id,
+                        reference,
+                    });
                 }
                 UiAction::CancelTask(id) => {
                     self.worker.send(Command::CancelTask { task_id: id });
@@ -5955,7 +5975,7 @@ impl eframe::App for App {
 
         views::shell::menubar(ui, &mut self.state, &self.workspace, &mut actions);
         views::shell::toolbar(ui, &mut self.state, &self.workspace, &mut actions);
-        views::shell::statusbar(ui, &self.state, &self.workspace);
+        views::shell::statusbar(ui, &mut self.state, &self.workspace, &mut actions);
         views::sidebar::show(ui, &mut self.state, &self.workspace, &mut actions);
 
         egui::CentralPanel::default()

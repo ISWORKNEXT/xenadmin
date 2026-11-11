@@ -510,7 +510,7 @@ fn page(
                 widgets::kv(ui, label, &value, false);
             }
             ui.add_space(8.0);
-            ui.label("Create the VM with these settings. Follow its progress in Activity & tasks.");
+            ui.label("Create the VM with these settings. Follow its progress in Events.");
         }
     }
     error

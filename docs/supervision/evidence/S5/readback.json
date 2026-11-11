@@ -1,0 +1,45 @@
+{
+  "created_vms": [
+    {
+      "uuid": "b833fef1-c1fa-1daf-94c4-17510a9a3a64",
+      "name": "zz-parity-S5-notifications",
+      "power_state": "Halted"
+    }
+  ],
+  "created_alerts": [
+    {
+      "uuid": "47057708-adc9-e3f2-966d-ce71b1b5ba13",
+      "name": "zz-parity-S5",
+      "priority": 3
+    }
+  ],
+  "happy_path": {
+    "snapshot_created": true,
+    "snapshot_uuid": "07bfd2c7-1b3e-ff7d-9b81-cfe7d712a004",
+    "snapshot_of_test_vm": true,
+    "snapshot_name_from_ui": "Snapshot 2026-11-12"
+  },
+  "failed_start_readback": {
+    "power_state": "Halted",
+    "ui_result": "Failed / INTERNAL_ERROR"
+  },
+  "explicit_alert_dismissed": true,
+  "cleanup": {
+    "test_vm_absent": true,
+    "test_snapshot_absent": true,
+    "test_alert_absent": true,
+    "generated_test_messages_removed": 1,
+    "host_answering": true
+  },
+  "csv_export": {
+    "rows": 540,
+    "columns": [
+      "Title",
+      "Severity",
+      "Description",
+      "Applies To",
+      "Timestamp"
+    ],
+    "parsed_with_python_csv": true
+  }
+}

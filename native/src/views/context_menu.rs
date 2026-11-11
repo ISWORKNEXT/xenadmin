@@ -368,39 +368,39 @@ pub fn items(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
                         | "DeleteSnapshotCommand"
                         | "DeleteVirtualDiskCommand"
                         | "DeleteFolderCommand"
-                        | "DeleteTagCommand" => "Delete".into(),
-                        "PropertiesCommand" => "Properties".into(),
-                        "EditTagsCommand" => "Edit Tags…".into(),
+                        | "DeleteTagCommand" => "Delete",
+                        "PropertiesCommand" => "Properties",
+                        "EditTagsCommand" => "Edit Tags…",
                         "PutTagIntoRenameModeCommand" | "PutFolderIntoRenameModeCommand" => {
-                            "Rename".into()
+                            "Rename"
                         }
-                        "NewFolderCommand" => "New Folder…".into(),
-                        "AddSelectedHostToPoolToolStripMenuItem" => "Add to Pool".into(),
-                        "AddHostToSelectedPoolToolStripMenuItem" => "Add Server".into(),
-                        "StartVMCommand" => "Start".into(),
-                        "ShutDownVMCommand" => "Shut Down".into(),
-                        "SuspendVMCommand" => "Suspend".into(),
-                        "ResumeVMCommand" => "Resume".into(),
-                        "NewVMFromSnapshotCommand" => "New VM from Snapshot…".into(),
-                        "NewTemplateFromSnapshotCommand" => "New Template from Snapshot…".into(),
-                        "ExportSnapshotAsTemplateCommand" => "Export Snapshot as Template…".into(),
-                        "InstantVMFromTemplateCommand" => "Instant VM from Template…".into(),
-                        "AssignGroupToolStripMenuItemVMSS" => "Assign to Snapshot Schedule".into(),
-                        "AssignGroupToolStripMenuItemVM_appliance" => "Assign to vApp".into(),
-                        "VtpmCommand" => "Virtual TPM…".into(),
-                        "DisconnectHostsAndPoolsCommand" => "Disconnect".into(),
-                        "CancelHostConnectionCommand" => "Cancel Connection".into(),
-                        _ => command
-                            .strip_suffix("Command")
-                            .unwrap_or(command)
-                            .chars()
-                            .fold(String::new(), |mut s, c| {
-                                if c.is_uppercase() && !s.is_empty() {
-                                    s.push(' ');
-                                }
-                                s.push(c);
-                                s
-                            }),
+                        "NewFolderCommand" => "New Folder…",
+                        "AddSelectedHostToPoolToolStripMenuItem" => "Add to Pool",
+                        "AddHostToSelectedPoolToolStripMenuItem" => "Add Server",
+                        "StartVMCommand" => "Start",
+                        "ShutDownVMCommand" => "Shut Down",
+                        "SuspendVMCommand" => "Suspend",
+                        "ResumeVMCommand" => "Resume",
+                        "NewVMFromSnapshotCommand" => "New VM from Snapshot…",
+                        "NewTemplateFromSnapshotCommand" => "New Template from Snapshot…",
+                        "ExportSnapshotAsTemplateCommand" => "Export Snapshot as Template…",
+                        "InstantVMFromTemplateCommand" => "Instant VM from Template…",
+                        "AssignGroupToolStripMenuItemVMSS" => "Assign to Snapshot Schedule",
+                        "AssignGroupToolStripMenuItemVM_appliance" => "Assign to vApp",
+                        "VtpmCommand" => "Virtual TPM…",
+                        "DisconnectHostsAndPoolsCommand" => "Disconnect",
+                        "CancelHostConnectionCommand" => "Cancel Connection",
+                        "RebootVMCommand" => "Reboot",
+                        "ForceVMShutDownCommand" => "Force Shut Down",
+                        "ForceVMRebootCommand" => "Force Reboot",
+                        "VappStartCommand" => "Start vApp",
+                        "VappShutDownCommand" => "Shut Down vApp",
+                        "StartVMOnHostCommand" => "Start on Server",
+                        "ResumeVMOnHostCommand" => "Resume on Server",
+                        "MigratetoServer" => "Migrate to Server",
+                        "RemoveHostFromPoolCommand" => "Remove From Pool",
+                        "LaunchConversionManagerCommand" => "Conversion Manager...",
+                        _ => panic!("Missing upstream context-menu label: {command}"),
                     },
                     command,
                 )
@@ -428,6 +428,75 @@ mod tests {
                 vm_uuid: name.into(),
             },
             title: name.into(),
+        }
+    }
+    #[test]
+    fn every_context_label_uses_display_text_without_split_acronyms() {
+        let workspace = WorkspaceView {
+            connections: vec![],
+            tasks: vec![],
+        };
+        let keys = vec![
+            ObjectKey::Home,
+            ObjectKey::Pool("lab".into()),
+            ObjectKey::Host {
+                connection_id: "lab".into(),
+                host_uuid: "host".into(),
+            },
+            vm("vm").key,
+            ObjectKey::Template {
+                connection_id: "lab".into(),
+                vm_uuid: "template".into(),
+            },
+            ObjectKey::Snapshot {
+                connection_id: "lab".into(),
+                vm_uuid: "snapshot".into(),
+            },
+            ObjectKey::Storage {
+                connection_id: "lab".into(),
+                sr_uuid: "sr".into(),
+            },
+            ObjectKey::Vdi {
+                connection_id: "lab".into(),
+                vdi_uuid: "vdi".into(),
+            },
+            ObjectKey::Network {
+                connection_id: "lab".into(),
+                network_uuid: "network".into(),
+            },
+            ObjectKey::Group("folder".into()),
+        ];
+        fn check(items: Vec<MenuItem>) {
+            for item in items {
+                assert!(
+                    !item
+                        .label
+                        .split_whitespace()
+                        .any(|w| w.len() == 1 && w.chars().all(|c| c.is_ascii_alphabetic())),
+                    "{}: {}",
+                    item.command,
+                    item.label
+                );
+                assert!(!item.label.contains("Command"));
+                check(item.children);
+            }
+        }
+        for key in keys {
+            for multi in [false, true] {
+                let mut state = UiState::default();
+                let selection = ObjectSelection {
+                    key: key.clone(),
+                    title: "Test".into(),
+                };
+                state.selection = Some(selection.clone());
+                state.tree_selection = vec![selection.clone()];
+                if multi {
+                    state.tree_selection.push(selection);
+                }
+                check(items(&state, &workspace));
+                state.navigation_mode = super::super::sidebar::NavigationMode::Tags;
+                check(items(&state, &workspace));
+            }
         }
     }
     #[test]

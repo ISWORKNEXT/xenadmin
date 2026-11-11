@@ -1,0 +1,289 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        160,
+        567,
+        3
+      ],
+      "snap": "/tmp/s5-final-context",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        233,
+        680
+      ],
+      "snap": "/tmp/s5-snapshot-dialog",
+      "wait": 0.3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        657,
+        521
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-S5-snapshot",
+      "wait": 0.1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        951,
+        574
+      ],
+      "wait": 0
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1320,
+        927
+      ],
+      "snap": "/tmp/s5-running-attempt",
+      "wait": 0.05
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "/tmp/s5-events-after-snapshot",
+      "wait": 0.1,
+      "readback": true
+    },
+    "readback": [
+      {
+        "uuid": "b833fef1-c1fa-1daf-94c4-17510a9a3a64",
+        "name_label": "zz-parity-S5-notifications",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 2147483648,
+        "memory_dynamic_min": 2147483648,
+        "memory_dynamic_max": 2147483648
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        725
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        150,
+        566
+      ],
+      "wait": 0.3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        678,
+        54
+      ],
+      "snap": "/tmp/s5-start-dialog",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        951,
+        540
+      ],
+      "wait": 0
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1320,
+        927
+      ],
+      "snap": "/tmp/s5-start-running",
+      "wait": 0.1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "/tmp/s5-start-progress",
+      "wait": 0.3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "/tmp/s5-start-outcome",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        421,
+        253
+      ],
+      "wait": 0.1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        421,
+        324
+      ],
+      "snap": "02-events",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        434,
+        149
+      ],
+      "snap": "/tmp/s5-status-filter",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        396,
+        255
+      ],
+      "wait": 0.1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        110
+      ],
+      "snap": "03-events-failed",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        60,
+        103
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        916,
+        149
+      ],
+      "snap": "/tmp/s5-export-dialog",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        65,
+        103
+      ],
+      "snap": "/tmp/s5-alert-export-ready",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        176,
+        90
+      ],
+      "key": "Control_L+a",
+      "text": "/tmp/s5-alerts.csv",
+      "wait": 0.3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        45,
+        192
+      ],
+      "snap": "/tmp/s5-export-saved",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        166,
+        88
+      ],
+      "key": "Control_L+a",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+v",
+      "snap": "/tmp/s5-export-paste",
+      "wait": 0.5
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        45,
+        192
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]
