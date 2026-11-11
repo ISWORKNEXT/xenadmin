@@ -52,8 +52,8 @@ async fn exercise(
         .ok_or("Guest network missing")?;
     let source = c.vm_details(&template.uuid).await?;
     let uuid = c
-        .create_vm_from_template(&CreateVmRequest {
-            template_uuid: template.uuid.clone(),
+        .create_configured_vm(&CreateVmRequest {
+            source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-source"),
             description: "Temporary real-host snapshot qualification".into(),
             vcpus: 1,

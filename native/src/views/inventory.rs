@@ -77,7 +77,9 @@ pub fn vms(
                 if ui.add(widgets::primary_button("New VM…")).clicked() {
                     actions.push(UiAction::OpenNewVmWizard {
                         connection_id: connection_id.clone(),
-                        template_uuid: template_uuid.clone(),
+                        source: xen_core::provisioning::VmCreationSource::Template(
+                            template_uuid.clone(),
+                        ),
                     });
                 }
             } else if !creation_targets.is_empty() {
@@ -86,7 +88,9 @@ pub fn vms(
                         if ui.button(name).clicked() {
                             actions.push(UiAction::OpenNewVmWizard {
                                 connection_id: connection_id.clone(),
-                                template_uuid: template_uuid.clone(),
+                                source: xen_core::provisioning::VmCreationSource::Template(
+                                    template_uuid.clone(),
+                                ),
                             });
                             ui.close();
                         }

@@ -2233,7 +2233,7 @@ impl App {
                 }
                 UiAction::OpenNewVmWizard {
                     connection_id,
-                    template_uuid,
+                    source,
                 } => {
                     if !find_connection(&self.workspace, &connection_id)
                         .is_some_and(|connection| !crate::state::is_read_only(connection))
@@ -2247,7 +2247,7 @@ impl App {
                     self.state.new_vm = Some(crate::state::NewVmWizard {
                         connection_id,
                         draft: xen_core::provisioning::CreateVmRequest {
-                            template_uuid: String::new(),
+                            source: source.clone(),
                             name: String::new(),
                             description: String::new(),
                             vcpus: 1,
@@ -2263,11 +2263,11 @@ impl App {
                         error: None,
                         submitting: false,
                     });
-                    self.apply(vec![UiAction::SelectNewVmTemplate(template_uuid)]);
+                    self.apply(vec![UiAction::SelectNewVmSource(source)]);
                 }
-                UiAction::SelectNewVmTemplate(uuid) => {
+                UiAction::SelectNewVmSource(source) => {
                     if let Some(wizard) = self.state.new_vm.as_mut() {
-                        wizard.draft.template_uuid = uuid.clone();
+                        wizard.draft.source = source.clone();
                         wizard.template = LoadState::Loading;
                         wizard.draft.iso_uuid = None;
                         wizard.error = None;
@@ -2275,7 +2275,7 @@ impl App {
                         self.worker.send(Command::WizardTemplate {
                             seq: self.state.new_vm_seq,
                             connection_id: wizard.connection_id.clone(),
-                            template_uuid: uuid,
+                            source_uuid: source.uuid().to_owned(),
                         });
                     }
                 }
@@ -2377,15 +2377,24 @@ impl App {
                     self.open_object(key, None);
                 }
                 UiAction::Propose(kind, targets) => {
-                    if kind == ActionKind::Clone
+                    if matches!(kind, ActionKind::Clone | ActionKind::SnapshotToVm)
                         && targets.len() == 1
                         && let Some((connection, vm)) = targets.first()
-                        && find_vm(&self.workspace, connection, vm)
-                            .is_some_and(|(_, template)| template.kind == "template")
+                        && find_vm(&self.workspace, connection, vm).is_some_and(|(_, source)| {
+                            match kind {
+                                ActionKind::Clone => source.kind == "template",
+                                ActionKind::SnapshotToVm => source.kind == "snapshot",
+                                _ => false,
+                            }
+                        })
                     {
                         self.apply(vec![UiAction::OpenNewVmWizard {
                             connection_id: connection.clone(),
-                            template_uuid: vm.clone(),
+                            source: if kind == ActionKind::SnapshotToVm {
+                                xen_core::provisioning::VmCreationSource::Snapshot(vm.clone())
+                            } else {
+                                xen_core::provisioning::VmCreationSource::Template(vm.clone())
+                            },
                         }]);
                         continue;
                     }

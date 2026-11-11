@@ -43,7 +43,7 @@ pub enum Command {
     WizardTemplate {
         seq: u64,
         connection_id: String,
-        template_uuid: String,
+        source_uuid: String,
     },
     Connect {
         settings: ConnectionSettings,
@@ -896,7 +896,7 @@ fn dispatch(
                 request,
             } => {
                 let result = workspace
-                    .create_vm_from_template(connection_id, request)
+                    .create_configured_vm(connection_id, request)
                     .await
                     .map(|_| ());
                 let _ = events.send(Event::VmCreationQueued { result });
@@ -904,10 +904,10 @@ fn dispatch(
             Command::WizardTemplate {
                 seq,
                 connection_id,
-                template_uuid,
+                source_uuid,
             } => {
                 let result = workspace
-                    .vm_details(&connection_id, &template_uuid)
+                    .vm_details(&connection_id, &source_uuid)
                     .await
                     .map(Box::new);
                 let _ = events.send(Event::WizardTemplate { seq, result });

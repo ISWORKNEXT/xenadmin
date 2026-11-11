@@ -17,6 +17,8 @@ struct Input {
     password: String,
     #[serde(default)]
     pause_for_ui: bool,
+    #[serde(default)]
+    snapshot_wizard: bool,
 }
 
 fn ssh_json(script: &str) -> Result<Value, Error> {
@@ -150,8 +152,8 @@ async fn exercise(
         .find(|v| v.name == "Other install media")
         .ok_or("Blank template missing")?;
     let source = c
-        .create_vm_from_template(&CreateVmRequest {
-            template_uuid: template.uuid.clone(),
+        .create_configured_vm(&CreateVmRequest {
+            source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-source"),
             description: "Owned storage qualification VM".into(),
             vcpus: 1,
@@ -297,17 +299,97 @@ async fn exercise(
         "{}",
         json!({"check":"pbd-detach-repair-scan","sr_uuid":target.uuid,"pbd_uuid":pbd.uuid,"status":"VERIFIED"})
     );
+    let mut snapshot_uuid = None;
+    if input.snapshot_wizard {
+        let task = c
+            .begin_vm_action(
+                &source,
+                &VmAction::Snapshot {
+                    name: format!("{prefix}-snapshot"),
+                },
+            )
+            .await?;
+        c.wait_task(&task).await?;
+        let state = c.inventory().await?;
+        let snapshot = state
+            .snapshots
+            .iter()
+            .find(|vm| vm.name == format!("{prefix}-snapshot"))
+            .ok_or("Snapshot missing")?;
+        let mut request = CreateVmRequest {
+            source: xen_core::provisioning::VmCreationSource::Snapshot(snapshot.uuid.clone()),
+            name: format!("{prefix}-configured"),
+            description: "Configured from an owned snapshot".into(),
+            vcpus: 2,
+            memory_mib: 384,
+            sr_uuid: target.uuid.clone(),
+            new_disk_gib: None,
+            network_uuid: inventory
+                .networks
+                .iter()
+                .find(|n| n.bridge != "xenapi")
+                .map(|n| n.uuid.clone()),
+            iso_uuid: None,
+            affinity_host_uuid: Some(host.uuid.clone()),
+        };
+        // A template-typed UUID must never silently admit a snapshot.
+        request.source = xen_core::provisioning::VmCreationSource::Template(snapshot.uuid.clone());
+        if c.create_configured_vm(&request).await.is_ok() {
+            return Err("Wrong source kind was admitted".into());
+        }
+        request.source = xen_core::provisioning::VmCreationSource::Snapshot(snapshot.uuid.clone());
+        let output = c.create_configured_vm(&request).await?;
+        let details = c.vm_details(&output).await?;
+        let output_disk = details
+            .disks
+            .iter()
+            .find(|d| !d.is_cd)
+            .ok_or("Configured disk missing")?;
+        let probe = disk_probe(&output, &output_disk.vdi_uuid, prefix, false)?;
+        if details.is_template
+            || details.is_snapshot
+            || details.power_state != "Halted"
+            || details.vcpus_at_startup != 2
+            || details.vcpus_max != 2
+            || details.memory_static_max != 384 * 1024 * 1024
+            || details.memory_dynamic_min != 384 * 1024 * 1024
+            || details.memory_dynamic_max != 384 * 1024 * 1024
+            || details.affinity_ref != host.reference
+            || details
+                .interfaces
+                .iter()
+                .any(|interface| Some(&interface.network_uuid) != request.network_uuid.as_ref())
+            || details.description != request.description
+            || probe["sha256"] != readback["sha256"]
+            || probe["sr_uuid"] != target.uuid
+            || details.interfaces.len() != usize::from(request.network_uuid.is_some())
+        {
+            return Err(
+                "Configured snapshot output does not match resources, destination or data".into(),
+            );
+        }
+        println!(
+            "{}",
+            json!({"check":"configured-snapshot-vm","source_snapshot_uuid":snapshot.uuid,"uuid":output,"readback":probe,"vcpus":2,"memory_mib":384,"network_uuid":request.network_uuid,"affinity_host_uuid":request.affinity_host_uuid,"wrong_source_kind_rejected":true,"status":"VERIFIED"})
+        );
+        snapshot_uuid = Some(snapshot.uuid.clone());
+    }
     if input.pause_for_ui {
         println!(
             "{}",
-            json!({"phase":"ready-for-ui","prefix":prefix,"vm_uuid":source,"target_sr_uuid":target.uuid,"target_sr_name":target.name,"location":location,"source_sr_uuid":original_sr.uuid})
+            json!({"phase":"ready-for-ui","prefix":prefix,"vm_uuid":source,"snapshot_uuid":snapshot_uuid,"target_sr_uuid":target.uuid,"target_sr_name":target.name,"location":location,"source_sr_uuid":original_sr.uuid})
         );
         let mut line = String::new();
         io::stdin().lock().read_line(&mut line)?;
     }
     Ok(())
 }
-fn cleanup_graph(prefix: &str, location: &str, baseline: &Value) -> Result<Value, Error> {
+fn cleanup_graph(
+    prefix: &str,
+    location: &str,
+    baseline: &Value,
+    allow_snapshots: bool,
+) -> Result<Value, Error> {
     let helper = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tools/audit_storage_cleanup_graph.py");
     let mut child = Command::new("python3")
@@ -321,7 +403,7 @@ fn cleanup_graph(prefix: &str, location: &str, baseline: &Value) -> Result<Value
         .take()
         .ok_or("Missing cleanup admission input")?
         .write_all(
-            json!({"prefix":prefix,"location":location,"baseline":baseline})
+            json!({"prefix":prefix,"location":location,"baseline":baseline,"allow_snapshots":allow_snapshots})
                 .to_string()
                 .as_bytes(),
         )?;
@@ -341,8 +423,9 @@ async fn cleanup(
     prefix: &str,
     location: &str,
     baseline: &Value,
+    allow_snapshots: bool,
 ) -> Result<(), Error> {
-    let graph = cleanup_graph(prefix, location, baseline)?;
+    let graph = cleanup_graph(prefix, location, baseline, allow_snapshots)?;
     println!("{}", json!({"phase":"cleanup-admission","graph":graph}));
     let disk_ids = graph["admitted_vdi_uuids"]
         .as_array()
@@ -393,7 +476,7 @@ async fn main() -> Result<(), Error> {
     println!("{}", json!({"phase":"private-path-ready","path":path}));
     let c = Connection::login(input.settings.clone(), &input.password).await?;
     let result = exercise(&c, &prefix, &location, &input).await;
-    let clean = cleanup(&c, &prefix, &location, &baseline).await;
+    let clean = cleanup(&c, &prefix, &location, &baseline, input.snapshot_wizard).await;
     c.logout().await?;
     clean?;
     let final_inventory = snapshot()?;

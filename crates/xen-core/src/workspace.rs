@@ -2022,14 +2022,14 @@ impl Workspace {
         Ok(record)
     }
 
-    pub async fn create_vm_from_template(
+    pub async fn create_configured_vm(
         self: &Arc<Self>,
         connection_id: String,
         request: crate::provisioning::CreateVmRequest,
     ) -> Result<Operation, String> {
         self.start_vm_preparation(
             connection_id,
-            request.template_uuid.clone(),
+            request.source.uuid().to_owned(),
             request.name.clone(),
             VmPreparation::NewVm(request),
         )
@@ -2240,7 +2240,7 @@ impl Workspace {
                 VmPreparation::NewVm(request) => {
                     active_for_task
                         .connection
-                        .create_vm_from_template(&request)
+                        .create_configured_vm(&request)
                         .await
                 }
                 VmPreparation::Clone => active_for_task.connection.clone_vm(&vm_uuid, &name).await,

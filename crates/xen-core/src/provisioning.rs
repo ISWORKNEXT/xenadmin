@@ -5,9 +5,26 @@ use serde_json::{Value, json};
 
 use crate::xapi::{ApiError, Connection};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VmCreationSource {
+    Template(String),
+    Snapshot(String),
+}
+
+impl VmCreationSource {
+    pub fn uuid(&self) -> &str {
+        match self {
+            Self::Template(uuid) | Self::Snapshot(uuid) => uuid,
+        }
+    }
+    pub fn is_snapshot(&self) -> bool {
+        matches!(self, Self::Snapshot(_))
+    }
+}
+
 #[derive(Clone)]
 pub struct CreateVmRequest {
-    pub template_uuid: String,
+    pub source: VmCreationSource,
     pub name: String,
     pub description: String,
     pub vcpus: u64,
@@ -533,7 +550,7 @@ impl Connection {
         }
     }
 
-    pub async fn create_vm_from_template(
+    pub async fn create_configured_vm(
         &self,
         request: &CreateVmRequest,
     ) -> Result<String, ApiError> {
@@ -556,25 +573,39 @@ impl Connection {
             ));
         }
         let inventory = self.inventory().await?;
-        let template = inventory
-            .templates
+        let candidates = match &request.source {
+            VmCreationSource::Template(_) => &inventory.templates,
+            VmCreationSource::Snapshot(_) => &inventory.snapshots,
+        };
+        let source = candidates
             .iter()
-            .find(|vm| vm.uuid == request.template_uuid)
-            .ok_or_else(|| ApiError::Xen("The selected template is no longer available.".into()))?;
-        if !template
+            .find(|vm| vm.uuid == request.source.uuid())
+            .ok_or_else(|| {
+                ApiError::Xen(
+                    "The selected source is no longer available. Refresh the inventory.".into(),
+                )
+            })?;
+        if !source
             .allowed_operations
             .iter()
             .any(|operation| operation == "clone")
         {
             return Err(ApiError::Xen(
-                "The host does not currently allow cloning this template.".into(),
+                "The host does not currently allow cloning this source.".into(),
             ));
         }
-        let details = self.vm_details(&request.template_uuid).await?;
-        crate::properties::validate_description_change(&details.description, &request.description)?;
-        if !details.is_template || request.memory_mib * 1024 * 1024 < details.memory_static_min {
+        let details = self.vm_details(request.source.uuid()).await?;
+        if details.is_snapshot != request.source.is_snapshot()
+            || (!request.source.is_snapshot() && !details.is_template)
+        {
             return Err(ApiError::Xen(
-                "The memory is below the template's minimum.".into(),
+                "The creation source type changed. Select the source again.".into(),
+            ));
+        }
+        crate::properties::validate_description_change(&details.description, &request.description)?;
+        if request.memory_mib * 1024 * 1024 < details.memory_static_min {
+            return Err(ApiError::Xen(
+                "The memory is below the source's minimum.".into(),
             ));
         }
         let sr = inventory
@@ -646,7 +677,7 @@ impl Connection {
             return Err(ApiError::Xen("Select an enabled home server.".into()));
         }
         let uuid = self
-            .clone_vm_unprovisioned(&request.template_uuid, &request.name)
+            .clone_vm_unprovisioned(request.source.uuid(), &request.name)
             .await?;
         match self.configure_new_vm(&uuid, request, &details).await {
             Ok(()) => Ok(uuid),
@@ -674,6 +705,11 @@ impl Connection {
             .request("VM.get_record", json!([self.session, reference]))
             .await?;
         let disks = self.vm_details(uuid).await?;
+        if disks.is_snapshot || disks.power_state != "Halted" {
+            return Err(ApiError::Xen(
+                "The source clone is not an independent halted object.".into(),
+            ));
+        }
         for disk in disks.disks.iter().filter(|disk| !disk.is_cd) {
             if template
                 .disks

@@ -113,8 +113,8 @@ async fn exercise(
         .find(|v| v.name == "Pool-wide network 0" && v.bridge != "xenapi")
         .ok_or("Network missing")?;
     let source = c
-        .create_vm_from_template(&CreateVmRequest {
-            template_uuid: template.uuid.clone(),
+        .create_configured_vm(&CreateVmRequest {
+            source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-source"),
             description: "Temporary XVA qualification VM".into(),
             vcpus: 1,

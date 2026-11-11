@@ -5,7 +5,7 @@ use crate::state::{LoadState, UiAction, UiState, connection_inventory, find_conn
 use crate::{format, theme, widgets};
 
 const STEPS: [&str; 6] = [
-    "Template",
+    "Source",
     "Name",
     "Resources",
     "Storage & media",
@@ -126,12 +126,13 @@ fn page(
     let draft = &mut wizard.draft;
     match wizard.step {
         0 => {
-            widgets::field_label(ui, "Template");
+            widgets::field_label(ui, "Source");
             let selected = inventory
                 .templates
                 .iter()
-                .find(|vm| vm.uuid == draft.template_uuid)
-                .map_or("Select a template", |vm| vm.name.as_str());
+                .chain(&inventory.snapshots)
+                .find(|vm| vm.uuid == draft.source.uuid())
+                .map_or("Select a template or snapshot", |vm| vm.name.as_str());
             egui::ComboBox::from_id_salt("new-vm-template")
                 .selected_text(selected)
                 .width(620.0)
@@ -139,13 +140,24 @@ fn page(
                     for template in inventory
                         .templates
                         .iter()
+                        .chain(&inventory.snapshots)
                         .filter(|vm| vm.allowed_operations.iter().any(|op| op == "clone"))
                     {
                         if ui
-                            .selectable_label(template.uuid == draft.template_uuid, &template.name)
+                            .selectable_label(template.uuid == draft.source.uuid(), &template.name)
                             .clicked()
                         {
-                            actions.push(UiAction::SelectNewVmTemplate(template.uuid.clone()));
+                            actions.push(UiAction::SelectNewVmSource(
+                                if template.kind == "snapshot" {
+                                    xen_core::provisioning::VmCreationSource::Snapshot(
+                                        template.uuid.clone(),
+                                    )
+                                } else {
+                                    xen_core::provisioning::VmCreationSource::Template(
+                                        template.uuid.clone(),
+                                    )
+                                },
+                            ));
                         }
                     }
                 });
@@ -162,15 +174,15 @@ fn page(
                 }
                 LoadState::Error(message) => {
                     ui.colored_label(theme::red(), message);
-                    if ui.button("Retry template").clicked() {
-                        actions.push(UiAction::SelectNewVmTemplate(draft.template_uuid.clone()));
+                    if ui.button("Retry source").clicked() {
+                        actions.push(UiAction::SelectNewVmSource(draft.source.clone()));
                     }
-                    error = Some("Load the template before continuing.");
+                    error = Some("Load the source before continuing.");
                 }
                 _ => {
                     ui.spinner();
-                    ui.label("Loading template…");
-                    error = Some("Wait for the template to load.");
+                    ui.label("Loading source…");
+                    error = Some("Wait for the source to load.");
                 }
             }
         }
@@ -268,7 +280,7 @@ fn page(
                 .ready()
                 .map_or(0, |vm| vm.disks.iter().filter(|disk| !disk.is_cd).count());
             if existing > 0 {
-                ui.label(format!("Keep the template's {existing} existing disks and place their copies on the selected storage."));
+                ui.label(format!("Keep the source's {existing} existing disks and place their copies on the selected storage."));
             }
             if let Some(template) = wizard.template.ready()
                 && existing == 0
@@ -314,12 +326,12 @@ fn page(
                         .iter()
                         .find(|iso| Some(&iso.uuid) == draft.iso_uuid.as_ref())
                 })
-                .map_or("Keep template media", |iso| iso.name.as_str());
+                .map_or("Keep source media", |iso| iso.name.as_str());
             egui::ComboBox::from_id_salt("new-vm-iso")
                 .selected_text(selected)
                 .width(620.0)
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut draft.iso_uuid, None, "Keep template media");
+                    ui.selectable_value(&mut draft.iso_uuid, None, "Keep source media");
                     if let Some(details) = wizard.template.ready() {
                         for iso in &details.isos {
                             ui.selectable_value(
@@ -364,7 +376,7 @@ fn page(
                     }
                 });
             ui.add_space(12.0);
-            ui.label("Choose one guest network or create the VM without network interfaces. This selection replaces the template's interfaces.");
+            ui.label("Choose one guest network or create the VM without network interfaces. This selection replaces the source's interfaces.");
         }
         _ => {
             let template = wizard.template.ready();
@@ -382,7 +394,7 @@ fn page(
                 )
             } else {
                 format!(
-                    "{disk_count} existing template disks{}",
+                    "{disk_count} existing source disks{}",
                     draft
                         .new_disk_gib
                         .map_or_else(String::new, |size| format!(" + {size} GiB new disk"))
@@ -390,7 +402,7 @@ fn page(
             };
             for (label, value) in [
                 (
-                    "Template",
+                    "Source",
                     template.map_or_else(String::new, |vm| vm.name.clone()),
                 ),
                 ("Name", draft.name.clone()),
@@ -430,7 +442,7 @@ fn page(
                                 .iter()
                                 .find(|iso| Some(&iso.uuid) == draft.iso_uuid.as_ref())
                         })
-                        .map_or_else(|| "Keep template media".into(), |iso| iso.name.clone()),
+                        .map_or_else(|| "Keep source media".into(), |iso| iso.name.clone()),
                 ),
                 (
                     "Home server",

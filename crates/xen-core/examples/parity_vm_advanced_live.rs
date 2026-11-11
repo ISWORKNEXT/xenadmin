@@ -144,7 +144,7 @@ async fn provisioning_descriptions(c: &Connection, prefix: &str) -> Result<(), E
         .find(|sr| sr.name == "Local storage")
         .ok_or("Local storage missing")?;
     let mut request = CreateVmRequest {
-        template_uuid: template.uuid.clone(),
+        source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
         name: format!("{prefix}-source"),
         description: "D".repeat(2000),
         vcpus: 1,
@@ -155,7 +155,7 @@ async fn provisioning_descriptions(c: &Connection, prefix: &str) -> Result<(), E
         iso_uuid: None,
         affinity_host_uuid: None,
     };
-    let source = c.create_vm_from_template(&request).await?;
+    let source = c.create_configured_vm(&request).await?;
     let details = c.vm_details(&source).await?;
     if details.description != request.description {
         return Err("Changed long description not preserved during creation".into());
@@ -201,10 +201,10 @@ async fn provisioning_descriptions(c: &Connection, prefix: &str) -> Result<(), E
     );
     c.convert_vm_to_template(&source).await?;
     owned_legacy_metadata(&source)?;
-    request.template_uuid = source.clone();
+    request.source = xen_core::provisioning::VmCreationSource::Template(source.clone());
     request.name = format!("{prefix}-legacy-child");
     request.description = "L".repeat(40000);
-    let child = c.create_vm_from_template(&request).await?;
+    let child = c.create_configured_vm(&request).await?;
     let details = c.vm_details(&child).await?;
     let properties = c
         .object_properties(&xen_core::properties::ObjectTarget {
@@ -228,7 +228,7 @@ async fn provisioning_descriptions(c: &Connection, prefix: &str) -> Result<(), E
     request.name = format!("{prefix}-must-not-exist");
     request.description = "X".repeat(32768);
     let error = c
-        .create_vm_from_template(&request)
+        .create_configured_vm(&request)
         .await
         .err()
         .ok_or("Changed oversized description accepted")?;
@@ -455,8 +455,8 @@ async fn full_copy(c: &Connection, prefix: &str, input: &Input) -> Result<(), Er
         .find(|s| s.name == "Local storage")
         .ok_or("Local storage missing")?;
     let source = c
-        .create_vm_from_template(&CreateVmRequest {
-            template_uuid: template.uuid.clone(),
+        .create_configured_vm(&CreateVmRequest {
+            source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-copy-source"),
             description: "Full copy source description".into(),
             vcpus: 1,
@@ -677,8 +677,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
         .find(|sr| sr.name == "Local storage")
         .ok_or("Local storage missing")?;
     let uuid = c
-        .create_vm_from_template(&CreateVmRequest {
-            template_uuid: template.uuid.clone(),
+        .create_configured_vm(&CreateVmRequest {
+            source: xen_core::provisioning::VmCreationSource::Template(template.uuid.clone()),
             name: format!("{prefix}-vm"),
             description: "Temporary advanced VM qualification".into(),
             vcpus: 1,
@@ -974,8 +974,8 @@ async fn exercise(c: &Connection, prefix: &str, input: &Input) -> Result<(), Err
         );
         if input.pause_for_ui {
             let ui_uuid = c
-                .create_vm_from_template(&CreateVmRequest {
-                    template_uuid: uuid.clone(),
+                .create_configured_vm(&CreateVmRequest {
+                    source: xen_core::provisioning::VmCreationSource::Template(uuid.clone()),
                     name: format!("{prefix}-ui"),
                     description: "Temporary UI qualification VM".into(),
                     vcpus: 1,

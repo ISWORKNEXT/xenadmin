@@ -46,3 +46,7 @@ This unit follows completion of advanced VM qualification. Hardware-specific and
 ## Legacy pool RPC follow-up
 
 The new Pool options owner uses canonical lowercase `pool` RPC names. Legacy HA/WLB and VLAN paths still contain SDK-style uppercase `Pool` prefixes. Their spelling-only correction was deferred after review found that enabling the HA path also activates unsafe ambiguous-error rollback to zero tolerated failures. Resolve the workflow state and recovery rules together before qualifying those paths. The known one-host/one-management-PIF lab does not qualify HA, WLB service integration or management-interface VLAN creation.
+
+## Configured creation recovery follow-up
+
+Template and snapshot creation now share an explicit-source wizard. Their existing post-clone cleanup still treats current nonsource attached disks as disposable. Qualify and correct ownership/retention for concurrent foreign-disk attachment and interrupted configuration before extending the Full-copy recovery guarantees to configured creation. Happy-path small-disk snapshot qualification does not close this recovery gap.

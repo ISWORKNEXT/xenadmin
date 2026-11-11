@@ -1608,9 +1608,9 @@ pub enum UiAction {
     SubmitXvaTransfer,
     OpenNewVmWizard {
         connection_id: String,
-        template_uuid: String,
+        source: xen_core::provisioning::VmCreationSource,
     },
-    SelectNewVmTemplate(String),
+    SelectNewVmSource(xen_core::provisioning::VmCreationSource),
     CloseNewVmWizard,
     CreateNewVm,
     SetView(View),
