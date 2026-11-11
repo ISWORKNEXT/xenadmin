@@ -21,6 +21,7 @@ with tempfile.TemporaryDirectory(prefix='xen-clipboard-qa-') as config:
   try:
    deadline=time.monotonic()+15;window=None
    while time.monotonic()<deadline:
+    if app.poll() is not None:raise RuntimeError(f'Native app exited before mapping a window (code {app.returncode}); see app.log')
     for w in windows(root):
      try:
       prop=w.get_full_property(dpy.intern_atom('_NET_WM_PID'),0)
