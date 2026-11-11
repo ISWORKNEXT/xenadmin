@@ -33,6 +33,7 @@ jobs:
       - name: Install native dependencies
         timeout-minutes: 8
         run: |
+          bash tools/ci_ubuntu_dns.sh
           if [ -f /etc/apt/apt-mirrors.txt ]; then
             sudo sed -i '/azure[.]archive[.]ubuntu[.]com/d' /etc/apt/apt-mirrors.txt
           fi

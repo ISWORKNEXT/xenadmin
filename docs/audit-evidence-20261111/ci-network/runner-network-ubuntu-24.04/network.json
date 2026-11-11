@@ -1,0 +1,107 @@
+{
+  "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+  "proxy_variables_present": {
+    "HTTP_PROXY": false,
+    "HTTPS_PROXY": false,
+    "NO_PROXY": false
+  },
+  "system_dns": [
+    {
+      "host": "github.com",
+      "exit_code": 0,
+      "stdout": "172.182.252.133 STREAM github.com\n172.182.252.133 DGRAM  \n172.182.252.133 RAW    \n",
+      "stderr": "",
+      "elapsed_s": 0.007
+    },
+    {
+      "host": "packages.microsoft.com",
+      "exit_code": 0,
+      "stdout": "13.107.213.69   STREAM part-0041.t-0009.t-msedge.net\n13.107.213.69   DGRAM  \n13.107.213.69   RAW    \n13.107.246.69   STREAM \n13.107.246.69   DGRAM  \n13.107.246.69   RAW    \n",
+      "stderr": "",
+      "elapsed_s": 0.004
+    },
+    {
+      "host": "azure.archive.ubuntu.com",
+      "timed_out": true,
+      "elapsed_s": 8.004
+    },
+    {
+      "host": "archive.ubuntu.com",
+      "timed_out": true,
+      "elapsed_s": 8.008
+    },
+    {
+      "host": "security.ubuntu.com",
+      "timed_out": true,
+      "elapsed_s": 8.009
+    },
+    {
+      "host": "pypi.org",
+      "exit_code": 0,
+      "stdout": "151.101.128.223 STREAM pypi.org\n151.101.128.223 DGRAM  \n151.101.128.223 RAW    \n151.101.0.223   STREAM \n151.101.0.223   DGRAM  \n151.101.0.223   RAW    \n151.101.192.223 STREAM \n151.101.192.223 DGRAM  \n151.101.192.223 RAW    \n151.101.64.223  STREAM \n151.101.64.223  DGRAM  \n151.101.64.223  RAW    \n",
+      "stderr": "",
+      "elapsed_s": 0.004
+    }
+  ],
+  "direct_dns": [
+    {
+      "server": "1.1.1.1",
+      "host": "github.com",
+      "rcode": 0,
+      "answers": 1,
+      "elapsed_s": 0.004
+    },
+    {
+      "server": "1.1.1.1",
+      "host": "archive.ubuntu.com",
+      "rcode": 0,
+      "answers": 12,
+      "elapsed_s": 0.005
+    },
+    {
+      "server": "8.8.8.8",
+      "host": "github.com",
+      "rcode": 0,
+      "answers": 1,
+      "elapsed_s": 0.012
+    },
+    {
+      "server": "8.8.8.8",
+      "host": "archive.ubuntu.com",
+      "error": "TimeoutError: timed out",
+      "elapsed_s": 3.003
+    }
+  ],
+  "https": [
+    {
+      "url": "https://github.com/",
+      "exit_code": 0,
+      "stdout": "200",
+      "stderr": "",
+      "elapsed_s": 0.07
+    },
+    {
+      "url": "https://packages.microsoft.com/",
+      "exit_code": 0,
+      "stdout": "200",
+      "stderr": "",
+      "elapsed_s": 0.042
+    },
+    {
+      "url": "https://archive.ubuntu.com/ubuntu/dists/noble/InRelease",
+      "exit_code": 28,
+      "stdout": "000",
+      "stderr": "curl: (28) Resolving timed out after 4001 milliseconds\n",
+      "elapsed_s": 4.01
+    }
+  ],
+  "nameservers": [
+    "127.0.0.53"
+  ],
+  "configured_mirrors": [
+    "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1",
+    "https://archive.ubuntu.com/ubuntu/\tpriority:2",
+    "https://security.ubuntu.com/ubuntu/\tpriority:3"
+  ],
+  "collection_complete": true
+}

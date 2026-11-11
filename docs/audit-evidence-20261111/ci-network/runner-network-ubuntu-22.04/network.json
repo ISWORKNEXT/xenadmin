@@ -1,0 +1,106 @@
+{
+  "platform": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.35",
+  "proxy_variables_present": {
+    "HTTP_PROXY": false,
+    "HTTPS_PROXY": false,
+    "NO_PROXY": false
+  },
+  "system_dns": [
+    {
+      "host": "github.com",
+      "exit_code": 0,
+      "stdout": "140.82.113.4    STREAM github.com\n140.82.113.4    DGRAM  \n140.82.113.4    RAW    \n",
+      "stderr": "",
+      "elapsed_s": 0.003
+    },
+    {
+      "host": "packages.microsoft.com",
+      "exit_code": 0,
+      "stdout": "13.107.213.40   STREAM part-0012.t-0009.t-msedge.net\n13.107.213.40   DGRAM  \n13.107.213.40   RAW    \n13.107.246.40   STREAM \n13.107.246.40   DGRAM  \n13.107.246.40   RAW    \n",
+      "stderr": "",
+      "elapsed_s": 0.004
+    },
+    {
+      "host": "azure.archive.ubuntu.com",
+      "timed_out": true,
+      "elapsed_s": 8.009
+    },
+    {
+      "host": "archive.ubuntu.com",
+      "timed_out": true,
+      "elapsed_s": 8.009
+    },
+    {
+      "host": "security.ubuntu.com",
+      "timed_out": true,
+      "elapsed_s": 8.009
+    },
+    {
+      "host": "pypi.org",
+      "exit_code": 0,
+      "stdout": "151.101.128.223 STREAM pypi.org\n151.101.128.223 DGRAM  \n151.101.128.223 RAW    \n151.101.192.223 STREAM \n151.101.192.223 DGRAM  \n151.101.192.223 RAW    \n151.101.64.223  STREAM \n151.101.64.223  DGRAM  \n151.101.64.223  RAW    \n151.101.0.223   STREAM \n151.101.0.223   DGRAM  \n151.101.0.223   RAW    \n",
+      "stderr": "",
+      "elapsed_s": 0.005
+    }
+  ],
+  "direct_dns": [
+    {
+      "server": "1.1.1.1",
+      "host": "github.com",
+      "rcode": 0,
+      "answers": 1,
+      "elapsed_s": 0.002
+    },
+    {
+      "server": "1.1.1.1",
+      "host": "archive.ubuntu.com",
+      "rcode": 0,
+      "answers": 12,
+      "elapsed_s": 0.006
+    },
+    {
+      "server": "8.8.8.8",
+      "host": "github.com",
+      "rcode": 0,
+      "answers": 1,
+      "elapsed_s": 0.044
+    },
+    {
+      "server": "8.8.8.8",
+      "host": "archive.ubuntu.com",
+      "rcode": 5,
+      "answers": 0,
+      "elapsed_s": 0.002
+    }
+  ],
+  "https": [
+    {
+      "url": "https://github.com/",
+      "exit_code": 0,
+      "stdout": "200",
+      "stderr": "",
+      "elapsed_s": 0.046
+    },
+    {
+      "url": "https://packages.microsoft.com/",
+      "exit_code": 0,
+      "stdout": "200",
+      "stderr": "",
+      "elapsed_s": 0.049
+    },
+    {
+      "url": "https://archive.ubuntu.com/ubuntu/dists/noble/InRelease",
+      "timed_out": true,
+      "elapsed_s": 8.01
+    }
+  ],
+  "nameservers": [
+    "127.0.0.53"
+  ],
+  "configured_mirrors": [
+    "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1",
+    "https://archive.ubuntu.com/ubuntu/\tpriority:2",
+    "https://security.ubuntu.com/ubuntu/\tpriority:3"
+  ],
+  "collection_complete": true
+}

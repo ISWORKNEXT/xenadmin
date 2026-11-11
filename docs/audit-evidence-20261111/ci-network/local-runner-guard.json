@@ -1,0 +1,6 @@
+{
+  "exit_code": 1,
+  "stderr": "This helper only applies to GitHub-hosted Linux runners.\n",
+  "resolver_unchanged": true,
+  "resolver_sha256": "8eac70194bdf2b96b77d68a87b73c96c7b171511d1c75b764f6e33241b60b6d0"
+}

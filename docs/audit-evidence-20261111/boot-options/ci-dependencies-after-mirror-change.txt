@@ -1,0 +1,46 @@
+Typecheck, lint and test	Install native dependencies	﻿2026-11-11T14:23:06.8568469Z ##[group]Run if [ -f /etc/apt/apt-mirrors.txt ]; then
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8568766Z ^[[36;1mif [ -f /etc/apt/apt-mirrors.txt ]; then^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8569008Z ^[[36;1m  sudo sed -i '/azure[.]archive[.]ubuntu[.]com/d' /etc/apt/apt-mirrors.txt^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8569231Z ^[[36;1mfi^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8569388Z ^[[36;1msudo apt-get -o APT::Update::Error-Mode=any update^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8569624Z ^[[36;1msudo apt-get install -y --no-install-recommends \^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8569899Z ^[[36;1m  build-essential pkg-config python3 python3-xlib python3-pil xvfb openssl \^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8570202Z ^[[36;1m  libx11-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev \^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8570450Z ^[[36;1m  libgl1-mesa-dev libegl1-mesa-dev libxrandr-dev \^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8570655Z ^[[36;1m  libxi-dev libxcursor-dev libxinerama-dev^[[0m
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8590084Z shell: /usr/bin/bash -e {0}
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8590435Z env:
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8590557Z   CARGO_TERM_COLOR: always
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8590745Z   CARGO_HOME: /home/runner/.cargo
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8590901Z   CARGO_INCREMENTAL: 0
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8591037Z   CACHE_ON_FAILURE: false
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:06.8591174Z ##[endgroup]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:07.2346709Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [93 B]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:07.2855187Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:07.3568125Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [690 kB]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:07.4525431Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [760 kB]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:07.5610523Z Get:9 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [12.6 kB]
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:27.2683087Z Ign:2 https://archive.ubuntu.com/ubuntu noble InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:23:47.3023160Z Ign:3 https://archive.ubuntu.com/ubuntu noble-updates InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:24:07.3291182Z Ign:4 https://archive.ubuntu.com/ubuntu noble-backports InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:24:27.3589241Z Ign:5 https://archive.ubuntu.com/ubuntu noble-security InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:24:47.3877585Z Ign:2 https://archive.ubuntu.com/ubuntu noble InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:07.4200360Z Ign:3 https://archive.ubuntu.com/ubuntu noble-updates InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:07.4219483Z Err:2 https://security.ubuntu.com/ubuntu noble InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:07.4219886Z   Temporary failure resolving 'archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:27.4492402Z Ign:4 https://archive.ubuntu.com/ubuntu noble-backports InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:27.4493334Z Err:3 https://security.ubuntu.com/ubuntu noble-updates InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:27.4493603Z   Temporary failure resolving 'archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:47.4774155Z Err:4 https://security.ubuntu.com/ubuntu noble-backports InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:47.4774492Z   Temporary failure resolving 'archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:25:47.4804674Z Ign:5 https://archive.ubuntu.com/ubuntu noble-security InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:07.5097547Z Err:5 https://security.ubuntu.com/ubuntu noble-security InRelease
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:07.5098304Z   Temporary failure resolving 'archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:10.4559227Z Fetched 1467 kB in 3min 0s (8135 B/s)
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:11.2643132Z Reading package lists...
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:11.2778948Z E: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble/InRelease  Temporary failure resolving 'archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:11.2779870Z E: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-updates/InRelease  Temporary failure resolving 'archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:11.2780639Z E: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-backports/InRelease  Temporary failure resolving 'archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:11.2781420Z E: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-security/InRelease  Temporary failure resolving 'archive.ubuntu.com'
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:11.2782136Z E: Some index files failed to download. They have been ignored, or old ones used instead.
+Typecheck, lint and test	Install native dependencies	2026-11-11T14:26:11.2811304Z ##[error]Process completed with exit code 100.
