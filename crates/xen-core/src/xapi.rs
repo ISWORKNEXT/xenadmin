@@ -448,8 +448,8 @@ impl RawInventory {
         snapshots.sort_by(|a, b| b.snapshot_time.cmp(&a.snapshot_time));
         let mut storage: Vec<_> = self
             .storage
-            .values()
-            .map(|r| {
+            .iter()
+            .map(|(reference, r)| {
                 let pbd_refs = r["PBDs"].as_array().cloned().unwrap_or_default();
                 let pbd_count = pbd_refs.len();
                 let pbd_attached = pbd_refs
@@ -473,6 +473,16 @@ impl RawInventory {
                     shared: boolean(r, "shared"),
                     pbd_count,
                     pbd_attached,
+                    is_default: self
+                        .pools
+                        .values()
+                        .any(|pool| pool["default_SR"].as_str() == Some(reference.as_str())),
+                    can_be_default: r["content_type"].as_str() != Some("iso")
+                        && pbd_attached > 0
+                        && (boolean(r, "shared") || self.hosts.len() <= 1)
+                        && r["allowed_operations"].as_array().is_some_and(|ops| {
+                            ops.iter().any(|op| op.as_str() == Some("vdi_create"))
+                        }),
                 }
             })
             .collect();
@@ -755,6 +765,8 @@ pub struct Storage {
     pub shared: bool,
     pub pbd_count: usize,
     pub pbd_attached: usize,
+    pub is_default: bool,
+    pub can_be_default: bool,
 }
 
 #[derive(Clone, Serialize)]

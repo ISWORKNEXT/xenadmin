@@ -1,0 +1,273 @@
+{
+  "conclusion": "success",
+  "headSha": "8944bbc6dc64ce6abedf5e569999101d3b942028",
+  "jobs": [
+    {
+      "completedAt": "2026-11-11T11:54:04Z",
+      "conclusion": "success",
+      "databaseId": 130501233325,
+      "name": "Build windows-x86_64",
+      "startedAt": "2026-11-11T11:43:11Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-11T11:43:13Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-11T11:43:12Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:22Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "startedAt": "2026-11-11T11:43:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:22Z",
+          "conclusion": "skipped",
+          "name": "Install Linux build dependencies",
+          "number": 3,
+          "startedAt": "2026-11-11T11:43:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:31Z",
+          "conclusion": "success",
+          "name": "Install Rust",
+          "number": 4,
+          "startedAt": "2026-11-11T11:43:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:33Z",
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2",
+          "number": 5,
+          "startedAt": "2026-11-11T11:43:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:53:18Z",
+          "conclusion": "success",
+          "name": "Release build",
+          "number": 6,
+          "startedAt": "2026-11-11T11:43:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:53:18Z",
+          "conclusion": "skipped",
+          "name": "Package (Linux)",
+          "number": 7,
+          "startedAt": "2026-11-11T11:53:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:53:22Z",
+          "conclusion": "success",
+          "name": "Package (Windows)",
+          "number": 8,
+          "startedAt": "2026-11-11T11:53:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:53:24Z",
+          "conclusion": "success",
+          "name": "Upload package artifact",
+          "number": 9,
+          "startedAt": "2026-11-11T11:53:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:53:59Z",
+          "conclusion": "success",
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "number": 17,
+          "startedAt": "2026-11-11T11:53:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:54:02Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 18,
+          "startedAt": "2026-11-11T11:53:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:54:02Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 19,
+          "startedAt": "2026-11-11T11:54:02Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ISWORKNEXT/xenadmin/actions/runs/43014249064/job/130501233325"
+    },
+    {
+      "completedAt": "2026-11-11T11:47:25Z",
+      "conclusion": "success",
+      "databaseId": 130501233747,
+      "name": "Build linux-x86_64",
+      "startedAt": "2026-11-11T11:43:11Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-11T11:43:13Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-11T11:43:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:16Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "startedAt": "2026-11-11T11:43:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:31Z",
+          "conclusion": "success",
+          "name": "Install Linux build dependencies",
+          "number": 3,
+          "startedAt": "2026-11-11T11:43:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:34Z",
+          "conclusion": "success",
+          "name": "Install Rust",
+          "number": 4,
+          "startedAt": "2026-11-11T11:43:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:34Z",
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2",
+          "number": 5,
+          "startedAt": "2026-11-11T11:43:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:47:13Z",
+          "conclusion": "success",
+          "name": "Release build",
+          "number": 6,
+          "startedAt": "2026-11-11T11:43:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:47:14Z",
+          "conclusion": "success",
+          "name": "Package (Linux)",
+          "number": 7,
+          "startedAt": "2026-11-11T11:47:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:47:14Z",
+          "conclusion": "skipped",
+          "name": "Package (Windows)",
+          "number": 8,
+          "startedAt": "2026-11-11T11:47:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:47:16Z",
+          "conclusion": "success",
+          "name": "Upload package artifact",
+          "number": 9,
+          "startedAt": "2026-11-11T11:47:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:47:23Z",
+          "conclusion": "success",
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "number": 17,
+          "startedAt": "2026-11-11T11:47:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:47:23Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 18,
+          "startedAt": "2026-11-11T11:47:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:47:23Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 19,
+          "startedAt": "2026-11-11T11:47:23Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ISWORKNEXT/xenadmin/actions/runs/43014249064/job/130501233747"
+    },
+    {
+      "completedAt": "2026-11-11T11:54:27Z",
+      "conclusion": "success",
+      "databaseId": 130506253861,
+      "name": "Publish GitHub release",
+      "startedAt": "2026-11-11T11:54:06Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-11T11:54:08Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-11T11:54:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:54:19Z",
+          "conclusion": "success",
+          "name": "Run actions/download-artifact@v4",
+          "number": 2,
+          "startedAt": "2026-11-11T11:54:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:54:20Z",
+          "conclusion": "success",
+          "name": "Generate checksums",
+          "number": 3,
+          "startedAt": "2026-11-11T11:54:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:54:26Z",
+          "conclusion": "success",
+          "name": "Publish release",
+          "number": 4,
+          "startedAt": "2026-11-11T11:54:20Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:54:26Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 5,
+          "startedAt": "2026-11-11T11:54:26Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ISWORKNEXT/xenadmin/actions/runs/43014249064/job/130506253861"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/ISWORKNEXT/xenadmin/actions/runs/43014249064"
+}

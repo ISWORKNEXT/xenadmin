@@ -52,6 +52,7 @@ try:
  for ref,sr in srs.items():
   if sr['name_label']!=prefix+'-sr':continue
   assert sr['uuid'] not in baseline['sr_uuids'] and sr['type']=='file'
+  assert all(p['default_SR']!=ref for p in s.xenapi.pool.get_all_records().values()),'Restore pool default before deleting test SR'
   attachments=[p for p in pbds.values() if p['SR']==ref]
   assert len(attachments)==1
   assert attachments[0]['host']==target_hosts[0] and attachments[0]['device_config'].get('location')==str(location)

@@ -1,0 +1,15 @@
+{
+  "started_at_utc": "2026-11-11T11:57:06.026835+00:00",
+  "binary": "/home/tinnerkun/Desktop/xen/xenadmin/target/debug/xen-native",
+  "binary_sha256": "81d257771919cb79171298b364622be44e18f37ce5cfdf24fb90b7b948876456",
+  "args": [
+    "/home/tinnerkun/Desktop/xen/xenadmin/target/debug/xen-native",
+    "--connect-stdin",
+    "--sr",
+    "6e3aee03-423b-7647-ee53-9b47e7ced38e"
+  ],
+  "pid": 3427490,
+  "host": "192.168.8.170",
+  "display": ":98",
+  "owner_prefix": "zz-parity-storage-01a1ca75-d335-76c8-9ebe-955568854224"
+}

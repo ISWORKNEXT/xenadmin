@@ -1,0 +1,115 @@
+{
+  "conclusion": "success",
+  "headSha": "8944bbc6dc64ce6abedf5e569999101d3b942028",
+  "jobs": [
+    {
+      "completedAt": "2026-11-11T11:44:17Z",
+      "conclusion": "success",
+      "databaseId": 130501155838,
+      "name": "Typecheck, lint and test",
+      "startedAt": "2026-11-11T11:43:01Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-11T11:43:03Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-11T11:43:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:07Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "startedAt": "2026-11-11T11:43:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:09Z",
+          "conclusion": "success",
+          "name": "Install Rust",
+          "number": 3,
+          "startedAt": "2026-11-11T11:43:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:16Z",
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2",
+          "number": 4,
+          "startedAt": "2026-11-11T11:43:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:29Z",
+          "conclusion": "success",
+          "name": "Install native dependencies",
+          "number": 5,
+          "startedAt": "2026-11-11T11:43:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:30Z",
+          "conclusion": "success",
+          "name": "Format",
+          "number": 6,
+          "startedAt": "2026-11-11T11:43:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:43:58Z",
+          "conclusion": "success",
+          "name": "Tests",
+          "number": 7,
+          "startedAt": "2026-11-11T11:43:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:44:07Z",
+          "conclusion": "success",
+          "name": "Clippy",
+          "number": 8,
+          "startedAt": "2026-11-11T11:43:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:44:15Z",
+          "conclusion": "success",
+          "name": "Build",
+          "number": 9,
+          "startedAt": "2026-11-11T11:44:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:44:15Z",
+          "conclusion": "success",
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "number": 17,
+          "startedAt": "2026-11-11T11:44:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:44:15Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 18,
+          "startedAt": "2026-11-11T11:44:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-11T11:44:15Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 19,
+          "startedAt": "2026-11-11T11:44:15Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ISWORKNEXT/xenadmin/actions/runs/43014225339/job/130501155838"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/ISWORKNEXT/xenadmin/actions/runs/43014225339"
+}

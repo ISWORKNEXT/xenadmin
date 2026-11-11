@@ -1,0 +1,14 @@
+[
+  {
+    "name": "xen-desktop-v0.1.8-linux-x86_64.tar.gz",
+    "sha256": "252506c60da5b9265db73d67bd806f73b8f8dc26070162cc71c2214e9b4d44e2",
+    "bytes": 12745224,
+    "published_asset_digest_matches": true
+  },
+  {
+    "name": "xen-desktop-v0.1.8-windows-x86_64.zip",
+    "sha256": "08ddf81fa8281e8e856125e9ef8cf7fc21f4b8cc2dee8b1eba13aa6ae94a4fa2",
+    "bytes": 11328346,
+    "published_asset_digest_matches": true
+  }
+]

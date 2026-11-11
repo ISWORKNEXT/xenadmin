@@ -1,0 +1,51 @@
+{
+  "assets": [
+    {
+      "apiUrl": "https://api.github.com/repos/ISWORKNEXT/xenadmin/releases/assets/735350781",
+      "contentType": "application/octet-stream",
+      "createdAt": "2026-11-11T11:54:23Z",
+      "digest": "sha256:fb0b2bc83b8fe295327b7f4b757cd35f216b312c7316ee7bc8f255a012f1b379",
+      "downloadCount": 0,
+      "id": "RA_kwDOVkkdls4r1I_9",
+      "label": "",
+      "name": "SHA256SUMS",
+      "size": 209,
+      "state": "uploaded",
+      "updatedAt": "2026-11-11T11:54:24Z",
+      "url": "https://github.com/ISWORKNEXT/xenadmin/releases/download/v0.1.8/SHA256SUMS"
+    },
+    {
+      "apiUrl": "https://api.github.com/repos/ISWORKNEXT/xenadmin/releases/assets/735350788",
+      "contentType": "application/gzip",
+      "createdAt": "2026-11-11T11:54:23Z",
+      "digest": "sha256:252506c60da5b9265db73d67bd806f73b8f8dc26070162cc71c2214e9b4d44e2",
+      "downloadCount": 0,
+      "id": "RA_kwDOVkkdls4r1JAE",
+      "label": "",
+      "name": "xen-desktop-v0.1.8-linux-x86_64.tar.gz",
+      "size": 12745224,
+      "state": "uploaded",
+      "updatedAt": "2026-11-11T11:54:24Z",
+      "url": "https://github.com/ISWORKNEXT/xenadmin/releases/download/v0.1.8/xen-desktop-v0.1.8-linux-x86_64.tar.gz"
+    },
+    {
+      "apiUrl": "https://api.github.com/repos/ISWORKNEXT/xenadmin/releases/assets/735350789",
+      "contentType": "application/zip",
+      "createdAt": "2026-11-11T11:54:23Z",
+      "digest": "sha256:08ddf81fa8281e8e856125e9ef8cf7fc21f4b8cc2dee8b1eba13aa6ae94a4fa2",
+      "downloadCount": 0,
+      "id": "RA_kwDOVkkdls4r1JAF",
+      "label": "",
+      "name": "xen-desktop-v0.1.8-windows-x86_64.zip",
+      "size": 11328346,
+      "state": "uploaded",
+      "updatedAt": "2026-11-11T11:54:24Z",
+      "url": "https://github.com/ISWORKNEXT/xenadmin/releases/download/v0.1.8/xen-desktop-v0.1.8-windows-x86_64.zip"
+    }
+  ],
+  "isDraft": false,
+  "isPrerelease": false,
+  "publishedAt": "2026-11-11T11:54:25Z",
+  "tagName": "v0.1.8",
+  "url": "https://github.com/ISWORKNEXT/xenadmin/releases/tag/v0.1.8"
+}

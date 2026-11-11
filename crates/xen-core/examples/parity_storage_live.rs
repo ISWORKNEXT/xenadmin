@@ -21,6 +21,8 @@ struct Input {
     snapshot_wizard: bool,
     #[serde(default)]
     qualify_retained_failure: bool,
+    #[serde(default)]
+    qualify_default_sr: bool,
 }
 
 fn ssh_json(script: &str) -> Result<Value, Error> {
@@ -54,6 +56,31 @@ try:
 finally:s.xenapi.session.logout()
 "#,
     )
+}
+fn default_sr_state() -> Result<Value, Error> {
+    ssh_json(
+        r#"import XenAPI,json
+s=XenAPI.xapi_local();s.xenapi.login_with_password('','','1.0','default-sr-independent-read')
+try:
+ pools=s.xenapi.pool.get_all();assert len(pools)==1;p=pools[0];sr=s.xenapi.pool.get_default_SR(p)
+ print(json.dumps({'pool_uuid':s.xenapi.pool.get_uuid(p),'sr_ref':sr,'sr_uuid':s.xenapi.SR.get_uuid(sr)}))
+finally:s.xenapi.session.logout()
+"#,
+    )
+}
+fn default_sr_journal(prefix: &str, state: &Value, create: bool) -> Result<Value, Error> {
+    ssh_json(&r#"import json
+from pathlib import Path
+c=json.loads(CONFIG);parent=Path('/var/tmp')/c['prefix'];assert c['prefix'].startswith('zz-parity-storage-') and '/' not in c['prefix'] and not parent.is_symlink()
+assert json.loads((parent/'owner.json').read_text())=={'prefix':c['prefix']}
+p=parent/'default-sr-original.json'
+if c['create']:
+ with p.open('x') as f:json.dump(c['state'],f)
+ p.chmod(0o600)
+else:
+ assert not p.is_symlink() and json.loads(p.read_text())==c['state'];p.unlink()
+print(json.dumps({'journal_created':c['create'],'state':c['state']}))
+"#.replace("CONFIG",&serde_json::to_string(&json!({"prefix":prefix,"state":state,"create":create}).to_string())?))
 }
 fn private_path(prefix: &str, prepare: bool) -> Result<Value, Error> {
     ssh_json(&r#"import json,os
@@ -288,6 +315,13 @@ async fn exercise(
     {
         return Err("PBD did not detach".into());
     }
+    if input.qualify_default_sr
+        && c.sr_action(&target.uuid, SrAction::SetDefault)
+            .await
+            .is_ok()
+    {
+        return Err("Detached storage was admitted as default".into());
+    }
     if c.repair_sr(&target.uuid).await? != 1
         || c.pbd_catalog(&target.uuid)
             .await?
@@ -301,6 +335,40 @@ async fn exercise(
         "{}",
         json!({"check":"pbd-detach-repair-scan","sr_uuid":target.uuid,"pbd_uuid":pbd.uuid,"status":"VERIFIED"})
     );
+    if input.qualify_default_sr {
+        if let Some(iso) = inventory.storage.iter().find(|sr| sr.content_type == "iso")
+            && c.sr_action(&iso.uuid, SrAction::SetDefault).await.is_ok()
+        {
+            return Err("ISO storage was admitted as default".into());
+        }
+        c.sr_action(&target.uuid, SrAction::SetDefault).await?;
+        c.sr_action(&target.uuid, SrAction::SetDefault).await?;
+        let mut readonly_settings = input.settings.clone();
+        readonly_settings.read_only = true;
+        let readonly = Connection::login(readonly_settings, &input.password).await?;
+        let rejected = readonly
+            .sr_action(&original_sr.uuid, SrAction::SetDefault)
+            .await
+            .is_err();
+        readonly.logout().await?;
+        if !rejected {
+            return Err("Read-only default change was admitted".into());
+        }
+        let actual = default_sr_state()?;
+        let refreshed = c.inventory().await?;
+        if actual["sr_uuid"] != target.uuid
+            || !refreshed
+                .storage
+                .iter()
+                .any(|sr| sr.uuid == target.uuid && sr.is_default)
+        {
+            return Err("Pool default SR readback differs".into());
+        }
+        println!(
+            "{}",
+            json!({"check":"set-default-sr","actual":actual,"idempotent_retry":true,"readonly_rejected":true,"detached_rejected":true,"iso_rejected":inventory.storage.iter().any(|sr|sr.content_type=="iso"),"status":"VERIFIED"})
+        );
+    }
     let mut snapshot_uuid = None;
     if input.snapshot_wizard {
         let task = c
@@ -511,7 +579,32 @@ async fn main() -> Result<(), Error> {
         .to_owned();
     println!("{}", json!({"phase":"private-path-ready","path":path}));
     let c = Connection::login(input.settings.clone(), &input.password).await?;
+    let original_default = if input.qualify_default_sr {
+        let state = default_sr_state()?;
+        default_sr_journal(&prefix, &state, true)?;
+        println!("{}", json!({"phase":"original-default-sr","state":state}));
+        Some(state)
+    } else {
+        None
+    };
     let result = exercise(&c, &prefix, &location, &input).await;
+    if let Some(original) = original_default {
+        c.sr_action(
+            original["sr_uuid"]
+                .as_str()
+                .ok_or("Original default missing")?,
+            SrAction::SetDefault,
+        )
+        .await?;
+        if default_sr_state()? != original {
+            return Err("Default SR restore differs; journal retained; no cleanup".into());
+        }
+        default_sr_journal(&prefix, &original, false)?;
+        println!(
+            "{}",
+            json!({"phase":"default-sr-restored","state":original,"exact_match":true})
+        );
+    }
     let clean = cleanup(&c, &prefix, &location, &baseline, input.snapshot_wizard).await;
     c.logout().await?;
     clean?;

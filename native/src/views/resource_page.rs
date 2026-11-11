@@ -43,6 +43,22 @@ pub fn storage(
             ui.menu_button(RichText::new("Manage storage…").size(10.5), |ui| {
                 if ui
                     .add_enabled(
+                        !is_read_only(connection) && !sr.is_default && sr.can_be_default,
+                        egui::Button::new(RichText::new("Set as default storage").size(11.0)),
+                    )
+                    .on_hover_text("Use this storage for new virtual disks. Existing disks keep their location.")
+                    .clicked()
+                {
+                    actions.push(UiAction::PromptSrAction {
+                        connection_id: connection_id.clone(),
+                        sr_uuid: sr.uuid.clone(),
+                        sr_name: sr.name.clone(),
+                        action: SrAction::SetDefault,
+                    });
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(
                         !is_read_only(connection),
                         egui::Button::new(RichText::new("Scan storage").size(11.0)),
                     )
@@ -184,6 +200,12 @@ pub fn storage(
                 false,
             );
             ui.add_space(2.0);
+            widgets::kv(
+                ui,
+                "Pool default",
+                if sr.is_default { "Yes" } else { "No" },
+                false,
+            );
             widgets::kv(ui, "UUID", &sr.uuid, true);
         });
         theme::card_frame().show(&mut columns[1], |ui| {

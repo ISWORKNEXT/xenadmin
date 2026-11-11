@@ -1,0 +1,54 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "published-linux-connected",
+      "readback": true,
+      "wait": 2
+    },
+    "readback": [
+      {
+        "uuid": "e79401e5-716f-15bc-7b45-190ce33fbc85",
+        "name_label": "zz-parity-storage-01a1ca75-d335-76c8-9ebe-955568854224-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "b5178226-38a4-1e23-2a39-879f496e8851",
+        "name_label": "zz-parity-storage-01a1ca75-d335-76c8-9ebe-955568854224-template-copy",
+        "power_state": "Halted",
+        "is_a_template": true,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      },
+      {
+        "uuid": "1cab3551-0e53-8083-768b-54c12e54bab4",
+        "name_label": "zz-parity-storage-01a1ca75-d335-76c8-9ebe-955568854224-source",
+        "power_state": "Halted",
+        "is_a_template": false,
+        "is_a_snapshot": false,
+        "VCPUs_max": 1,
+        "VCPUs_at_startup": 1,
+        "memory_static_max": 268435456,
+        "memory_dynamic_min": 268435456,
+        "memory_dynamic_max": 268435456
+      }
+    ]
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

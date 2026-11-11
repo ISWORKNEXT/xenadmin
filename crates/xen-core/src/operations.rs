@@ -333,6 +333,7 @@ pub struct RemoteTask {
 #[serde(rename_all = "snake_case")]
 pub enum SrAction {
     Scan,
+    SetDefault,
     Detach,
     Trim,
     Forget,
@@ -343,6 +344,7 @@ impl SrAction {
     pub fn title(self) -> &'static str {
         match self {
             Self::Scan => "Scan storage",
+            Self::SetDefault => "Set as default storage",
             Self::Detach => "Detach storage repository",
             Self::Trim => "Reclaim storage space",
             Self::Forget => "Forget storage repository",
@@ -542,6 +544,42 @@ impl Connection {
             return Err(ApiError::Protocol);
         }
         match action {
+            SrAction::SetDefault => {
+                let pools = self.records("pool").await?;
+                if pools.len() != 1 {
+                    return Err(ApiError::Protocol);
+                }
+                let (pool_ref, pool) = pools.iter().next().ok_or(ApiError::Protocol)?;
+                if pool["default_SR"].as_str() == Some(sr_ref.as_str()) {
+                    return Ok(());
+                }
+                let hosts = self.records("host").await?;
+                let pbds = self.records("PBD").await?;
+                if sr["content_type"].as_str() == Some("iso")
+                    || !sr["allowed_operations"]
+                        .as_array()
+                        .is_some_and(|ops| ops.iter().any(|op| op.as_str() == Some("vdi_create")))
+                    || (!sr["shared"].as_bool().unwrap_or(false) && hosts.len() > 1)
+                    || !pbds.values().any(|pbd| {
+                        pbd["SR"].as_str() == Some(sr_ref.as_str())
+                            && pbd["currently_attached"].as_bool() == Some(true)
+                    })
+                {
+                    return Err(ApiError::Xen("Select attached writable storage. A multi-host pool requires shared default storage.".into()));
+                }
+                self.request::<Value>(
+                    "pool.set_default_SR",
+                    json!([self.session, pool_ref, sr_ref]),
+                )
+                .await?;
+                let actual: String = self
+                    .request("pool.get_default_SR", json!([self.session, pool_ref]))
+                    .await?;
+                if actual != sr_ref {
+                    return Err(ApiError::Xen("The pool default storage changed before readback. Refresh and review the current default.".into()));
+                }
+                Ok(())
+            }
             SrAction::Trim => self.sr_trim(sr_uuid).await,
             SrAction::Detach => {
                 let pbds = self.records("PBD").await?;

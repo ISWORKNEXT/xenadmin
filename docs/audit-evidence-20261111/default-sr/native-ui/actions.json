@@ -1,0 +1,154 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "snap": "private-current-default",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1358,
+        267
+      ],
+      "wait": 1,
+      "snap": "current-default-disabled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        943,
+        265
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        137,
+        425
+      ],
+      "wait": 2,
+      "snap": "original-nondefault"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1355,
+        267
+      ],
+      "wait": 1,
+      "snap": "original-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1320,
+        304
+      ],
+      "wait": 4,
+      "snap": "original-default-restored"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        174,
+        488
+      ],
+      "wait": 2,
+      "snap": "private-nondefault"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1356,
+        267
+      ],
+      "wait": 1,
+      "snap": "private-can-select"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1320,
+        304
+      ],
+      "wait": 4,
+      "snap": "private-set-by-ui"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        425
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1356,
+        267
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1320,
+        304
+      ],
+      "wait": 4,
+      "snap": "original-final-restored"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        136,
+        456
+      ],
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1356,
+        267
+      ],
+      "wait": 1,
+      "snap": "iso-default-disabled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]
