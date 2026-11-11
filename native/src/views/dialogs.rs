@@ -21,7 +21,7 @@ pub fn show(
     if state.vm_copy.is_some() {
         super::vm_copy::show(ctx, state, workspace, actions);
     }
-    if state.properties.is_some() {
+    if state.properties.is_some() && state.pool_options.is_none() {
         super::properties::show(ctx, state, workspace, actions);
     }
     if state.xva_dialog.is_some() {
@@ -137,6 +137,9 @@ pub fn show(
     }
     if state.sr_action_confirm.is_some() {
         sr_action_confirm(ctx, state, actions);
+    }
+    if state.network_chooser.is_some() {
+        network_chooser(ctx, state, actions);
     }
     if state.network_create_dialog.is_some() {
         network_create(ctx, state, actions);
@@ -900,6 +903,61 @@ fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
     }
     if close {
         actions.push(UiAction::CloseSaveSearch);
+    }
+}
+
+fn network_chooser(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+    let Some(bonded) = state.network_chooser.as_mut() else {
+        return;
+    };
+    let mut close = false;
+    let response = egui::Modal::new(egui::Id::unique("network-type"))
+        .frame(theme::modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width(480.0);
+            ui.heading("New Network");
+            ui.label("Select network type");
+            ui.add_space(12.0);
+            ui.radio_value(bonded, false, "External Network");
+            ui.label("Connect virtual machines to an external network using a VLAN.");
+            ui.radio_value(bonded, true, "Bonded Network");
+            ui.label("Combine physical NICs into a bond.");
+            ui.add_enabled(
+                false,
+                egui::RadioButton::new(false, "Single-Server Private Network"),
+            )
+            .on_disabled_hover_text("Not implemented yet");
+            ui.label("Not implemented yet");
+            ui.add_space(12.0);
+            if state.pif_catalog_loading {
+                ui.spinner();
+                ui.label("Reading physical interfaces…");
+            }
+            if let Some(error) = &state.pif_catalog_error {
+                ui.colored_label(theme::red(), error);
+            }
+            ui.horizontal(|ui| {
+                if ui.button("Cancel").clicked() {
+                    close = true;
+                }
+                if ui
+                    .add_enabled(
+                        !state.pif_catalog_loading && state.pif_catalog_error.is_none(),
+                        widgets::primary_button("Next >"),
+                    )
+                    .clicked()
+                {
+                    close = true;
+                    actions.push(if *bonded {
+                        UiAction::OpenBondCreate
+                    } else {
+                        UiAction::OpenVlanCreate
+                    });
+                }
+            });
+        });
+    if close || response.should_close() {
+        actions.push(UiAction::CloseNetworkChooser);
     }
 }
 

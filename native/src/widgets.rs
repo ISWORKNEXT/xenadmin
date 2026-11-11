@@ -307,30 +307,50 @@ pub fn toasts(ctx: &egui::Context, state: &UiState, actions: &mut Vec<UiAction>)
 }
 
 pub fn tab_bar(ui: &mut Ui, tabs: &[&str], current: &mut usize) {
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        for (index, label) in tabs.iter().enumerate() {
-            let selected = index == *current;
-            let response = ui.add(
-                Button::new(RichText::new(*label).size(11.5).color(if selected {
-                    fg()
-                } else {
-                    muted_fg()
-                }))
-                .frame(false)
-                .corner_radius(CornerRadius::same(6)),
-            );
-            if selected {
-                let rect = response.rect;
-                ui.painter().hline(
-                    rect.x_range(),
-                    rect.bottom() + 1.0,
-                    Stroke::new(1.5, accent()),
+    let response = ui
+        .horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.spacing_mut().button_padding = egui::vec2(12.0, 0.0);
+            for (index, label) in tabs.iter().enumerate() {
+                let selected = index == *current;
+                let response = ui.add(
+                    Button::new(RichText::new(*label).size(11.0).color(if selected {
+                        fg()
+                    } else {
+                        muted_fg()
+                    }))
+                    .min_size(egui::vec2(0.0, 28.0))
+                    .fill(if selected {
+                        panel_2()
+                    } else {
+                        Color32::TRANSPARENT
+                    })
+                    .stroke(Stroke::NONE)
+                    .corner_radius(CornerRadius::ZERO),
                 );
+                if response.hovered() && !selected {
+                    ui.painter().rect_filled(
+                        response.rect,
+                        CornerRadius::ZERO,
+                        with_alpha(accent(), 20),
+                    );
+                }
+                if selected {
+                    ui.painter().hline(
+                        response.rect.x_range(),
+                        response.rect.bottom(),
+                        Stroke::new(2.0, accent()),
+                    );
+                }
+                if response.clicked() {
+                    *current = index;
+                }
             }
-            if response.clicked() {
-                *current = index;
-            }
-        }
-    });
+        })
+        .response;
+    ui.painter().hline(
+        ui.max_rect().x_range(),
+        response.rect.bottom() + 1.0,
+        Stroke::new(1.0, border()),
+    );
 }

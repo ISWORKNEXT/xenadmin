@@ -111,14 +111,7 @@ fn connections_panel(
             ui,
             &format!("Connections {}", workspace.connections.len()),
             "Select a pool to narrow the workspace. Each host stays connected independently.",
-            |ui| {
-                if ui
-                    .add(egui::Button::new(RichText::new("+  Add host").size(10.5)).frame(false))
-                    .clicked()
-                {
-                    state.connect = Some(crate::state::ConnectState::empty());
-                }
-            },
+            |_ui| {},
         );
         ui.add_space(10.0);
         if workspace.connections.is_empty() {

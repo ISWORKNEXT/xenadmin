@@ -20,6 +20,11 @@ pub fn show(
     let read_only = connection.is_none_or(is_read_only);
     let available = connection.is_some_and(is_online);
     let writable = available && !read_only;
+    let pool_options = dialog.target.kind == xen_core::properties::ObjectKind::Pool
+        || (dialog.target.kind == xen_core::properties::ObjectKind::Host
+            && connection
+                .and_then(crate::state::connection_inventory)
+                .is_some_and(|inventory| inventory.hosts.len() == 1));
     let mut close = false;
     let response = egui::Modal::new(egui::Id::unique("object-properties"))
         .frame(theme::modal_frame())
@@ -65,6 +70,9 @@ pub fn show(
             if let Some(error) = &dialog.error {
                 ui.add_space(8.0);
                 egui::ScrollArea::vertical().id_salt(("property-error", sequence)).max_height(80.0).show(ui, |ui| { ui.label(RichText::new(error).color(theme::red())); });
+            }
+            if pool_options && ui.add_enabled(available && !dialog.submitting, egui::Button::new("Pool options… (VM autostart)")).clicked() {
+                actions.push(UiAction::OpenPoolOptions { connection_id: dialog.connection_id.clone() });
             }
             ui.add_space(14.0);
             ui.horizontal(|ui| {

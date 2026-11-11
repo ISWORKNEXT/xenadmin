@@ -1,0 +1,19 @@
+{
+  "host_count": 1,
+  "pools": [
+    {
+      "uuid": "366d4165-4bdd-84e8-3e5e-84542311b5c3",
+      "auto_poweron": null
+    }
+  ],
+  "pifs": [
+    {
+      "uuid": "3dc0505f-f8dd-fb15-ab54-9a4ff80a765c",
+      "device": "eth0",
+      "physical": true,
+      "management": true,
+      "currently_attached": true,
+      "VLAN": -1
+    }
+  ]
+}

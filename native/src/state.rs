@@ -5,7 +5,7 @@ use chrono::{DateTime, Local};
 
 use crate::config::{GroupBy, SavedSearch};
 use xen_core::{
-    host::{DataSection, HostDetails, InfoGroup},
+    host::{HostDetails, InfoGroup},
     network::PifSummary,
     operations::{TaskStatus, VmAction},
     performance::HostPerformance,
@@ -128,6 +128,11 @@ impl ListKind {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum ObjectKey {
     Home,
+    Group(String),
+    Vdi {
+        connection_id: String,
+        vdi_uuid: String,
+    },
     Pool(String),
     Host {
         connection_id: String,
@@ -173,9 +178,10 @@ pub enum ObjectKey {
 impl ObjectKey {
     pub fn connection_id(&self) -> Option<&str> {
         match self {
-            ObjectKey::Home | ObjectKey::Tasks => None,
+            ObjectKey::Home | ObjectKey::Tasks | ObjectKey::Group(_) => None,
             ObjectKey::Pool(id) => Some(id),
-            ObjectKey::Host { connection_id, .. }
+            ObjectKey::Vdi { connection_id, .. }
+            | ObjectKey::Host { connection_id, .. }
             | ObjectKey::Vm { connection_id, .. }
             | ObjectKey::Template { connection_id, .. }
             | ObjectKey::Snapshot { connection_id, .. }
@@ -205,10 +211,15 @@ pub enum VmTab {
     Memory,
     Snapshots,
     Console,
+    Home,
+    Nics,
+    Gpu,
+    Usb,
+    Search,
 }
 
 impl VmTab {
-    pub const ALL: [VmTab; 7] = [
+    pub const ALL: [VmTab; 8] = [
         VmTab::General,
         VmTab::Memory,
         VmTab::Storage,
@@ -216,6 +227,7 @@ impl VmTab {
         VmTab::Console,
         VmTab::Performance,
         VmTab::Snapshots,
+        VmTab::Search,
     ];
 
     pub fn label(self) -> &'static str {
@@ -227,11 +239,21 @@ impl VmTab {
             VmTab::Memory => "Memory",
             VmTab::Snapshots => "Snapshots",
             VmTab::Console => "Console",
+            VmTab::Home => "Home",
+            VmTab::Nics => "NICs",
+            VmTab::Gpu => "GPU",
+            VmTab::Usb => "USB",
+            VmTab::Search => "Search",
         }
     }
 
     pub fn from_key(key: &str) -> Option<Self> {
         match key.to_ascii_lowercase().as_str() {
+            "home" => Some(VmTab::Home),
+            "nics" => Some(VmTab::Nics),
+            "gpu" => Some(VmTab::Gpu),
+            "usb" => Some(VmTab::Usb),
+            "search" => Some(VmTab::Search),
             "general" => Some(VmTab::General),
             "performance" | "perf" => Some(VmTab::Performance),
             "storage" | "disks" => Some(VmTab::Storage),
@@ -543,18 +565,6 @@ pub enum HostTab {
 }
 
 impl HostTab {
-    pub const ALL: [HostTab; 9] = [
-        HostTab::General,
-        HostTab::Cpu,
-        HostTab::Performance,
-        HostTab::Networking,
-        HostTab::Storage,
-        HostTab::Hardware,
-        HostTab::Updates,
-        HostTab::Certificates,
-        HostTab::Health,
-    ];
-
     pub fn from_key(key: &str) -> Option<Self> {
         match key.to_ascii_lowercase().as_str() {
             "general" => Some(HostTab::General),
@@ -569,27 +579,12 @@ impl HostTab {
             _ => None,
         }
     }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            HostTab::General => "General",
-            HostTab::Cpu => "CPU & memory",
-            HostTab::Performance => "Performance",
-            HostTab::Networking => "Networking",
-            HostTab::Storage => "Storage",
-            HostTab::Hardware => "Hardware",
-            HostTab::Updates => "Updates",
-            HostTab::Certificates => "Certificates",
-            HostTab::Health => "Health",
-        }
-    }
 }
 
 #[derive(Clone)]
 pub struct HostRoute {
     pub connection_id: String,
     pub host_uuid: String,
-    pub host_name: String,
 }
 
 #[derive(Clone)]
@@ -1397,6 +1392,7 @@ pub struct UiState {
     pub tree_preferences: crate::config::TreePreferences,
     pub tree_query: String,
     pub tree_expanded: HashSet<String>,
+    pub object_tab: VmTab,
     pub vm_subtab: VmTab,
     pub vm_last_tabs: [VmTab; 3],
     pub vm_state: LoadState<VmDetails>,
@@ -1432,6 +1428,7 @@ pub struct UiState {
     pub sr_create_dialog: Option<SrCreateDialog>,
     pub sr_introduce_dialog: Option<SrIntroduceDialog>,
     pub sr_reattach_dialog: Option<SrReattachDialog>,
+    pub network_chooser: Option<bool>,
     pub network_create_dialog: Option<NetworkCreateDialog>,
     pub bond_create_dialog: Option<BondCreateDialog>,
     pub vlan_create_dialog: Option<VlanCreateDialog>,
@@ -1485,6 +1482,7 @@ pub struct UiState {
     pub updated: Option<DateTime<Local>>,
     pub host_route: Option<HostRoute>,
     pub host_tab: HostTab,
+    pub page_hosts: std::collections::HashMap<(String, String), LoadState<HostDetails>>,
     pub host_state: LoadState<HostDetails>,
     pub auth_state: LoadState<xen_core::auth::AuthInfo>,
     pub auth_seq: u64,
@@ -1530,6 +1528,7 @@ impl Default for UiState {
             tree_preferences: crate::config::load_ui_preferences().tree,
             tree_query: String::new(),
             tree_expanded: HashSet::new(),
+            object_tab: VmTab::General,
             vm_subtab: VmTab::General,
             vm_last_tabs: [VmTab::General; 3],
             vm_state: LoadState::Idle,
@@ -1565,6 +1564,7 @@ impl Default for UiState {
             sr_create_dialog: None,
             sr_introduce_dialog: None,
             sr_reattach_dialog: None,
+            network_chooser: None,
             network_create_dialog: None,
             bond_create_dialog: None,
             vlan_create_dialog: None,
@@ -1618,6 +1618,7 @@ impl Default for UiState {
             updated: None,
             host_route: None,
             host_tab: HostTab::General,
+            page_hosts: Default::default(),
             host_state: LoadState::Idle,
             auth_state: LoadState::Idle,
             auth_seq: 0,
@@ -1693,7 +1694,15 @@ pub enum UiAction {
         host_uuid: String,
         host_name: String,
     },
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     CloseHostDetails,
+    LoadPageHost {
+        connection_id: String,
+        host_uuid: String,
+    },
     ReloadHostDetails,
     LoadPerformance,
     OpenResource {
@@ -1721,21 +1730,41 @@ pub enum UiAction {
     OpenVmResources,
     CloseVmResources,
     SaveVmResources,
+    SetDvdMedia {
+        vbd_uuid: String,
+        iso_uuid: Option<String>,
+    },
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     OpenIsoDialog {
         vbd_uuid: String,
         drive: String,
     },
     CloseIsoDialog,
     SaveIso,
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     DismissAlert {
         connection_id: String,
         message_uuid: String,
     },
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     LoadPbdCatalog {
         seq: u64,
         connection_id: String,
         sr_uuid: String,
     },
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     SetPbdPlugged {
         connection_id: String,
         pbd_uuid: String,
@@ -1749,6 +1778,10 @@ pub enum UiAction {
         seq: u64,
         connection_id: String,
     },
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     SetPifPlugged {
         connection_id: String,
         pif_uuid: String,
@@ -1760,6 +1793,8 @@ pub enum UiAction {
     OpenVlanCreate,
     CloseVlanCreate,
     SaveVlanCreate,
+    OpenNetworkChooser,
+    CloseNetworkChooser,
     OpenNetworkCreate,
     CloseNetworkCreate,
     SaveNetwork,
@@ -1894,6 +1929,10 @@ pub enum UiAction {
     OpenAttachVdi,
     CloseAttachVdi,
     SaveAttachVdi,
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     SetVbdBootable {
         vbd_uuid: String,
         bootable: bool,
@@ -1906,6 +1945,10 @@ pub enum UiAction {
     },
     CloseMoveDisk,
     SaveMoveDisk,
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     SetVbdMode {
         vbd_uuid: String,
         mode: String,
@@ -1921,6 +1964,10 @@ pub enum UiAction {
     CloseSaveSearch,
     SaveCurrentSearch,
     AddCdDrive,
+    #[expect(
+        dead_code,
+        reason = "Legacy dispatch retained while object commands move to upstream menus and properties"
+    )]
     OpenDiskResize {
         vdi_uuid: String,
         name: String,
@@ -2190,13 +2237,6 @@ pub fn task_status_label(status: TaskStatus) -> &'static str {
         TaskStatus::Failed => "failed",
         TaskStatus::Cancelled => "cancelled",
         TaskStatus::Unreachable => "unreachable",
-    }
-}
-
-pub fn section_columns(section: &DataSection) -> Vec<String> {
-    match section {
-        DataSection::Ready { columns, .. } => columns.clone(),
-        _ => Vec::new(),
     }
 }
 

@@ -99,7 +99,13 @@ pub fn vms(
             }
         });
     });
-    toolbar(ui, state, actions, targets.len(), templates);
+    toolbar(
+        ui,
+        state,
+        actions,
+        targets.len(),
+        if templates { "templates" } else { "machines" },
+    );
     if !templates {
         bulk_bar(ui, state, workspace, actions, &targets);
     }
@@ -428,12 +434,12 @@ fn select_all(
     }
 }
 
-fn toolbar(
+pub(super) fn toolbar(
     ui: &mut Ui,
     state: &mut UiState,
     actions: &mut Vec<UiAction>,
     count: usize,
-    templates: bool,
+    noun: &str,
 ) {
     ui.horizontal(|ui| {
         ui.scope(|ui| {
@@ -461,7 +467,7 @@ fn toolbar(
             state.group_by = group_by;
             state.page = 0;
         }
-        ui.menu_button(RichText::new("Saved searches").size(10.5), |ui| {
+        ui.menu_button(RichText::new("Saved Searches ▾").size(10.5), |ui| {
             if state.saved_searches.is_empty() {
                 ui.label(
                     RichText::new("No saved searches yet.")
@@ -529,13 +535,9 @@ fn toolbar(
             state.page = 0;
         }
         ui.label(
-            RichText::new(if templates {
-                format::plural(count, "template", "templates")
-            } else {
-                format::plural(count, "machine", "machines")
-            })
-            .size(10.0)
-            .color(dim_fg()),
+            RichText::new(format!("{count} {noun}"))
+                .size(10.0)
+                .color(dim_fg()),
         );
     });
     ui.add_space(6.0);

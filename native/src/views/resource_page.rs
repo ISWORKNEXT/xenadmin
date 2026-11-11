@@ -1,14 +1,14 @@
-use egui::{Align, Layout, RichText, Sense, Ui, Vec2};
-use egui_extras::{Column, TableBuilder};
-use xen_core::{operations::SrAction, workspace::WorkspaceView};
-
-use crate::format;
-use crate::state::{
-    ObjectKey, UiAction, UiState, connection_name, find_network, find_storage, is_read_only,
+use super::{
+    infrastructure_page::{disabled, properties, section, table},
+    object_page::{self, Selection, value_row},
+    sidebar::TreeIcon,
 };
-use crate::theme;
-use crate::theme::*;
-use crate::widgets;
+use crate::{
+    format,
+    state::{self, ObjectKey, UiAction, UiState, VmTab},
+};
+use egui::Ui;
+use xen_core::{operations::SrAction, properties::ObjectKind, workspace::WorkspaceView};
 
 pub fn storage(
     ui: &mut Ui,
@@ -17,395 +17,190 @@ pub fn storage(
     actions: &mut Vec<UiAction>,
 ) {
     let Some(ObjectKey::Storage {
-        connection_id,
+        connection_id: id,
         sr_uuid,
-    }) = active_key(state)
+    }) = state.selection.as_ref().map(|s| s.key.clone())
     else {
         return;
     };
-    let Some((connection, sr)) = find_storage(workspace, &connection_id, &sr_uuid) else {
-        missing(ui, "Storage repository is no longer present.");
+    let Some((connection, sr)) = state::find_storage(workspace, &id, &sr_uuid) else {
+        ui.label("Storage repository unavailable.");
         return;
     };
-    header(
+    object_page::title_strip(
         ui,
-        "S",
+        connection,
         &sr.name,
-        &format!("{} · {}", connection_name(connection), sr.storage_type),
-        &sr.uuid,
-        is_read_only(connection),
-        &connection_id,
-        actions,
+        TreeIcon::Storage,
+        if sr.pbd_attached > 0 {
+            "Running"
+        } else {
+            "Halted"
+        },
     );
-
-    ui.horizontal(|ui| {
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.menu_button(RichText::new("Manage storage…").size(10.5), |ui| {
+    object_page::tab_strip(
+        ui,
+        &object_page::tabs_for(Selection::Sr),
+        &mut state.object_tab,
+    );
+    ui.add_space(6.0);
+    match state.object_tab {
+        VmTab::Search => super::search_page::show(ui, state, workspace, actions),
+        VmTab::General => {
+            section(ui, "General", |ui| {
+                value_row(ui, "Name", &sr.name);
+                value_row(ui, "Description", &sr.description);
+                value_row(ui, "Type", &sr.storage_type);
+                value_row(ui, "Shared", if sr.shared { "Yes" } else { "No" });
+                value_row(ui, "Size", &format::bytes(sr.total));
+                value_row(ui, "Usage", &format::bytes(sr.used));
+                value_row(ui, "UUID", &sr.uuid);
+            });
+            section(ui, "Status", |ui| {
+                value_row(
+                    ui,
+                    "Connection",
+                    if sr.pbd_attached > 0 {
+                        "Connected"
+                    } else {
+                        "Detached"
+                    },
+                );
+                value_row(
+                    ui,
+                    "Attachments",
+                    &format!("{} / {}", sr.pbd_attached, sr.pbd_count),
+                );
+            });
+            section(ui, "Multipathing", |ui| {
+                // No new reads: retain the host collector's explicit availability values.
+                let mut found = false;
+                for ((cid, _), details) in &state.page_hosts {
+                    if cid != &id {
+                        continue;
+                    }
+                    if let Some(details) = details.ready()
+                        && let xen_core::host::DataSection::Ready { rows, .. } = &details.storage
+                    {
+                        for r in rows {
+                            let is_sr = r.groups.iter().any(|g| {
+                                g.title == "Storage repository"
+                                    && g.fields
+                                        .iter()
+                                        .any(|f| f.label == "UUID" && f.value == sr_uuid)
+                            });
+                            if is_sr {
+                                for g in &r.groups {
+                                    if g.title == "Multipathing" || g.title == "Path health" {
+                                        for f in &g.fields {
+                                            value_row(ui, &f.label, &f.value);
+                                            found = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if !found {
+                    ui.label("Multipathing information unavailable.");
+                }
+            });
+        }
+        VmTab::Storage => {
+            if state.sr_vdis_sr.as_deref() != Some(&sr_uuid) {
+                state.sr_vdis.clear();
+                state.sr_vdis_error = None;
+                state.sr_vdis_sr = Some(sr_uuid.clone());
+                state.sr_vdis_loading = true;
+                state.sr_vdis_seq += 1;
+                actions.push(UiAction::LoadSrVdis {
+                    seq: state.sr_vdis_seq,
+                    connection_id: id.clone(),
+                    sr_uuid: sr_uuid.clone(),
+                });
+            }
+            if state.sr_vdis_loading {
+                ui.spinner();
+            }
+            if let Some(error) = &state.sr_vdis_error {
+                ui.colored_label(crate::theme::red(), error);
+            }
+            let rows = state
+                .sr_vdis
+                .iter()
+                .map(|d| {
+                    (
+                        d.uuid.clone(),
+                        vec![
+                            d.name.clone(),
+                            d.description.clone(),
+                            format::bytes(d.virtual_size),
+                            d.attached_to.clone(),
+                        ],
+                    )
+                })
+                .collect::<Vec<_>>();
+            let selected = table(
+                ui,
+                "sr-disks",
+                &["Name", "Description", "Size", "VM"],
+                &rows,
+            );
+            let disk = state.sr_vdis.iter().find(|d| d.uuid == selected);
+            ui.horizontal(|ui| {
+                disabled(ui, "Add…");
                 if ui
-                    .add_enabled(!is_read_only(connection), egui::Button::new("Scan storage"))
+                    .add_enabled(
+                        !state::is_read_only(connection),
+                        egui::Button::new("Rescan"),
+                    )
                     .clicked()
                 {
                     actions.push(UiAction::PromptSrAction {
-                        connection_id: connection_id.clone(),
-                        sr_uuid: sr.uuid.clone(),
+                        connection_id: id.clone(),
+                        sr_uuid: sr_uuid.clone(),
                         sr_name: sr.name.clone(),
                         action: SrAction::Scan,
                     });
-                    ui.close();
                 }
-            });
-        });
-    });
-    ui.add_space(4.0);
-
-    ui.columns(2, |columns| {
-        theme::card_frame().show(&mut columns[0], |ui| {
-            ui.set_width(ui.available_width());
-            widgets::section_title(ui, "Storage repository", None);
-            ui.add_space(4.0);
-            widgets::kv(ui, "Name", &sr.name, false);
-            widgets::kv(ui, "Type", &sr.storage_type, false);
-            widgets::kv(
-                ui,
-                "Scope",
-                if sr.shared { "Shared" } else { "Local" },
-                false,
-            );
-            widgets::kv(
-                ui,
-                "PBDs",
-                &format!("{} attached / {}", sr.pbd_attached, sr.pbd_count),
-                false,
-            );
-            widgets::kv(
-                ui,
-                "Description",
-                if sr.description.is_empty() {
-                    "No description"
-                } else {
-                    &sr.description
-                },
-                false,
-            );
-            ui.add_space(2.0);
-            widgets::kv(
-                ui,
-                "Pool default",
-                if sr.is_default { "Yes" } else { "No" },
-                false,
-            );
-            widgets::kv(ui, "UUID", &sr.uuid, true);
-        });
-        theme::card_frame().show(&mut columns[1], |ui| {
-            ui.set_width(ui.available_width());
-            widgets::section_title(ui, "Capacity", None);
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(format::bytes(sr.used)).size(23.0).strong());
-                ui.label(
-                    RichText::new(if sr.total == 0 {
-                        "capacity not reported".into()
-                    } else {
-                        format!("/ {}", format::bytes(sr.total))
-                    })
-                    .size(11.0)
-                    .color(muted_fg()),
-                );
-            });
-            ui.add_space(4.0);
-            widgets::resource_bar(ui, sr.used, sr.total, green(), 6.0);
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Used").size(9.0).color(dim_fg()));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(if sr.total == 0 {
-                            "—".into()
-                        } else {
-                            format!(
-                                "{:.0}% · {} free",
-                                format::percent(sr.used, sr.total),
-                                format::bytes(sr.total.saturating_sub(sr.used))
-                            )
-                        })
-                        .size(9.0)
-                        .color(dim_fg()),
-                    );
-                });
-            });
-        });
-    });
-
-    ui.add_space(8.0);
-    if state.sr_vdis_sr.as_deref() != Some(sr.uuid.as_str()) {
-        state.sr_vdis = Vec::new();
-        state.sr_vdis_error = None;
-        state.sr_vdis_sr = Some(sr.uuid.clone());
-        state.sr_vdis_loading = true;
-        state.sr_vdis_seq += 1;
-        actions.push(UiAction::LoadSrVdis {
-            seq: state.sr_vdis_seq,
-            connection_id: connection_id.clone(),
-            sr_uuid: sr.uuid.clone(),
-        });
-    }
-    theme::card_frame().show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Virtual disks").size(15.0).strong());
-            widgets::badge(ui, state.sr_vdis.len().to_string(), muted_fg());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                disabled(ui, "Move…");
+                let deletable = !state::is_read_only(connection)
+                    && sr.content_type != "iso"
+                    && disk.is_some_and(|d| d.attached_to.is_empty() && !d.missing && !d.read_only);
                 if ui
-                    .add(egui::Button::new(RichText::new("Refresh").size(10.0)))
+                    .add_enabled(deletable, egui::Button::new("Delete"))
+                    .on_disabled_hover_text("Select an unattached, writable disk.")
                     .clicked()
                 {
-                    state.sr_vdis_sr = None;
-                }
-            });
-        });
-        ui.add_space(4.0);
-        if state.sr_vdis_loading {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(RichText::new("Loading disks…").size(10.5).color(muted_fg()));
-            });
-            return;
-        }
-        if let Some(error) = &state.sr_vdis_error {
-            ui.label(RichText::new(error).size(10.0).color(red()));
-            return;
-        }
-        if state.sr_vdis.is_empty() {
-            ui.label(
-                RichText::new("No virtual disks in this storage repository.")
-                    .size(10.5)
-                    .color(dim_fg()),
-            );
-            return;
-        }
-        let can_delete = !is_read_only(connection) && sr.content_type != "iso";
-        TableBuilder::new(ui)
-            .id_salt("sr-vdi-table")
-            .striped(true)
-            .cell_layout(Layout::left_to_right(Align::Center))
-            .column(Column::remainder().at_least(160.0).clip(true))
-            .column(Column::exact(90.0))
-            .column(Column::exact(130.0).clip(true))
-            .column(Column::exact(70.0))
-            .column(Column::exact(160.0))
-            .header(26.0, |mut header| {
-                for title in ["Name", "Size", "Attached VM", "Type", "Actions"] {
-                    header.col(|ui| {
-                        ui.label(RichText::new(title).size(9.5).color(muted_fg()));
+                    let d = disk.unwrap();
+                    actions.push(UiAction::PromptDeleteVdi {
+                        vdi_uuid: d.uuid.clone(),
+                        name: d.name.clone(),
+                        size: d.virtual_size,
                     });
                 }
-            })
-            .body(|body| {
-                body.rows(28.0, state.sr_vdis.len(), |mut row| {
-                    let vdi = &state.sr_vdis[row.index()];
-                    row.col(|ui| {
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(if vdi.name.is_empty() {
-                                    "(unnamed)"
-                                } else {
-                                    &vdi.name
-                                })
-                                .size(10.5),
-                            )
-                            .truncate(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(format::bytes(vdi.virtual_size))
-                                .monospace()
-                                .size(9.5)
-                                .color(muted_fg()),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if vdi.attached_to.is_empty() {
-                                "Unattached"
-                            } else {
-                                &vdi.attached_to
-                            })
-                            .size(9.5)
-                            .color(if vdi.attached_to.is_empty() {
-                                dim_fg()
-                            } else {
-                                muted_fg()
-                            }),
-                        );
-                    });
-                    row.col(|ui| {
-                        let (label, color) = if vdi.missing {
-                            ("Missing", red())
-                        } else if vdi.read_only {
-                            ("Base", amber())
-                        } else {
-                            ("Disk", muted_fg())
-                        };
-                        ui.label(RichText::new(label).size(9.0).color(color));
-                    });
-                    row.col(|ui| {
-                        if ui.small_button("Properties…").clicked() {
-                            actions.push(UiAction::OpenProperties {
-                                connection_id: connection_id.clone(),
-                                target: xen_core::properties::ObjectTarget {
-                                    kind: xen_core::properties::ObjectKind::Disk,
-                                    uuid: vdi.uuid.clone(),
-                                },
-                            });
-                        }
-                        let deletable = can_delete && vdi.attached_to.is_empty() && !vdi.missing;
-                        if ui
-                            .add_enabled(
-                                deletable,
-                                egui::Button::new(RichText::new("Delete").size(9.5).color(red()))
-                                    .small(),
-                            )
-                            .on_disabled_hover_text(if vdi.attached_to.is_empty() {
-                                "ISO media or missing disks cannot be deleted here"
-                            } else {
-                                "Detach the disk from its VM first"
-                            })
-                            .clicked()
-                        {
-                            actions.push(UiAction::PromptDeleteVdi {
-                                vdi_uuid: vdi.uuid.clone(),
-                                name: vdi.name.clone(),
-                                size: vdi.virtual_size,
-                            });
-                        }
-                    });
-                });
-            });
-    });
-
-    ui.add_space(8.0);
-    if state.pbd_catalog_sr.as_deref() != Some(sr.uuid.as_str()) {
-        state.pbd_catalog = Vec::new();
-        state.pbd_catalog_error = None;
-        state.pbd_catalog_sr = Some(sr.uuid.clone());
-        state.pbd_catalog_loading = true;
-        state.pbd_catalog_seq += 1;
-        actions.push(UiAction::LoadPbdCatalog {
-            seq: state.pbd_catalog_seq,
-            connection_id: connection_id.clone(),
-            sr_uuid: sr.uuid.clone(),
-        });
-    }
-    theme::card_frame().show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new("Storage attachments (PBDs)")
-                    .size(15.0)
-                    .strong(),
-            );
-            widgets::badge(ui, state.pbd_catalog.len().to_string(), muted_fg());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if ui
-                    .add(egui::Button::new(RichText::new("Refresh").size(10.0)))
+                    .add_enabled(disk.is_some(), egui::Button::new("Properties"))
                     .clicked()
                 {
-                    state.pbd_catalog_sr = None;
+                    properties(actions, &id, ObjectKind::Disk, &selected);
                 }
             });
-        });
-        ui.add_space(4.0);
-        if state.pbd_catalog_loading {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(
-                    RichText::new("Loading storage attachments…")
-                        .size(10.5)
-                        .color(muted_fg()),
-                );
-            });
-            return;
-        }
-        if let Some(error) = &state.pbd_catalog_error {
-            ui.label(RichText::new(error).size(10.0).color(red()));
-            return;
-        }
-        if state.pbd_catalog.is_empty() {
-            ui.label(
-                RichText::new("No PBDs. Use Reattach storage repository to create one.")
-                    .size(10.5)
-                    .color(dim_fg()),
-            );
-            return;
-        }
-        TableBuilder::new(ui)
-            .id_salt("sr-pbds")
-            .striped(true)
-            .cell_layout(Layout::left_to_right(Align::Center))
-            .column(Column::remainder().at_least(160.0))
-            .column(Column::initial(220.0))
-            .column(Column::exact(80.0))
-            .column(Column::exact(90.0))
-            .header(26.0, |mut header| {
-                for title in ["Host", "Location", "Attached", "Actions"] {
-                    header.col(|ui| {
-                        ui.label(RichText::new(title).size(9.5).color(muted_fg()));
-                    });
-                }
-            })
-            .body(|body| {
-                body.rows(28.0, state.pbd_catalog.len(), |mut row| {
-                    let pbd = &state.pbd_catalog[row.index()];
-                    row.col(|ui| {
-                        ui.add(
-                            egui::Label::new(RichText::new(&pbd.host_name).size(10.5)).truncate(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(if pbd.location.is_empty() {
-                                    "—"
-                                } else {
-                                    &pbd.location
-                                })
-                                .monospace()
-                                .size(9.0)
-                                .color(muted_fg()),
-                            )
-                            .truncate(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if pbd.attached { "Yes" } else { "No" })
-                                .size(9.5)
-                                .color(if pbd.attached { green() } else { dim_fg() }),
-                        );
-                    });
-                    row.col(|ui| {
-                        if is_read_only(connection) {
-                            ui.label(RichText::new("—").size(9.5).color(dim_fg()));
-                        } else if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new(if pbd.attached { "Unplug" } else { "Plug" })
-                                        .size(9.5),
-                                )
-                                .small(),
-                            )
-                            .clicked()
-                        {
-                            actions.push(UiAction::SetPbdPlugged {
-                                connection_id: connection_id.clone(),
-                                pbd_uuid: pbd.uuid.clone(),
-                                plugged: !pbd.attached,
-                            });
-                        }
-                    });
+            if let Some(disk) = disk
+                && ui.link(format!("Open {}", disk.name)).clicked()
+            {
+                actions.push(UiAction::OpenObject {
+                    key: ObjectKey::Vdi {
+                        connection_id: id,
+                        vdi_uuid: disk.uuid.clone(),
+                    },
+                    title: disk.name.clone(),
                 });
-            });
-    });
+            }
+        }
+        _ => {}
+    }
 }
 
 pub fn network(
@@ -417,319 +212,63 @@ pub fn network(
     let Some(ObjectKey::Network {
         connection_id,
         network_uuid,
-    }) = active_key(state)
+    }) = state.selection.as_ref().map(|s| s.key.clone())
     else {
         return;
     };
-    let Some((connection, network)) = find_network(workspace, &connection_id, &network_uuid) else {
-        missing(ui, "Network is no longer present.");
+    let Some((connection, network)) = state::find_network(workspace, &connection_id, &network_uuid)
+    else {
         return;
     };
-    header(
+    object_page::title_strip(ui, connection, &network.name, TreeIcon::Network, "Running");
+    object_page::tab_strip(
         ui,
-        "N",
-        &network.name,
-        &format!("{} · {}", connection_name(connection), network.bridge),
-        &network.uuid,
-        is_read_only(connection),
-        &connection_id,
-        actions,
+        &object_page::tabs_for(Selection::Network),
+        &mut state.object_tab,
     );
-
-    if state.pif_catalog_connection.as_deref() != Some(connection_id.as_str()) {
-        state.pif_catalog = Vec::new();
-        state.pif_catalog_error = None;
-        state.pif_catalog_connection = Some(connection_id.clone());
-        state.pif_catalog_loading = true;
-        state.pif_catalog_seq += 1;
-        actions.push(UiAction::LoadPifCatalog {
-            seq: state.pif_catalog_seq,
-            connection_id: connection_id.clone(),
-        });
-    }
-
-    ui.horizontal(|ui| {
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.menu_button(RichText::new("Manage network…").size(10.5), |ui| {
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection),
-                        egui::Button::new(RichText::new("Create bond…").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::OpenBondCreate);
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection),
-                        egui::Button::new(RichText::new("Create VLAN…").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::OpenVlanCreate);
-                    ui.close();
-                }
-                ui.separator();
-                if ui
-                    .add_enabled(
-                        !is_read_only(connection),
-                        egui::Button::new(
-                            RichText::new("Destroy network…").size(11.0).color(red()),
-                        ),
-                    )
-                    .clicked()
-                {
-                    actions.push(UiAction::PromptDestroyNetwork {
-                        connection_id: connection_id.clone(),
-                        network_uuid: network.uuid.clone(),
-                        name: network.name.clone(),
-                    });
-                    ui.close();
-                }
-            });
-        });
-    });
-    ui.add_space(4.0);
-
-    ui.columns(2, |columns| {
-        theme::card_frame().show(&mut columns[0], |ui| {
-            ui.set_width(ui.available_width());
-            widgets::section_title(ui, "Network", None);
-            ui.add_space(4.0);
-            widgets::kv(ui, "Name", &network.name, false);
-            widgets::kv(ui, "Bridge", &network.bridge, true);
-            widgets::kv(ui, "MTU", &network.mtu.to_string(), false);
-            widgets::kv(
-                ui,
-                "Description",
-                if network.description.is_empty() {
-                    "No description"
-                } else {
-                    &network.description
-                },
-                false,
-            );
-            ui.add_space(2.0);
-            widgets::kv(ui, "UUID", &network.uuid, true);
-        });
-        theme::card_frame().show(&mut columns[1], |ui| {
-            ui.set_width(ui.available_width());
-            widgets::section_title(ui, "Attachments", None);
-            ui.add_space(4.0);
-            widgets::kv(
-                ui,
-                "Physical interfaces",
-                &network.interface_count.to_string(),
-                false,
-            );
-            widgets::kv(
-                ui,
-                "Virtual interfaces",
-                &network.virtual_interface_count.to_string(),
-                false,
-            );
-        });
-    });
-
-    ui.add_space(8.0);
-    theme::card_frame().show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        let pifs: Vec<&xen_core::network::PifSummary> = state
-            .pif_catalog
-            .iter()
-            .filter(|pif| pif.network_uuid == network.uuid)
-            .collect();
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Physical interfaces").size(15.0).strong());
-            widgets::badge(ui, pifs.len().to_string(), muted_fg());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui
-                    .add(egui::Button::new(RichText::new("Refresh").size(10.0)))
-                    .clicked()
-                {
-                    state.pif_catalog_connection = None;
-                }
-            });
-        });
-        ui.add_space(4.0);
-        if state.pif_catalog_loading {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(
-                    RichText::new("Loading interfaces…")
-                        .size(10.5)
-                        .color(muted_fg()),
-                );
-            });
-            return;
-        }
-        if let Some(error) = &state.pif_catalog_error {
-            ui.label(RichText::new(error).size(10.0).color(red()));
-            return;
-        }
-        if pifs.is_empty() {
-            ui.label(
-                RichText::new("No physical interfaces are attached to this network.")
-                    .size(10.5)
-                    .color(dim_fg()),
-            );
-            return;
-        }
-        TableBuilder::new(ui)
-            .id_salt("network-pifs")
-            .striped(true)
-            .cell_layout(Layout::left_to_right(Align::Center))
-            .column(Column::remainder().at_least(130.0))
-            .column(Column::exact(65.0))
-            .column(Column::initial(140.0))
-            .column(Column::exact(55.0))
-            .column(Column::exact(90.0))
-            .column(Column::exact(70.0))
-            .column(Column::exact(80.0))
-            .header(26.0, |mut header| {
-                for title in [
-                    "Host",
-                    "Device",
-                    "MAC",
-                    "VLAN",
-                    "Management",
-                    "Attached",
-                    "Actions",
-                ] {
-                    header.col(|ui| {
-                        ui.label(RichText::new(title).size(9.5).color(muted_fg()));
-                    });
-                }
-            })
-            .body(|body| {
-                body.rows(28.0, pifs.len(), |mut row| {
-                    let pif = pifs[row.index()];
-                    row.col(|ui| {
-                        ui.add(
-                            egui::Label::new(RichText::new(&pif.host_name).size(10.5)).truncate(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(&pif.device)
-                                .monospace()
-                                .size(10.0)
-                                .color(muted_fg()),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(&pif.mac)
-                                    .monospace()
-                                    .size(9.0)
-                                    .color(dim_fg()),
-                            )
-                            .truncate(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if pif.vlan > 0 {
-                                pif.vlan.to_string()
-                            } else {
-                                "—".into()
-                            })
-                            .size(9.5)
-                            .color(muted_fg()),
-                        );
-                    });
-                    row.col(|ui| {
-                        if pif.management {
-                            ui.label(RichText::new("Protected").size(9.0).color(amber()));
-                        } else {
-                            ui.label(RichText::new("—").size(9.5).color(dim_fg()));
-                        }
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            RichText::new(if pif.attached { "Yes" } else { "No" })
-                                .size(9.5)
-                                .color(if pif.attached { green() } else { dim_fg() }),
-                        );
-                    });
-                    row.col(|ui| {
-                        if is_read_only(connection) {
-                            ui.label(RichText::new("—").size(9.5).color(dim_fg()));
-                        } else if pif.management {
-                            ui.label(RichText::new("Protected").size(9.0).color(amber()));
-                        } else if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new(if pif.attached { "Unplug" } else { "Plug" })
-                                        .size(9.5),
-                                )
-                                .small(),
-                            )
-                            .clicked()
-                        {
-                            actions.push(UiAction::SetPifPlugged {
-                                connection_id: connection_id.clone(),
-                                pif_uuid: pif.uuid.clone(),
-                                plugged: !pif.attached,
-                            });
-                        }
-                    });
-                });
-            });
-    });
+    super::search_page::show(ui, state, workspace, actions);
 }
-
-fn active_key(state: &UiState) -> Option<ObjectKey> {
-    state.selection.as_ref().map(|tab| tab.key.clone())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn header(
+pub fn vdi(
     ui: &mut Ui,
-    mark: &str,
-    title: &str,
-    subtitle: &str,
-    uuid: &str,
-    read_only: bool,
-    _connection_id: &str,
-    _actions: &mut Vec<UiAction>,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
 ) {
-    ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(Vec2::splat(42.0), Sense::hover());
-        ui.painter()
-            .rect_filled(rect, egui::CornerRadius::same(11), panel_2());
-        ui.painter().rect_stroke(
-            rect,
-            egui::CornerRadius::same(11),
-            egui::Stroke::new(1.0, border()),
-            egui::StrokeKind::Inside,
-        );
-        ui.painter().text(
-            rect.center(),
-            egui::Align2::CENTER_CENTER,
-            mark,
-            egui::FontId::proportional(17.0),
-            accent(),
-        );
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            ui.label(RichText::new("RESOURCE").size(8.5).color(dim_fg()));
-            ui.label(RichText::new(title).size(21.0).strong());
-            ui.label(RichText::new(subtitle).size(9.5).color(muted_fg()));
-        });
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if read_only {
-                widgets::badge(ui, "Read-only", amber());
-            }
-        });
+    let Some(ObjectKey::Vdi {
+        connection_id: id,
+        vdi_uuid,
+    }) = state.selection.as_ref().map(|s| s.key.clone())
+    else {
+        return;
+    };
+    let Some(connection) = state::find_connection(workspace, &id) else {
+        return;
+    };
+    let Some(disk) = state::connection_inventory(connection)
+        .and_then(|i| i.virtual_disks.iter().find(|d| d.uuid == vdi_uuid))
+    else {
+        ui.label("Virtual disk unavailable.");
+        return;
+    };
+    object_page::title_strip(ui, connection, &disk.name, TreeIcon::Disk, "Halted");
+    object_page::tab_strip(
+        ui,
+        &object_page::tabs_for(Selection::Vdi),
+        &mut state.object_tab,
+    );
+    if state.object_tab == VmTab::Search {
+        super::search_page::show(ui, state, workspace, actions);
+        return;
+    }
+    section(ui, "General", |ui| {
+        value_row(ui, "Name", &disk.name);
+        value_row(ui, "Description", &disk.description);
+        value_row(ui, "Size", &format::bytes(disk.size));
+        value_row(ui, "SR", &disk.sr_name);
+        value_row(ui, "Read only", if disk.read_only { "Yes" } else { "No" });
+        value_row(ui, "UUID", &disk.uuid);
     });
-    ui.label(RichText::new(uuid).monospace().size(8.5).color(dim_fg()));
-    ui.add_space(8.0);
-}
-
-fn missing(ui: &mut Ui, message: &str) {
-    widgets::empty_state(ui, "Object unavailable", message);
+    if ui.button("Properties").clicked() {
+        properties(actions, &id, ObjectKind::Disk, &disk.uuid);
+    }
 }

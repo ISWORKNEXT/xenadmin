@@ -1,0 +1,320 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        399,
+        164
+      ],
+      "snap": "01-host-general",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        610,
+        164
+      ],
+      "snap": "02-host-networking",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        680,
+        164
+      ],
+      "snap": "03-host-nics",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        132,
+        143
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        454,
+        111
+      ],
+      "snap": "review",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "05-root-search"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "double_click": [
+        490,
+        310
+      ],
+      "snap": "review",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        535,
+        164
+      ],
+      "wait": 1,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        825,
+        164
+      ],
+      "wait": 1,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        102,
+        751
+      ],
+      "wait": 1,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        110,
+        250
+      ],
+      "wait": 1,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "06-objects-vms-search"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        39,
+        250
+      ],
+      "wait": 1,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        39,
+        329
+      ],
+      "wait": 1,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        135,
+        382
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        164
+      ],
+      "wait": 1,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        164
+      ],
+      "wait": 1,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        477,
+        758
+      ],
+      "wait": 2,
+      "snap": "review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        600,
+        5
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        600,
+        5
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        600,
+        5
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        600,
+        5
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1000,
+        600,
+        5
+      ],
+      "snap": "review",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        719
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        638,
+        758
+      ],
+      "wait": 0.2,
+      "note": "Rejection: attached XOA disk Delete remains disabled; no deletion dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        400,
+        207
+      ],
+      "snap": "04-sr-storage",
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        122,
+        170
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        610,
+        164
+      ],
+      "wait": 1,
+      "snap": "02-host-networking"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        680,
+        164
+      ],
+      "wait": 1,
+      "snap": "03-host-nics"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

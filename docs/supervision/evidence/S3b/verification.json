@@ -1,0 +1,48 @@
+{
+  "unit": "S3b",
+  "status": "PARTIAL",
+  "checks": {
+    "cargo_fmt_all_check": "pass",
+    "cargo_clippy_workspace_all_targets_deny_warnings": "pass",
+    "cargo_test_workspace": {
+      "passed": 117,
+      "ignored": 1,
+      "failed": 0
+    },
+    "cargo_build_xen_native": "pass"
+  },
+  "live_display": "private X11 :98, real xen-native binary, direct dev-host XenAPI connection",
+  "screenshots": [
+    "01-host-general.png",
+    "02-host-networking.png",
+    "03-host-nics.png",
+    "04-sr-storage.png",
+    "05-root-search.png",
+    "06-objects-vms-search.png"
+  ],
+  "observed": [
+    "Host General, Networking and NICs read real host inventory",
+    "SR Storage list, bounded table, Rescan completion and reload",
+    "Attached VDI Delete disabled and XenAPI confirms disk intact",
+    "Root Search and Objects > VMs Search (14 VMs)",
+    "Double-click VM in root Search selects its tree node and opens General",
+    "VM General restart priority renders Do not restart as text",
+    "VM Storage DVD row, Position 0, Device Path /dev/xvda; no More button",
+    "Snapshots buttons/list render without card frame"
+  ],
+  "not_exercised": [
+    "SR Add/Delete acceptance: standalone SR VDI creation has no existing backend; Add disabled",
+    "Multi-host pool data aggregation",
+    "GPU/USB hardware actions",
+    "Host console"
+  ],
+  "implementation_gaps": [
+    "Standalone SR Add and Move, NIC Rescan/Delete Bond, IP Configure and host Console have no backend path exposed here",
+    "Search CPU usage, guest used-memory, guest address and uptime are unavailable in current inventory projection and render dash",
+    "Legacy dispatch handlers retained for removed controls; some existing management actions still need upstream menu/properties placement"
+  ],
+  "menu_status": "No menu item changed state; menu-status.tsv unchanged",
+  "objects_created": [],
+  "git_mutations": "No commit, push, tag or issue edits",
+  "cleanup": "Stopped only the app and private X11 server started for S3b; no host objects were created or removed."
+}

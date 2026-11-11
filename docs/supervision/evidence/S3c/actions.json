@@ -1,0 +1,142 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        139,
+        14
+      ],
+      "wait": 1,
+      "snap": "/tmp/s3c-menu"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        158,
+        757
+      ],
+      "wait": 1,
+      "snap": "/tmp/s3c-properties"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        542,
+        596
+      ],
+      "wait": 1,
+      "snap": "01-server-properties-autostart"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        452,
+        614
+      ],
+      "wait": 0.3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        457,
+        650
+      ],
+      "wait": 0.3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        610,
+        164
+      ],
+      "wait": 0.5,
+      "snap": "/tmp/s3c-networking"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        425,
+        316
+      ],
+      "wait": 0.5,
+      "snap": "02-new-network-chooser"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        526,
+        570
+      ],
+      "wait": 0.5,
+      "snap": "/tmp/s3c-next"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        425,
+        316
+      ],
+      "wait": 0.5
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        564,
+        609
+      ],
+      "wait": 0.5,
+      "snap": "03-vlan-dialog"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        998,
+        682
+      ],
+      "wait": 0.3,
+      "note": "Create VLAN disabled: no eligible parent interface; no mutation submitted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        421,
+        682
+      ],
+      "wait": 0.2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

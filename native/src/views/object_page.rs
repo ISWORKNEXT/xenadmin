@@ -7,11 +7,18 @@ pub enum Selection {
     Vm,
     Template { has_provision_xml: bool },
     Snapshot,
+    Host { live: bool, usb: bool },
+    Pool,
+    Sr,
+    Vdi,
+    Home,
+    Group,
+    Network,
 }
 
 pub fn tabs_for(selection: Selection) -> Vec<VmTab> {
-    match selection {
-        Selection::Vm => VmTab::ALL.to_vec(),
+    let mut tabs = match selection {
+        Selection::Vm => VmTab::ALL[..7].to_vec(),
         Selection::Template {
             has_provision_xml: false,
         } => vec![
@@ -24,7 +31,35 @@ pub fn tabs_for(selection: Selection) -> Vec<VmTab> {
             has_provision_xml: true,
         }
         | Selection::Snapshot => vec![VmTab::General, VmTab::Memory, VmTab::Network],
-    }
+        Selection::Host { live: false, .. } | Selection::Vdi => vec![VmTab::General],
+        Selection::Host { live: true, usb } => {
+            let mut tabs = vec![
+                VmTab::General,
+                VmTab::Memory,
+                VmTab::Storage,
+                VmTab::Network,
+                VmTab::Nics,
+                VmTab::Gpu,
+            ];
+            if usb {
+                tabs.push(VmTab::Usb);
+            }
+            tabs.extend([VmTab::Console, VmTab::Performance]);
+            tabs
+        }
+        Selection::Pool => vec![
+            VmTab::General,
+            VmTab::Memory,
+            VmTab::Storage,
+            VmTab::Network,
+            VmTab::Gpu,
+        ],
+        Selection::Sr => vec![VmTab::General, VmTab::Storage],
+        Selection::Home => vec![VmTab::Home],
+        Selection::Group | Selection::Network => vec![],
+    };
+    tabs.push(VmTab::Search);
+    tabs
 }
 
 pub(super) fn title_strip(
@@ -66,7 +101,7 @@ pub fn value_row(ui: &mut Ui, label: &str, value: &str) {
         rect.left_center(),
         egui::Align2::LEFT_CENTER,
         label,
-        egui::FontId::proportional(13.0),
+        egui::FontId::proportional(11.0),
         crate::theme::muted_fg(),
     );
     let value_rect = egui::Rect::from_min_max(rect.min + egui::vec2(200.0, 0.0), rect.max);
@@ -74,16 +109,15 @@ pub fn value_row(ui: &mut Ui, label: &str, value: &str) {
         value_rect.left_center(),
         egui::Align2::LEFT_CENTER,
         value,
-        egui::FontId::proportional(13.5),
+        egui::FontId::proportional(11.0),
         crate::theme::fg(),
     );
-    ui.interact(
+    let response = ui.interact(
         value_rect,
         ui.scope_id().with(("value", label)),
         egui::Sense::click(),
-    )
-    .on_hover_text(value)
-    .context_menu(|ui| {
+    );
+    response.on_hover_text(value).context_menu(|ui| {
         if ui.button("Copy").clicked() {
             ui.ctx().copy_text(value.to_owned());
             ui.close();

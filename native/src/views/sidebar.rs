@@ -52,14 +52,14 @@ pub enum NavigationMode {
 }
 
 #[derive(Clone)]
-struct Node {
-    id: String,
-    name: String,
-    key: Option<ObjectKey>,
-    icon: TreeIcon,
+pub(super) struct Node {
+    pub(super) id: String,
+    pub(super) name: String,
+    pub(super) key: Option<ObjectKey>,
+    pub(super) icon: TreeIcon,
     rank: u8,
     metadata: NavigationMetadata,
-    children: Vec<Node>,
+    pub(super) children: Vec<Node>,
 }
 impl Node {
     fn new(id: String, name: String, key: Option<ObjectKey>, icon: TreeIcon, rank: u8) -> Self {
@@ -73,7 +73,7 @@ impl Node {
             children: vec![],
         }
     }
-    fn group(name: &str) -> Self {
+    pub(super) fn group(name: &str) -> Self {
         Self::new(
             format!("group:{name}"),
             name.into(),
@@ -131,7 +131,7 @@ fn natural_cmp(a: &str, b: &str) -> Ordering {
     }
 }
 
-fn objects(workspace: &WorkspaceView, state: &UiState) -> Vec<(String, Vec<Node>)> {
+pub(super) fn objects(workspace: &WorkspaceView, state: &UiState) -> Vec<(String, Vec<Node>)> {
     let mut result = vec![];
     for connection in &workspace.connections {
         let id = connection_id(connection).to_owned();
@@ -252,6 +252,18 @@ fn objects(workspace: &WorkspaceView, state: &UiState) -> Vec<(String, Vec<Node>
                 6,
             );
         }
+        for disk in &inv.virtual_disks {
+            add(
+                &disk.uuid,
+                &disk.name,
+                ObjectKey::Vdi {
+                    connection_id: id.clone(),
+                    vdi_uuid: disk.uuid.clone(),
+                },
+                TreeIcon::Disk,
+                8,
+            );
+        }
         for net in &inv.networks {
             add(
                 &net.uuid,
@@ -269,8 +281,15 @@ fn objects(workspace: &WorkspaceView, state: &UiState) -> Vec<(String, Vec<Node>
     result
 }
 
-fn build_tree(workspace: &WorkspaceView, state: &UiState) -> Node {
-    let mode = state.navigation_mode;
+pub(super) fn build_tree(workspace: &WorkspaceView, state: &UiState) -> Node {
+    build_tree_mode(workspace, state, state.navigation_mode)
+}
+
+pub(super) fn build_tree_mode(
+    workspace: &WorkspaceView,
+    state: &UiState,
+    mode: NavigationMode,
+) -> Node {
     let title = match mode {
         NavigationMode::Objects => "Objects",
         NavigationMode::Tags => "Tags",
@@ -307,7 +326,11 @@ fn build_tree(workspace: &WorkspaceView, state: &UiState) -> Node {
             let mut unhomed = vec![];
             for node in nodes.into_iter().filter(|n| n.rank > 1) {
                 match &node.key {
-                    Some(ObjectKey::Snapshot { .. } | ObjectKey::Network { .. }) => continue,
+                    Some(
+                        ObjectKey::Snapshot { .. }
+                        | ObjectKey::Network { .. }
+                        | ObjectKey::Vdi { .. },
+                    ) => continue,
                     Some(ObjectKey::Template { .. })
                         if if node.metadata.default_template {
                             !state.tree_preferences.default_templates
@@ -432,6 +455,16 @@ fn build_tree(workspace: &WorkspaceView, state: &UiState) -> Node {
             parent.children.extend(nodes);
         }
     }
+    fn assign_groups(node: &mut Node, parent: &str) {
+        let path = format!("{parent}/{}", node.id);
+        if node.key.is_none() || (parent.is_empty() && node.name != "Xen Desktop") {
+            node.key = Some(ObjectKey::Group(path.clone()));
+        }
+        for child in &mut node.children {
+            assign_groups(child, &path);
+        }
+    }
+    assign_groups(&mut root, "");
     root.sort();
     let needle = state.tree_query.trim().to_lowercase();
     if !needle.is_empty() {
@@ -594,6 +627,16 @@ fn draw_node(
 ) {
     let path_id = format!("{parent_id}/{}", node.id);
     if state.tree_initialized.insert(path_id.clone()) && (depth == 0 || node.rank <= 1) {
+        state.tree_expanded.insert(path_id.clone());
+    }
+    fn contains_selection(node: &Node, key: &ObjectKey) -> bool {
+        node.key.as_ref() == Some(key) || node.children.iter().any(|n| contains_selection(n, key))
+    }
+    if state
+        .selection
+        .as_ref()
+        .is_some_and(|s| node.children.iter().any(|n| contains_selection(n, &s.key)))
+    {
         state.tree_expanded.insert(path_id.clone());
     }
     let expanded = !state.tree_query.trim().is_empty() || state.tree_expanded.contains(&path_id);

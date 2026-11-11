@@ -157,6 +157,13 @@ impl App {
     fn object_title(&self, key: &ObjectKey) -> String {
         match key {
             ObjectKey::Home => "Home".into(),
+            ObjectKey::Group(name) => name.clone(),
+            ObjectKey::Vdi { vdi_uuid, .. } => self
+                .state
+                .sr_vdis
+                .iter()
+                .find(|v| &v.uuid == vdi_uuid)
+                .map_or_else(|| "Virtual disk".into(), |v| v.name.clone()),
             ObjectKey::Pool(id) => self
                 .workspace
                 .connections
@@ -253,6 +260,12 @@ impl App {
         self.state.detail = None;
 
         match &key {
+            ObjectKey::Group(_) => {
+                self.state.scope = Scope::All;
+            }
+            ObjectKey::Vdi { connection_id, .. } => {
+                self.state.scope = Scope::Connection(connection_id.clone());
+            }
             ObjectKey::Home => {
                 self.state.scope = Scope::All;
                 self.state.view = View::Overview;
@@ -277,14 +290,12 @@ impl App {
                             host_ref: host.reference.clone(),
                         },
                     );
-                let host_name = self.object_title(&key);
                 let same = self.state.host_route.as_ref().is_some_and(|route| {
                     &route.connection_id == connection_id && &route.host_uuid == host_uuid
                 });
                 self.state.host_route = Some(crate::state::HostRoute {
                     connection_id: connection_id.clone(),
                     host_uuid: host_uuid.clone(),
-                    host_name,
                 });
                 if !same {
                     self.state.perf_seq += 1;
@@ -927,8 +938,25 @@ impl App {
                         }
                     }
                 },
-                Event::HostDetails { seq, result } => {
-                    if seq == self.state.host_seq {
+                Event::HostDetails {
+                    seq,
+                    connection_id,
+                    host_uuid,
+                    result,
+                } => {
+                    let value = match &result {
+                        Ok(details) => LoadState::Ready((**details).clone()),
+                        Err(error) => LoadState::Error(error.clone()),
+                    };
+                    self.state
+                        .page_hosts
+                        .insert((connection_id.clone(), host_uuid.clone()), value);
+                    if seq != 0
+                        && seq == self.state.host_seq
+                        && self.state.host_route.as_ref().is_some_and(|r| {
+                            r.connection_id == connection_id && r.host_uuid == host_uuid
+                        })
+                    {
                         self.state.host_state = match result {
                             Ok(details) => LoadState::Ready(*details),
                             Err(message) => LoadState::Error(message),
@@ -1540,6 +1568,9 @@ impl App {
                     result,
                 } => match result {
                     Ok(()) => {
+                        if self.state.sr_vdis_sr.as_deref() == Some(sr_uuid.as_str()) {
+                            self.state.sr_vdis_sr = None;
+                        }
                         if self
                             .state
                             .sr_action_confirm
@@ -2333,10 +2364,12 @@ impl App {
                     });
                 }
                 UiAction::Refresh(Some(id)) => {
+                    self.state.page_hosts.retain(|(cid, _), _| cid != &id);
                     self.state.busy.insert(id.clone());
                     self.worker.send(Command::Refresh { connection_id: id });
                 }
                 UiAction::Refresh(None) => {
+                    self.state.page_hosts.clear();
                     let ids: Vec<String> = visible_connections(&self.workspace, &self.state.scope)
                         .into_iter()
                         .filter(|connection| {
@@ -2491,6 +2524,20 @@ impl App {
                     self.state.host_state = LoadState::Idle;
                     self.state.perf_state = LoadState::Idle;
                 }
+                UiAction::LoadPageHost {
+                    connection_id,
+                    host_uuid,
+                } => {
+                    self.state.page_hosts.insert(
+                        (connection_id.clone(), host_uuid.clone()),
+                        LoadState::Loading,
+                    );
+                    self.worker.send(Command::HostDetails {
+                        seq: 0,
+                        connection_id,
+                        host_uuid,
+                    });
+                }
                 UiAction::ReloadHostDetails => {
                     if let Some(route) = self.state.host_route.clone() {
                         self.state.host_seq += 1;
@@ -2523,6 +2570,17 @@ impl App {
                         self.state.record_query.clear();
                         self.state.record_page = 0;
                     }
+                    self.state.object_tab = match tab {
+                        crate::state::HostTab::General
+                        | crate::state::HostTab::Updates
+                        | crate::state::HostTab::Certificates
+                        | crate::state::HostTab::Health => crate::state::VmTab::General,
+                        crate::state::HostTab::Cpu => crate::state::VmTab::Memory,
+                        crate::state::HostTab::Networking => crate::state::VmTab::Network,
+                        crate::state::HostTab::Storage => crate::state::VmTab::Storage,
+                        crate::state::HostTab::Hardware => crate::state::VmTab::Gpu,
+                        crate::state::HostTab::Performance => crate::state::VmTab::Performance,
+                    };
                     self.state.host_tab = tab;
                     if tab == crate::state::HostTab::Performance
                         && matches!(self.state.perf_state, LoadState::Idle)
@@ -2790,6 +2848,18 @@ impl App {
                         vm_uuid: edit.vm_uuid.clone(),
                         resources,
                     });
+                }
+                UiAction::SetDvdMedia { vbd_uuid, iso_uuid } => {
+                    if let Some(key) = self.state.selection.as_ref().map(|s| &s.key)
+                        && let Some((connection_id, vm_uuid)) = vm_key(key)
+                    {
+                        self.worker.send(Command::ChangeCd {
+                            connection_id,
+                            vm_uuid,
+                            vbd_uuid,
+                            iso_uuid,
+                        });
+                    }
                 }
                 UiAction::OpenIsoDialog { vbd_uuid, drive } => {
                     let Some(key) = self.state.selection.as_ref().map(|tab| tab.key.clone()) else {
@@ -4381,22 +4451,15 @@ impl App {
                         ));
                         continue;
                     };
-                    let Some(parent) = self
+                    let parent = self
                         .state
                         .pif_catalog
                         .iter()
                         .find(|pif| pif.vlan_candidate())
-                        .map(|pif| pif.uuid.clone())
-                    else {
-                        self.state.toasts.push(Toast::new(
-                            "No spare physical interface is available for a VLAN.",
-                            ToastKind::Info,
-                        ));
-                        continue;
-                    };
+                        .map(|pif| pif.uuid.clone());
                     self.state.vlan_create_dialog = Some(crate::state::VlanCreateDialog {
                         connection_id,
-                        pif_uuid: Some(parent),
+                        pif_uuid: parent,
                         tag: "100".into(),
                         name: "VLAN 100".into(),
                         description: String::new(),
@@ -4444,6 +4507,30 @@ impl App {
                         autoplug: dialog.autoplug,
                     });
                 }
+                UiAction::OpenNetworkChooser => {
+                    let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    if !find_connection(&self.workspace, &connection_id).is_some_and(|connection| {
+                        crate::state::is_online(connection)
+                            && !crate::state::is_read_only(connection)
+                    }) {
+                        continue;
+                    }
+                    let connection_id_for_pifs = connection_id.clone();
+                    self.state.pif_catalog = Vec::new();
+                    self.state.pif_catalog_error = None;
+                    self.state.pif_catalog_connection = Some(connection_id_for_pifs.clone());
+                    self.state.pif_catalog_loading = true;
+                    self.state.pif_catalog_seq += 1;
+                    self.worker.send(Command::PifCatalog {
+                        seq: self.state.pif_catalog_seq,
+                        connection_id: connection_id_for_pifs,
+                    });
+                    self.state.network_chooser = Some(false);
+                }
+                UiAction::CloseNetworkChooser => self.state.network_chooser = None,
                 UiAction::OpenNetworkCreate => {
                     let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
                     else {

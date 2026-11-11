@@ -495,6 +495,7 @@ impl RawInventory {
                 name: text(r, "name_label"),
                 description: text(r, "name_description"),
                 bridge: text(r, "bridge"),
+                automatic: text(&r["other_config"], "automatic") != "false",
                 mtu: number(r, "MTU"),
                 interface_count: r["PIFs"].as_array().map_or(0, Vec::len),
                 virtual_interface_count: r["VIFs"].as_array().map_or(0, Vec::len),
@@ -589,6 +590,7 @@ impl RawInventory {
             &self.vms,
             &self.storage,
             &self.networks,
+            &self.vdis,
         ] {
             for r in records.values() {
                 let other = &r["other_config"];
@@ -665,11 +667,40 @@ impl RawInventory {
                 );
             }
         }
+        for vdi in self.vdis.values() {
+            let home = self
+                .storage
+                .get(&text(vdi, "SR"))
+                .and_then(|sr| navigation.get(&text(sr, "uuid")))
+                .map(|m| m.home.clone())
+                .unwrap_or_default();
+            if let Some(metadata) = navigation.get_mut(&text(vdi, "uuid")) {
+                metadata.home = home;
+            }
+        }
         let named_pool = self
             .pools
             .values()
             .any(|p| !text(p, "name_label").is_empty());
+        let mut virtual_disks: Vec<_> = self
+            .vdis
+            .values()
+            .map(|vdi| {
+                let sr = self.storage.get(&text(vdi, "SR")).unwrap_or(&Value::Null);
+                VirtualDisk {
+                    uuid: text(vdi, "uuid"),
+                    name: text(vdi, "name_label"),
+                    description: text(vdi, "name_description"),
+                    size: number(vdi, "virtual_size"),
+                    sr_uuid: text(sr, "uuid"),
+                    sr_name: text(sr, "name_label"),
+                    read_only: boolean(vdi, "read_only"),
+                }
+            })
+            .collect();
+        virtual_disks.sort_by(|a, b| a.name.cmp(&b.name).then(a.uuid.cmp(&b.uuid)));
         Ok(Inventory {
+            virtual_disks,
             navigation,
             named_pool,
             pool_id,
@@ -765,7 +796,19 @@ fn number(record: &Value, key: &str) -> u64 {
 }
 
 #[derive(Clone, Serialize)]
+pub struct VirtualDisk {
+    pub uuid: String,
+    pub name: String,
+    pub description: String,
+    pub size: u64,
+    pub sr_uuid: String,
+    pub sr_name: String,
+    pub read_only: bool,
+}
+
+#[derive(Clone, Serialize)]
 pub struct Inventory {
+    pub virtual_disks: Vec<VirtualDisk>,
     pub navigation: HashMap<String, NavigationMetadata>,
     pub named_pool: bool,
     pub settings: ConnectionSettings,
@@ -875,6 +918,7 @@ pub struct Storage {
 
 #[derive(Clone, Serialize)]
 pub struct Network {
+    pub automatic: bool,
     pub uuid: String,
     pub name: String,
     pub description: String,

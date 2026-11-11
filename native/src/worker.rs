@@ -536,6 +536,8 @@ pub enum Event {
     },
     HostDetails {
         seq: u64,
+        connection_id: String,
+        host_uuid: String,
         result: Result<Box<HostDetails>, String>,
     },
     HostPerformance {
@@ -994,7 +996,12 @@ fn dispatch(
                     .host_details(&connection_id, &host_uuid)
                     .await
                     .map(Box::new);
-                let _ = events.send(Event::HostDetails { seq, result });
+                let _ = events.send(Event::HostDetails {
+                    seq,
+                    connection_id,
+                    host_uuid,
+                    result,
+                });
             }
             Command::IntroduceSr {
                 connection_id,

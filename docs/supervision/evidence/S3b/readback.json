@@ -1,0 +1,184 @@
+{
+  "captured_at_utc": "2026-11-11T19:06:37.098772+00:00",
+  "host": [
+    {
+      "uuid": "f2347fdf-e320-4d3b-994b-7eb12f860c58",
+      "name": "OIIO-Server",
+      "address": "192.168.8.170"
+    }
+  ],
+  "pifs": [
+    {
+      "uuid": "3dc0505f-f8dd-fb15-ab54-9a4ff80a765c",
+      "device": "eth0",
+      "MAC": "50:9a:4c:14:56:ca",
+      "IP": "192.168.8.170",
+      "VLAN": -1,
+      "MTU": 1500,
+      "management": true,
+      "physical": true
+    }
+  ],
+  "sr": {
+    "uuid": "7a5a8cb4-7052-8de1-7473-4a8d9a36e272",
+    "name_label": "Local storage",
+    "type": "ext",
+    "physical_size": 447236136960,
+    "physical_utilisation": 118235762688
+  },
+  "user_disk_count": 19,
+  "disks": [
+    {
+      "uuid": "025af8d1-432f-4791-980a-b34fcc98ad26",
+      "name": "base copy",
+      "size_bytes": 42949672960,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "04490f10-6b60-4174-acb3-85b443cd9a4f",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "0a018bd3-bbac-4883-9285-e45a98946b31",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "0d6a24c8-5dd3-4b61-b4d9-a5df96b6e9f1",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "16aa37ad-4c69-43d7-af70-e0de3d6276bd",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "1973508f-6c96-4790-ad17-d780f7429e46",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "2ac00b06-4480-4fc0-90d1-15619531e5be",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "6e8474b1-7ce7-4191-b511-906fe609a0c7",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "721b7851-a9a1-4ed9-86d6-69e5854ed4f3",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "72bc1c01-2382-4870-929c-87464ff88f31",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "78dcf2f9-6ad6-497f-ac9c-c83cf5d6d3a5",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "7fbfb045-3909-4d73-b47e-e2f98923e888",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "8ecd35ce-e239-484d-a849-85765b1bdf0a",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "95bcec84-ac43-4e17-977f-1f1b555661b1",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "d9835fb0-78a8-4945-8a2d-bed07ccd3520",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "de767a5a-4be2-40f6-ad64-2fbad2e6c169",
+      "name": "base copy",
+      "size_bytes": 68719476736,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "f65b407a-14c9-482d-ab2d-5b940ada56f0",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "f8b551ca-72b7-49c7-b4f5-3161c65e4f10",
+      "name": "base copy",
+      "size_bytes": 10737418240,
+      "read_only": true,
+      "attached_vms": []
+    },
+    {
+      "uuid": "fbde7fde-1d98-4ccf-9edd-47098cca8831",
+      "name": "xoa root",
+      "size_bytes": 21474836480,
+      "read_only": false,
+      "attached_vms": [
+        "XOA"
+      ]
+    }
+  ],
+  "search_double_click_vm": [
+    {
+      "uuid": "99e0ffe0-cf1b-72c2-2ca3-489f124f1fd4",
+      "name_label": "AlmaLinux 10 (TH) - Guest Agent copy",
+      "power_state": "Halted"
+    }
+  ],
+  "objects_vms_expected_count": 14,
+  "s3b_objects_created": 0,
+  "attached_delete_rejection": {
+    "uuid": "fbde7fde-1d98-4ccf-9edd-47098cca8831",
+    "name": "xoa root",
+    "still_exists": true,
+    "vbd_count": 1,
+    "observed_ui": "Delete disabled; clicking it opened no confirmation dialog",
+    "readback_at_utc": "2026-11-11T19:07:59.494156+00:00"
+  }
+}

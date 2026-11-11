@@ -64,6 +64,9 @@ pub struct VmDetails {
 #[derive(Clone, Debug, Serialize)]
 pub struct VmDisk {
     pub vbd_uuid: String,
+    pub userdevice: String,
+    pub priority: String,
+    pub description: String,
     pub device: String,
     pub disk_type: String,
     pub is_cd: bool,
@@ -116,6 +119,7 @@ pub struct VdiSummary {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SrVdi {
+    pub description: String,
     pub uuid: String,
     pub name: String,
     pub virtual_size: u64,
@@ -232,6 +236,7 @@ impl Connection {
             .iter()
             .filter(|(_, vdi)| text(vdi, "SR") == sr_ref && text(vdi, "type") == "user")
             .map(|(reference, vdi)| SrVdi {
+                description: text(vdi, "name_description"),
                 uuid: text(vdi, "uuid"),
                 name: text(vdi, "name_label"),
                 virtual_size: number(vdi, "virtual_size"),
@@ -340,6 +345,9 @@ impl Connection {
                 let disk_type = text(vbd, "type");
                 disks.push(VmDisk {
                     vbd_uuid: text(vbd, "uuid"),
+                    userdevice: text(vbd, "userdevice"),
+                    priority: text(&vbd["qos_algorithm_params"], "class"),
+                    description: text(vdi, "name_description"),
                     device: text(vbd, "device"),
                     is_cd: disk_type == "CD",
                     disk_type,

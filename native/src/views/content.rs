@@ -21,11 +21,30 @@ pub fn show(
         .unwrap_or(ObjectKey::Home);
 
     match key {
-        ObjectKey::Home | ObjectKey::List { .. } | ObjectKey::Tasks => {
-            workspace_page(ui, state, workspace, actions);
+        ObjectKey::Home => {
+            super::object_page::tab_strip(
+                ui,
+                &super::object_page::tabs_for(super::object_page::Selection::Home),
+                &mut state.object_tab,
+            );
+            if state.object_tab == crate::state::VmTab::Search {
+                super::search_page::show(ui, state, workspace, actions);
+            } else {
+                workspace_page(ui, state, workspace, actions);
+            }
         }
+        ObjectKey::Group(_) | ObjectKey::List { .. } => {
+            super::object_page::tab_strip(
+                ui,
+                &super::object_page::tabs_for(super::object_page::Selection::Group),
+                &mut state.object_tab,
+            );
+            super::search_page::show(ui, state, workspace, actions);
+        }
+        ObjectKey::Vdi { .. } => super::resource_page::vdi(ui, state, workspace, actions),
+        ObjectKey::Tasks => workspace_page(ui, state, workspace, actions),
         ObjectKey::Pool(_) => super::pool_page::show(ui, state, workspace, actions),
-        ObjectKey::Host { .. } => super::host_details::show(ui, state, workspace, actions),
+        ObjectKey::Host { .. } => super::infrastructure_page::show(ui, state, workspace, actions),
         ObjectKey::Vm { .. } | ObjectKey::Template { .. } | ObjectKey::Snapshot { .. } => {
             super::vm_detail::show(ui, state, workspace, actions);
         }
@@ -66,8 +85,10 @@ fn workspace_page(
         return;
     }
 
-    page_header(ui, state, workspace);
-    ui.add_space(10.0);
+    if state.view != View::Overview {
+        page_header(ui, state, workspace);
+        ui.add_space(10.0);
+    }
 
     let stale: Vec<(String, String)> = visible_connections(workspace, &state.scope)
         .into_iter()

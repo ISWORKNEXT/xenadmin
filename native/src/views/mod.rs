@@ -25,3 +25,6 @@ pub mod menubar;
 pub mod shell;
 
 pub mod object_page;
+
+pub mod infrastructure_page;
+pub mod search_page;
