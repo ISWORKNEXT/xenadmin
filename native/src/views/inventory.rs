@@ -376,6 +376,12 @@ fn grouped_targets(
 
 fn group_value(vm: &xen_core::xapi::VirtualMachine, connection: &str, group_by: GroupBy) -> String {
     match group_by {
+        GroupBy::Folder => vm.folder.clone(),
+        GroupBy::CustomField => vm
+            .custom_fields
+            .first()
+            .map(|(k, v)| format!("{k}: {v}"))
+            .unwrap_or_else(|| "No custom fields".into()),
         GroupBy::None => String::new(),
         GroupBy::Connection => connection.to_owned(),
         GroupBy::Host => {
@@ -1171,6 +1177,9 @@ mod tests {
 
     fn sample_vm(host: &str, power: &str, tags: &[&str]) -> xen_core::xapi::VirtualMachine {
         xen_core::xapi::VirtualMachine {
+            instant_template: false,
+            cbt_enabled: false,
+            default_template: false,
             reference: "ref".into(),
             kind: "vm".into(),
             allowed_operations: Vec::new(),

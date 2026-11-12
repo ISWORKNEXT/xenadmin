@@ -58,7 +58,7 @@ pub(super) struct Node {
     pub(super) key: Option<ObjectKey>,
     pub(super) icon: TreeIcon,
     rank: u8,
-    metadata: NavigationMetadata,
+    pub(super) metadata: NavigationMetadata,
     pub(super) children: Vec<Node>,
 }
 impl Node {
@@ -408,6 +408,22 @@ pub(super) fn build_tree_mode(
         NavigationMode::Tags | NavigationMode::Folders | NavigationMode::CustomFields
     ) {
         let mut groups: BTreeMap<Vec<String>, Vec<Node>> = BTreeMap::new();
+        if mode == NavigationMode::Folders {
+            for connection in &workspace.connections {
+                if let Some(inventory) = connection_inventory(connection) {
+                    for path in &inventory.empty_folders {
+                        groups
+                            .entry(
+                                path.split('/')
+                                    .filter(|s| !s.is_empty())
+                                    .map(str::to_owned)
+                                    .collect(),
+                            )
+                            .or_default();
+                    }
+                }
+            }
+        }
         for (_, nodes) in connections {
             for node in nodes {
                 let paths: Vec<Vec<String>> = match mode {

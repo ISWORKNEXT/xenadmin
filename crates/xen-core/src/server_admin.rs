@@ -44,6 +44,7 @@ pub enum ServerChange {
     Standalone,
     RotateSecret,
     Backup(std::path::PathBuf),
+    StatusReport(std::path::PathBuf),
     Restore(std::path::PathBuf),
 }
 fn text(v: &Value, key: &str) -> String {
@@ -148,6 +149,7 @@ impl Connection {
         let host: String = self
             .request("host.get_by_uuid", json!([self.session, uuid]))
             .await?;
+        let status_report = matches!(&change, ServerChange::StatusReport(_));
         match change {
             ServerChange::Memory(mib) => {
                 let info = self.server_info(uuid).await?;
@@ -307,7 +309,7 @@ impl Connection {
                 self.async_task("Async.pool.rotate_secret", json!([self.session]))
                     .await?;
             }
-            ServerChange::Backup(path) => {
+            ServerChange::Backup(path) | ServerChange::StatusReport(path) => {
                 use tokio::io::AsyncWriteExt;
                 let record: Value = self
                     .request("host.get_record", json!([self.session, host]))
@@ -319,10 +321,12 @@ impl Connection {
                         self.settings.tls,
                     )
                     .map_err(|_| ApiError::Connection)?;
-                let mut response = transport
-                    .host_backup(&self.session)
-                    .await
-                    .map_err(|_| ApiError::Connection)?;
+                let mut response = if status_report {
+                    transport.system_status(&self.session).await
+                } else {
+                    transport.host_backup(&self.session).await
+                }
+                .map_err(|_| ApiError::Connection)?;
                 if !response.status().is_success() {
                     return Err(ApiError::Http(response.status().as_u16()));
                 }

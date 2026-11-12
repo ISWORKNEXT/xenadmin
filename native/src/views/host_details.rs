@@ -454,19 +454,19 @@ pub(crate) fn multi_chart(
                 let mut previous_time = 0u64;
                 for point in &metric.points {
                     let Some(value) = point.value else {
-                        flush_colored(painter, &mut segment, color);
+                        flush_colored(painter, &mut segment, color, plot.bottom());
                         continue;
                     };
                     let contiguous = segment.is_empty()
                         || step == 0
                         || point.timestamp.saturating_sub(previous_time) <= step.saturating_mul(2);
                     if !contiguous {
-                        flush_colored(painter, &mut segment, color);
+                        flush_colored(painter, &mut segment, color, plot.bottom());
                     }
                     segment.push(egui::pos2(x(point.timestamp), y(value)));
                     previous_time = point.timestamp;
                 }
-                flush_colored(painter, &mut segment, color);
+                flush_colored(painter, &mut segment, color, plot.bottom());
             }
 
             painter.text(
@@ -521,7 +521,26 @@ pub(crate) fn multi_chart(
         });
 }
 
-fn flush_colored(painter: &egui::Painter, segment: &mut Vec<egui::Pos2>, color: egui::Color32) {
+fn flush_colored(
+    painter: &egui::Painter,
+    segment: &mut Vec<egui::Pos2>,
+    color: egui::Color32,
+    baseline: f32,
+) {
+    if !super::utilities::load_options().graph_lines {
+        for pair in segment.windows(2) {
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    egui::pos2(pair[0].x, baseline),
+                    pair[0],
+                    pair[1],
+                    egui::pos2(pair[1].x, baseline),
+                ],
+                color.gamma_multiply(0.2),
+                Stroke::NONE,
+            ));
+        }
+    }
     if segment.len() > 1 {
         painter.add(egui::Shape::line(
             std::mem::take(segment),
@@ -642,19 +661,19 @@ pub(crate) fn chart(ui: &mut Ui, series: &MetricSeries, start: u64, end: u64, st
             let mut previous_time = 0u64;
             for point in &series.points {
                 let Some(value) = point.value else {
-                    flush(painter, &mut segment);
+                    flush_colored(painter, &mut segment, cyan(), plot.bottom());
                     continue;
                 };
                 let contiguous = segment.is_empty()
                     || step == 0
                     || point.timestamp.saturating_sub(previous_time) <= step.saturating_mul(2);
                 if !contiguous {
-                    flush(painter, &mut segment);
+                    flush_colored(painter, &mut segment, cyan(), plot.bottom());
                 }
                 segment.push(egui::pos2(x(point.timestamp), y(value)));
                 previous_time = point.timestamp;
             }
-            flush(painter, &mut segment);
+            flush_colored(painter, &mut segment, cyan(), plot.bottom());
 
             painter.text(
                 egui::pos2(plot.left(), rect.bottom() - 6.0),
@@ -711,17 +730,6 @@ pub(crate) fn chart(ui: &mut Ui, series: &MetricSeries, start: u64, end: u64, st
             }
             ui.add_space(2.0);
         });
-}
-
-fn flush(painter: &egui::Painter, segment: &mut Vec<egui::Pos2>) {
-    if segment.len() > 1 {
-        painter.add(egui::Shape::line(
-            std::mem::take(segment),
-            Stroke::new(1.4, cyan()),
-        ));
-    } else {
-        segment.clear();
-    }
 }
 
 fn format_axis(value: f64) -> String {

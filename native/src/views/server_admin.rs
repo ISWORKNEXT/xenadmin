@@ -11,6 +11,7 @@ pub enum Page {
     Ip,
     CrashDumps,
     Backup,
+    StatusReport,
     Restore,
     NewPool,
     JoinPool,
@@ -28,6 +29,7 @@ impl Page {
             Self::Eject => "Remove Server from Pool",
             Self::Standalone => "Make into standalone server",
             Self::RotateSecret => "Rotate Pool Secret",
+            Self::StatusReport => "Server Status Report",
             Self::Backup => "Back Up Server",
             Self::Restore => "Restore Server From Backup",
             Self::Memory => "Control Domain Memory",
@@ -119,14 +121,16 @@ impl Dialog {
                 }
                 Ok(ServerChange::RotateSecret)
             }
-            Page::Backup | Page::Restore => {
+            Page::Backup | Page::Restore | Page::StatusReport => {
                 if self.path.trim().is_empty() {
                     return Err("Select a backup file.".into());
                 }
                 if self.page == Page::Restore && !self.acknowledged {
                     return Err("Confirm restoring the server backup.".into());
                 }
-                Ok(if self.page == Page::Backup {
+                Ok(if self.page == Page::StatusReport {
+                    ServerChange::StatusReport(self.path.clone().into())
+                } else if self.page == Page::Backup {
                     ServerChange::Backup(self.path.clone().into())
                 } else {
                     ServerChange::Restore(self.path.clone().into())
@@ -203,8 +207,8 @@ pub fn show(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction
                     }
                     Page::Standalone=>{ui.label("Disconnect all member servers from this pool and make the coordinator standalone.");ui.checkbox(&mut d.acknowledged,"Make this server standalone");}
                     Page::RotateSecret=>{ui.label("Rotate the authentication secret shared by all servers in this pool.");ui.checkbox(&mut d.acknowledged,"Rotate the pool secret");}
-                    Page::Backup | Page::Restore => {
-                        ui.label(if d.page == Page::Backup {
+                    Page::Backup | Page::Restore | Page::StatusReport => {
+                        ui.label(if d.page == Page::StatusReport { "Destination status report file (tar.bz2)" } else if d.page == Page::Backup {
                             "Destination backup file"
                         } else {
                             "Server backup file"

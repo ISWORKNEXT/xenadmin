@@ -1,0 +1,13 @@
+{
+  "timestamps": false,
+  "graph_lines": true,
+  "clipboard": true,
+  "scale": true,
+  "windows_key": true,
+  "confirm_alerts": true,
+  "confirm_events": true,
+  "proxy": "",
+  "timeout": 45,
+  "save_servers": true,
+  "rdp_program": "xfreerdp"
+}

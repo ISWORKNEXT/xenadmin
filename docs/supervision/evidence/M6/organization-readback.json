@@ -1,0 +1,15 @@
+{
+  "custom_field": "M6 value",
+  "definitions": [
+    {
+      "date": false,
+      "name": "zz-parity-field"
+    }
+  ],
+  "folder": "/zz-parity",
+  "invalid_tag": "rejected",
+  "tags": [
+    "zz-parity-tag"
+  ],
+  "vm_uuid": "465be2be-9906-bd22-1919-6257277b7cbe"
+}

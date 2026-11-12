@@ -39,15 +39,19 @@ pub enum GroupBy {
     Host,
     PowerState,
     Tag,
+    Folder,
+    CustomField,
 }
 
 impl GroupBy {
-    pub const ALL: [GroupBy; 5] = [
+    pub const ALL: [GroupBy; 7] = [
         GroupBy::None,
         GroupBy::Connection,
         GroupBy::Host,
         GroupBy::PowerState,
         GroupBy::Tag,
+        GroupBy::Folder,
+        GroupBy::CustomField,
     ];
 
     pub fn label(self) -> &'static str {
@@ -57,6 +61,8 @@ impl GroupBy {
             Self::Host => "Host",
             Self::PowerState => "Power state",
             Self::Tag => "Tag",
+            Self::Folder => "Folder",
+            Self::CustomField => "Custom field",
         }
     }
 
@@ -67,6 +73,8 @@ impl GroupBy {
             "host" => Some(Self::Host),
             "power" | "power_state" | "state" => Some(Self::PowerState),
             "tag" => Some(Self::Tag),
+            "folder" => Some(Self::Folder),
+            "custom_field" => Some(Self::CustomField),
             _ => None,
         }
     }
@@ -74,10 +82,16 @@ impl GroupBy {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SavedSearch {
+    #[serde(default = "default_search_columns")]
+    pub columns: Vec<usize>,
     pub name: String,
     pub query: String,
     #[serde(default)]
     pub group_by: GroupBy,
+}
+
+pub fn default_search_columns() -> Vec<usize> {
+    (0..6).collect()
 }
 
 pub fn upsert_saved_search(
@@ -110,7 +124,15 @@ pub fn save_saved_searches(searches: &[SavedSearch]) {
 fn read_saved_searches(path: &std::path::Path) -> Vec<SavedSearch> {
     std::fs::read(path)
         .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .and_then(|bytes| serde_json::from_slice::<Vec<SavedSearch>>(&bytes).ok())
+        .map(|mut searches| {
+            for search in &mut searches {
+                search.columns.retain(|i| *i < 6);
+                search.columns.sort();
+                search.columns.dedup();
+            }
+            searches
+        })
         .unwrap_or_default()
 }
 
@@ -241,14 +263,43 @@ pub fn write_new_file(path: &std::path::Path, bytes: &[u8]) -> Result<(), String
 }
 pub fn export_searches(searches: &[SavedSearch]) -> String {
     let esc = |value: &str| quick_xml::escape::escape(value).into_owned();
-    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Searches>");
+    let mut xml = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Searches xmlns=\"http://www.citrix.com/XenCenter/XenSearch/schema\">",
+    );
     for search in searches {
+        let columns = search
+            .columns
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
         xml += &format!(
-            "<Search name=\"{}\" major_version=\"2\" minor_version=\"0\"><XenDesktopQuery group_by=\"{}\">{}</XenDesktopQuery></Search>",
+            "<Search name=\"{}\" major_version=\"2\" minor_version=\"0\" native_query=\"{}\" native_group_by=\"{}\" native_columns=\"{columns}\">",
             esc(&search.name),
-            esc(search.group_by.label()),
-            esc(&search.query)
+            esc(&search.query),
+            esc(search.group_by.label())
         );
+        if let Some(query) = crate::search::export_upstream(&search.query) {
+            xml += &query;
+            xml += match search.group_by {
+                GroupBy::None | GroupBy::Connection | GroupBy::CustomField => "",
+                GroupBy::Host => "<XenModelObjectPropertyGrouping property=\"host\"/>",
+                GroupBy::PowerState => "<PropertyGrouping property=\"power_state\"/>",
+                GroupBy::Tag => "<PropertyGrouping property=\"tags\"/>",
+                GroupBy::Folder => "<FolderGrouping/>",
+            };
+            xml += "<columns><column name=\"name\" width=\"300\"/>";
+            let names = ["cpu", "memory", "disks", "network", "ip", "uptime"];
+            for index in &search.columns {
+                if let Some(name) = names.get(*index) {
+                    xml += &format!("<column name=\"{name}\" width=\"100\"/>");
+                }
+            }
+            xml += "</columns>";
+        } else {
+            xml += &format!("<XenDesktopQuery>{}</XenDesktopQuery>", esc(&search.query));
+        }
+        xml += "</Search>";
     }
     xml += "</Searches>";
     xml
@@ -260,18 +311,81 @@ pub fn import_searches(xml: &str) -> Result<Vec<SavedSearch>, String> {
         .descendants()
         .filter(|n| n.tag_name().name() == "Search")
     {
-        let query = n
+        if let Some(query) = n.attribute("native_query") {
+            searches.push(SavedSearch {
+                name: n.attribute("name").unwrap_or("Imported search").into(),
+                query: query.into(),
+                group_by: n
+                    .attribute("native_group_by")
+                    .and_then(GroupBy::from_key)
+                    .unwrap_or_default(),
+                columns: n
+                    .attribute("native_columns")
+                    .map(|s| {
+                        s.split(',')
+                            .filter_map(|v| v.parse::<usize>().ok().filter(|i| *i < 6))
+                            .collect()
+                    })
+                    .unwrap_or_else(default_search_columns),
+            });
+        } else if let Some(query) = n
             .children()
             .find(|n| n.tag_name().name() == "XenDesktopQuery")
-            .ok_or("This search uses an upstream query type that is not supported yet.")?;
-        searches.push(SavedSearch {
-            name: n.attribute("name").unwrap_or("Imported search").into(),
-            query: query.text().unwrap_or_default().into(),
-            group_by: query
-                .attribute("group_by")
-                .and_then(GroupBy::from_key)
-                .unwrap_or_default(),
-        });
+        {
+            searches.push(SavedSearch {
+                columns: query
+                    .attribute("columns")
+                    .map(|s| {
+                        s.split(',')
+                            .filter_map(|v| v.parse::<usize>().ok().filter(|i| *i < 6))
+                            .collect()
+                    })
+                    .unwrap_or_else(default_search_columns),
+                name: n.attribute("name").unwrap_or("Imported search").into(),
+                query: query.text().unwrap_or_default().into(),
+                group_by: query
+                    .attribute("group_by")
+                    .and_then(GroupBy::from_key)
+                    .unwrap_or_default(),
+            });
+        } else {
+            let query = n
+                .children()
+                .find(|n| n.tag_name().name() == "Query")
+                .ok_or("Missing upstream Query")?;
+            searches.push(SavedSearch {
+                columns: n
+                    .children()
+                    .find(|n| n.tag_name().name() == "columns")
+                    .map(|cols| {
+                        cols.children()
+                            .filter_map(|col| {
+                                ["cpu", "memory", "disks", "network", "ip", "uptime"]
+                                    .iter()
+                                    .position(|name| col.attribute("name") == Some(*name))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_else(default_search_columns),
+                name: n.attribute("name").unwrap_or("Imported search").into(),
+                query: crate::search::import_upstream(query)?,
+                group_by: n
+                    .children()
+                    .find_map(|child| {
+                        if child.tag_name().name() == "FolderGrouping" {
+                            Some(GroupBy::Folder)
+                        } else {
+                            match child.attribute("property") {
+                                Some("host") => Some(GroupBy::Host),
+                                Some("power_state") => Some(GroupBy::PowerState),
+                                Some("tags") => Some(GroupBy::Tag),
+                                _ => None,
+                            }
+                        }
+                    })
+                    .unwrap_or_default(),
+            });
+        }
     }
     if searches.is_empty() {
         return Err("The file contains no supported saved searches.".into());
@@ -292,11 +406,13 @@ mod saved_search_tests {
         ));
         let searches = vec![
             SavedSearch {
+                columns: default_search_columns(),
                 name: "Running".into(),
                 query: "power_state:running".into(),
                 group_by: GroupBy::PowerState,
             },
             SavedSearch {
+                columns: default_search_columns(),
                 name: "Templates".into(),
                 query: "name:ubuntu".into(),
                 group_by: GroupBy::None,
@@ -318,6 +434,7 @@ mod saved_search_tests {
     #[test]
     fn saved_search_upsert_and_edit_replace_in_place() {
         let mut searches = vec![SavedSearch {
+            columns: default_search_columns(),
             name: "one".into(),
             query: "name:a".into(),
             group_by: GroupBy::None,
@@ -325,6 +442,7 @@ mod saved_search_tests {
         upsert_saved_search(
             &mut searches,
             SavedSearch {
+                columns: default_search_columns(),
                 name: "ONE".into(),
                 query: "name:b".into(),
                 group_by: GroupBy::Host,
@@ -335,6 +453,7 @@ mod saved_search_tests {
         assert_eq!(searches[0].query, "name:b");
         assert_eq!(searches[0].group_by, GroupBy::Host);
         searches.push(SavedSearch {
+            columns: default_search_columns(),
             name: "two".into(),
             query: "name:c".into(),
             group_by: GroupBy::Tag,
@@ -342,6 +461,7 @@ mod saved_search_tests {
         upsert_saved_search(
             &mut searches,
             SavedSearch {
+                columns: default_search_columns(),
                 name: "renamed".into(),
                 query: "name:d".into(),
                 group_by: GroupBy::PowerState,
@@ -351,6 +471,40 @@ mod saved_search_tests {
         assert_eq!(searches[0].name, "renamed");
         assert_eq!(searches[0].query, "name:d");
         assert_eq!(searches.len(), 2);
+    }
+
+    #[test]
+    fn xensearch_round_trip_and_upstream_namespace() {
+        let saved = SavedSearch {
+            name: "Web & prod".into(),
+            query: "name:web tag:prod".into(),
+            group_by: GroupBy::Folder,
+            columns: vec![1, 4],
+        };
+        let xml = export_searches(std::slice::from_ref(&saved));
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        assert!(
+            !doc.descendants()
+                .any(|n| n.tag_name().name() == "XenDesktopQuery")
+        );
+        let imported = import_searches(&xml).unwrap();
+        assert_eq!(imported[0].query, saved.query);
+        assert_eq!(imported[0].columns, saved.columns);
+        assert_eq!(imported[0].group_by, saved.group_by);
+        let upstream = r#"<Searches xmlns="http://www.citrix.com/XenCenter/XenSearch/schema"><Search name="Upstream" major_version="2"><Query><QueryScope><VM/></QueryScope><StringPropertyQuery property="label" type="contains" query="web" casesensitive="no"/></Query><FolderGrouping/><columns><column name="name" width="300"/><column name="ip" width="100"/></columns></Search></Searches>"#;
+        let imported = import_searches(upstream).unwrap();
+        assert_eq!(imported[0].columns, vec![4]);
+        assert_eq!(imported[0].group_by, GroupBy::Folder);
+        assert!(
+            crate::search::SearchQuery::parse(&imported[0].query).matches(
+                &xen_core::xapi::VirtualMachine {
+                    name: "web".into(),
+                    kind: "vm".into(),
+                    ..Default::default()
+                },
+                "pool"
+            )
+        );
     }
 
     #[test]

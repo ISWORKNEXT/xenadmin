@@ -138,6 +138,12 @@ fn perform(
     actions: &mut Vec<UiAction>,
 ) {
     match action {
+        CommandAction::Dispatch(UiAction::OpenUtility("HelpTopics")) => ctx.open_url(
+            egui::OpenUrl::new_tab("https://github.com/ISWORKNEXT/xenadmin#readme"),
+        ),
+        CommandAction::Dispatch(UiAction::OpenUtility("XenDesktopontheWeb")) => ctx.open_url(
+            egui::OpenUrl::new_tab("https://github.com/ISWORKNEXT/xenadmin"),
+        ),
         CommandAction::Dispatch(action) => actions.push(action),
         CommandAction::DispatchMany(batch) => {
             let console_keys = batch

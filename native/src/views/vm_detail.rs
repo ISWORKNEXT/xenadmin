@@ -624,7 +624,7 @@ fn console(
                         .unwrap_or_default();
                     if ui
                         .add_enabled(
-                            !clipboard.is_empty(),
+                            state.options.clipboard && !clipboard.is_empty(),
                             egui::Button::new(RichText::new("Copy from guest").size(11.0)),
                         )
                         .on_hover_text("Copy the guest clipboard to this desktop")
@@ -659,7 +659,7 @@ fn console(
                         }
                     });
                     if ui
-                        .add(egui::Button::new(
+                        .add_enabled(state.options.clipboard, egui::Button::new(
                             RichText::new("Paste to guest").size(11.0),
                         ))
                         .on_hover_text("Send this desktop's clipboard to the guest")
@@ -825,9 +825,9 @@ fn console(
         };
 
         let max_size = Vec2::new(ui.available_width(), 680.0);
-        let scale = (max_size.x / console.width as f32)
+        let scale = if !state.options.scale { 1.0 } else { (max_size.x / console.width as f32)
             .min(max_size.y / console.height as f32)
-            .max(0.05);
+            .max(0.05) };
         let display = Vec2::new(
             console.width as f32 * scale,
             console.height as f32 * scale,
@@ -1440,7 +1440,10 @@ fn sync_console_modifiers(
         focused && modifiers.shift,
         focused && modifiers.ctrl,
         focused && modifiers.alt,
-        focused && modifiers.command && !modifiers.ctrl,
+        focused
+            && modifiers.command
+            && !modifiers.ctrl
+            && super::utilities::load_options().windows_key,
     );
     let current = console.modifiers;
     for (index, keycode) in [0xffe1u32, 0xffe3, 0xffe9, 0xffeb].into_iter().enumerate() {

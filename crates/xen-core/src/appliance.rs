@@ -742,6 +742,7 @@ mod live_tests {
                 bypass_certificate_verification: true,
             },
             proxy: None,
+            timeout_seconds: 45,
         };
         assert_eq!(settings.host, "192.168.8.170");
         let c = Connection::login(settings, &std::env::var("XEN_DEV_PASSWORD").unwrap())

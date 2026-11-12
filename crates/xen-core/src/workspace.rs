@@ -167,6 +167,34 @@ impl Workspace {
         result.map_err(|e| e.to_string())
     }
 
+    pub async fn extra_action(
+        &self,
+        id: &str,
+        action: &crate::organization::ExtraAction,
+    ) -> Result<(), String> {
+        let active = self.active(id).await?;
+        let _lease = active.lifecycle.read().await;
+        let result = active.connection.extra_action(action).await;
+        let _ = refresh_inventory_cache(&active).await;
+        result.map_err(|e| e.to_string())
+    }
+    pub async fn forget_password(&self, id: &str) -> Result<(), String> {
+        let active = self.active(id).await?;
+        active.password.write().await.clear();
+        Ok(())
+    }
+    pub async fn change_organization(
+        &self,
+        id: &str,
+        change: &crate::organization::OrganizationChange,
+    ) -> Result<(), String> {
+        let active = self.active(id).await?;
+        let _lease = active.lifecycle.read().await;
+        let result = active.connection.change_organization(change).await;
+        let _ = refresh_inventory_cache(&active).await;
+        result.map_err(|e| e.to_string())
+    }
+
     pub async fn object_properties(
         &self,
         connection_id: &str,
@@ -264,6 +292,7 @@ impl Workspace {
                     read_only: false,
                     tls: Default::default(),
                     proxy: None,
+                    timeout_seconds: 45,
                 },
             });
         }

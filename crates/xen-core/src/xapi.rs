@@ -44,6 +44,12 @@ pub struct ConnectionSettings {
     /// Per-connection HTTP/SOCKS proxy, e.g. `http://proxy:3128`.
     #[serde(default)]
     pub proxy: Option<String>,
+    #[serde(default = "default_timeout_seconds")]
+    pub timeout_seconds: u64,
+}
+
+fn default_timeout_seconds() -> u64 {
+    45
 }
 
 impl ConnectionSettings {
@@ -111,13 +117,18 @@ impl Connection {
             };
             let origin = Url::parse(&address).map_err(|_| ApiError::InvalidHost)?;
             settings.enforce_host_policy(&origin);
-            let transport = HostTransport::new(origin, settings.tls, settings.proxy.as_deref())
-                .map_err(|error| match error {
-                    crate::transport::TransportError::InvalidProxy => {
-                        ApiError::Xen("The proxy URL is invalid.".into())
-                    }
-                    _ => ApiError::InvalidHost,
-                })?;
+            let transport = HostTransport::with_timeout(
+                origin,
+                settings.tls,
+                settings.proxy.as_deref(),
+                settings.timeout_seconds,
+            )
+            .map_err(|error| match error {
+                crate::transport::TransportError::InvalidProxy => {
+                    ApiError::Xen("The proxy URL is invalid.".into())
+                }
+                _ => ApiError::InvalidHost,
+            })?;
             let mut connection = Self {
                 transport,
                 session: String::new(),
@@ -458,7 +469,18 @@ impl RawInventory {
             .vms
             .iter()
             .filter(|(_, r)| !boolean(r, "is_control_domain"))
-            .map(|(reference, r)| vm_record(reference.clone(), r, &host_names))
+            .map(|(reference, r)| {
+                let mut vm = vm_record(reference.clone(), r, &host_names);
+                vm.cbt_enabled = r["VBDs"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .filter_map(|vbd| self.vbds.get(vbd))
+                    .filter_map(|vbd| self.vdis.get(vbd["VDI"].as_str()?))
+                    .any(|vdi| vdi["cbt_enabled"].as_bool() == Some(true));
+                vm
+            })
             .collect();
         let mut vms: Vec<_> = all_vms.iter().filter(|r| r.kind == "vm").cloned().collect();
         let mut templates: Vec<_> = all_vms
@@ -746,6 +768,24 @@ impl RawInventory {
             .collect();
         virtual_disks.sort_by(|a, b| a.name.cmp(&b.name).then(a.uuid.cmp(&b.uuid)));
         Ok(Inventory {
+            coordinator_reference: self
+                .pools
+                .values()
+                .next()
+                .map(|p| text(p, "master"))
+                .unwrap_or_default(),
+            empty_folders: self
+                .pools
+                .values()
+                .flat_map(|record| {
+                    record["other_config"]["EMPTY_FOLDERS"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .split(';')
+                        .filter(|p| p.starts_with('/'))
+                        .map(str::to_owned)
+                })
+                .collect(),
             virtual_disks,
             navigation,
             named_pool,
@@ -777,6 +817,12 @@ fn vm_record(reference: String, r: &Value, host_names: &HashMap<String, String>)
         resident_on.clone()
     };
     VirtualMachine {
+        instant_template: text(&r["other_config"], "instant") == "true"
+            && r["current_operations"]
+                .as_object()
+                .is_some_and(|m| m.is_empty()),
+        cbt_enabled: false,
+        default_template: r["other_config"].get("default_template").is_some(),
         reference,
         kind: if boolean(r, "is_a_snapshot") {
             "snapshot"
@@ -865,6 +911,8 @@ pub struct VirtualDisk {
 
 #[derive(Clone, Serialize)]
 pub struct Inventory {
+    pub coordinator_reference: String,
+    pub empty_folders: Vec<String>,
     pub virtual_disks: Vec<VirtualDisk>,
     pub navigation: HashMap<String, NavigationMetadata>,
     pub named_pool: bool,
@@ -913,8 +961,11 @@ pub struct Host {
     pub memory_free: u64,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Default, Serialize)]
 pub struct VirtualMachine {
+    pub instant_template: bool,
+    pub cbt_enabled: bool,
+    pub default_template: bool,
     pub reference: String,
     pub kind: String,
     pub allowed_operations: Vec<String>,

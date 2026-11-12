@@ -12,6 +12,8 @@ enum Field {
     PowerState,
     Host,
     Tag,
+    Folder,
+    Custom,
     Vcpus,
     Memory,
 }
@@ -39,6 +41,8 @@ impl Comparison {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Term {
+    custom_key: Option<String>,
+    case_sensitive: bool,
     negated: bool,
     field: Option<Field>,
     value: String,
@@ -99,21 +103,36 @@ impl Term {
         if negated {
             token.remove(0);
         }
+        let mut custom_key = None;
+        let mut case_sensitive = false;
         let (field, value) = match token.split_once(':') {
-            Some((field, value)) => match field.to_ascii_lowercase().as_str() {
-                "name" | "label" | "vm" => (Some(Field::Name), value),
-                "uuid" => (Some(Field::Uuid), value),
-                "description" | "desc" => (Some(Field::Description), value),
-                "os" | "os_type" => (Some(Field::Os), value),
-                "kind" | "type" => (Some(Field::Kind), value),
-                "connection" | "pool" => (Some(Field::Connection), value),
-                "power_state" | "power" | "state" => (Some(Field::PowerState), value),
-                "host" | "hostname" => (Some(Field::Host), value),
-                "tag" | "tags" => (Some(Field::Tag), value),
-                "vcpus" | "cpu" | "cpus" => (Some(Field::Vcpus), value),
-                "memory" | "mem" => (Some(Field::Memory), value),
-                _ => (None, token.as_str()),
-            },
+            Some((field, value)) => {
+                let field = if let Some(field) = field.strip_suffix(".cs") {
+                    case_sensitive = true;
+                    field
+                } else {
+                    field
+                };
+                match field.to_ascii_lowercase().as_str() {
+                    "name" | "label" | "vm" => (Some(Field::Name), value),
+                    "uuid" => (Some(Field::Uuid), value),
+                    "description" | "desc" => (Some(Field::Description), value),
+                    "os" | "os_type" => (Some(Field::Os), value),
+                    "kind" | "type" => (Some(Field::Kind), value),
+                    "connection" | "pool" => (Some(Field::Connection), value),
+                    "power_state" | "power" | "state" => (Some(Field::PowerState), value),
+                    "host" | "hostname" => (Some(Field::Host), value),
+                    "tag" | "tags" => (Some(Field::Tag), value),
+                    "folder" => (Some(Field::Folder), value),
+                    _ if field.starts_with("field.") => {
+                        custom_key = Some(field[6..].into());
+                        (Some(Field::Custom), value)
+                    }
+                    "vcpus" | "cpu" | "cpus" => (Some(Field::Vcpus), value),
+                    "memory" | "mem" => (Some(Field::Memory), value),
+                    _ => (None, token.as_str()),
+                }
+            }
             None => (None, token.as_str()),
         };
         let value = value.trim();
@@ -125,6 +144,8 @@ impl Term {
             .then(|| parse_number(numeric_value))
             .flatten();
         Some(Self {
+            custom_key,
+            case_sensitive,
             negated,
             field,
             value: value.to_owned(),
@@ -135,15 +156,48 @@ impl Term {
 
     fn matches(&self, vm: &VirtualMachine, connection_name: &str) -> bool {
         let needle = self.value.to_lowercase();
+        let string_matches = |actual: &str| {
+            let actual = if self.case_sensitive {
+                actual.to_owned()
+            } else {
+                actual.to_lowercase()
+            };
+            let needle = if self.case_sensitive {
+                self.value.clone()
+            } else {
+                needle.clone()
+            };
+            if let Some(value) = needle.strip_prefix('=') {
+                actual == value
+            } else if let Some(value) = needle.strip_prefix('^') {
+                actual.starts_with(value)
+            } else if let Some(value) = needle.strip_prefix('$') {
+                actual.ends_with(value)
+            } else {
+                actual.contains(&needle)
+            }
+        };
         let matched = match self.field {
-            Some(Field::Name) => vm.name.to_lowercase().contains(&needle),
+            Some(Field::Name) => string_matches(&vm.name),
             Some(Field::Uuid) => vm.uuid.to_lowercase().contains(&needle),
             Some(Field::Description) => vm.description.to_lowercase().contains(&needle),
-            Some(Field::Os) => vm.os.to_lowercase().contains(&needle),
-            Some(Field::Kind) => vm.kind.eq_ignore_ascii_case(&needle),
+            Some(Field::Os) => string_matches(&vm.os),
+            Some(Field::Kind) => match needle.as_str() {
+                "default_template" => vm.kind == "template" && vm.default_template,
+                "user_template" => vm.kind == "template" && !vm.default_template,
+                "template" => vm.kind == "template",
+                "storage" => matches!(vm.kind.as_str(), "storage" | "local_sr" | "remote_sr"),
+                _ => vm.kind.eq_ignore_ascii_case(&needle),
+            },
             Some(Field::Connection) => connection_name.to_lowercase().contains(&needle),
             Some(Field::PowerState) => power_matches(&vm.power_state, &needle),
             Some(Field::Host) => vm.host_name.to_lowercase().contains(&needle),
+            Some(Field::Folder) => string_matches(&vm.folder),
+            Some(Field::Custom) => vm
+                .custom_fields
+                .iter()
+                .find(|(key, _)| Some(key) == self.custom_key.as_ref())
+                .is_some_and(|(_, value)| string_matches(value)),
             Some(Field::Tag) => vm.tags.iter().any(|tag| tag.to_lowercase() == needle),
             Some(Field::Vcpus) => self
                 .number
@@ -382,8 +436,11 @@ fn tokenize(input: &str) -> Vec<Token> {
 mod tests {
     use super::*;
 
-    fn sample_vm(name: &str, tags: &[&str], power: &str) -> VirtualMachine {
+    pub(super) fn sample_vm(name: &str, tags: &[&str], power: &str) -> VirtualMachine {
         VirtualMachine {
+            instant_template: false,
+            cbt_enabled: false,
+            default_template: false,
             reference: "ref".into(),
             kind: "vm".into(),
             allowed_operations: Vec::new(),
@@ -477,5 +534,375 @@ mod tests {
         assert!(SearchQuery::parse("name:web )").matches(&vm, "conn"));
         assert!(SearchQuery::parse("() name:web").matches(&vm, "conn"));
         assert!(SearchQuery::parse("").matches(&vm, "any"));
+    }
+}
+
+/// Translate supported XenCenter query XML without dropping unknown conditions.
+pub fn import_upstream(query: roxmltree::Node<'_, '_>) -> Result<String, String> {
+    fn translate(n: roxmltree::Node<'_, '_>) -> Result<String, String> {
+        let attr = |key| {
+            n.attribute(key)
+                .ok_or_else(|| format!("Missing {key} in {}", n.tag_name().name()))
+        };
+        let quoted =
+            |value: &str| format!("\"{}\"", value.replace('\\', "\\\\").replace('\"', "\\\""));
+        let property = || -> Result<&str, String> {
+            Ok(match attr("property")? {
+                "label" | "name_label" => "name",
+                "folder" => "folder",
+                "tags" => "tag",
+                "power_state" => "power",
+                "memory" | "memory_dynamic_max" | "memory_static_max" => "memory",
+                "os_name" => "os",
+                "type" => "kind",
+                other => return Err(format!("Unsupported search property: {other}")),
+            })
+        };
+        match n.tag_name().name() {
+            "Query" => {
+                let parts = n
+                    .children()
+                    .filter(|n| n.is_element())
+                    .map(translate)
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(format!(
+                    "({})",
+                    parts
+                        .into_iter()
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" AND ")
+                ))
+            }
+            "QueryScope" => {
+                let kinds = n
+                    .children()
+                    .filter(|n| n.is_element())
+                    .map(|n| match n.tag_name().name() {
+                        "VM" => Ok("kind:vm"),
+                        "Server" => Ok("kind:host"),
+                        "Pool" => Ok("kind:pool"),
+                        "RemoteSR" => Ok("kind:remote_sr"),
+                        "LocalSR" => Ok("kind:local_sr"),
+                        "VDI" => Ok("kind:disk"),
+                        "Network" => Ok("kind:network"),
+                        "Template" => Ok("kind:template"),
+                        "UserTemplate" => Ok("kind:user_template"),
+                        "DefaultTemplate" => Ok("kind:default_template"),
+                        "Snapshot" => Ok("kind:snapshot"),
+                        other => Err(format!("Unsupported search scope: {other}")),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if kinds.is_empty() {
+                    Ok("kind:=__none__".into())
+                } else {
+                    Ok(format!("({})", kinds.join(" OR ")))
+                }
+            }
+            "GroupQuery" => {
+                let kind = attr("type")?;
+                let join = match kind {
+                    "And" => " AND ",
+                    "Or" | "Nor" => " OR ",
+                    _ => return Err(format!("Unsupported group: {kind}")),
+                };
+                let children = n
+                    .children()
+                    .filter(|n| n.is_element())
+                    .map(translate)
+                    .collect::<Result<Vec<_>, _>>()?;
+                if children.is_empty() {
+                    return Err("Empty query group is not supported.".into());
+                }
+                Ok(format!(
+                    "{}({})",
+                    if kind == "Nor" { "NOT " } else { "" },
+                    children.join(join)
+                ))
+            }
+            "XenModelObjectPropertyQuery" if attr("property")? == "folder" => {
+                let path = attr("uuid")?;
+                Ok(format!(
+                    "{}folder:{}",
+                    if n.attribute("equals") == Some("no") {
+                        "NOT "
+                    } else {
+                        ""
+                    },
+                    quoted(&format!("={path}"))
+                ))
+            }
+            "RecursiveXMOPropertyQuery" if attr("property")? == "folder" => {
+                let child = n
+                    .children()
+                    .find(|n| n.is_element())
+                    .ok_or("Missing folder condition")?;
+                if child.tag_name().name() != "StringPropertyQuery"
+                    || child.attribute("property") != Some("uuid")
+                {
+                    return Err("Unsupported recursive folder query".into());
+                }
+                let mode = match child.attribute("type") {
+                    Some("exactmatch") => "=",
+                    Some("contains") => "",
+                    Some("startswith") => "^",
+                    Some("endswith") => "$",
+                    _ => return Err("Unsupported folder comparison".into()),
+                };
+                Ok(format!(
+                    "folder:{}",
+                    quoted(&format!(
+                        "{mode}{}",
+                        child.attribute("query").ok_or("Missing folder query")?
+                    ))
+                ))
+            }
+            "StringPropertyQuery" | "CustomFieldQuery" => {
+                let field = if n.tag_name().name() == "CustomFieldQuery" {
+                    let def = n
+                        .children()
+                        .find(|n| n.tag_name().name() == "CustomFieldDefinition")
+                        .ok_or("Missing custom field definition")?;
+                    format!(
+                        "field.{}",
+                        def.attribute("name").ok_or("Missing field name")?
+                    )
+                } else {
+                    property()?.to_owned()
+                };
+                let mode = attr("type")?;
+                let prefix = match mode {
+                    "exactmatch" => "=",
+                    "contains" | "notcontain" => "",
+                    "startswith" => "^",
+                    "endswith" => "$",
+                    _ => return Err(format!("Unsupported string comparison: {mode}")),
+                };
+                let sensitive = if n.attribute("casesensitive") == Some("yes") {
+                    ".cs"
+                } else {
+                    ""
+                };
+                Ok(format!(
+                    "{}{}:{}",
+                    if mode == "notcontain" { "NOT " } else { "" },
+                    quoted(&format!("{field}{sensitive}")),
+                    quoted(&format!("{prefix}{}", attr("query")?))
+                ))
+            }
+            "EnumPropertyQuery" | "ValuePropertyQuery" | "StringListContainsQuery" => {
+                let field = property()?;
+                let mut value = attr("query")?.to_owned();
+                if field == "kind" {
+                    value = match value.as_str() {
+                        "VM" => "vm",
+                        "UserTemplate" => "user_template",
+                        "DefaultTemplate" => "default_template",
+                        "Server" => "host",
+                        "Pool" => "pool",
+                        "RemoteSR" => "remote_sr",
+                        "LocalSR" => "local_sr",
+                        "VDI" => "disk",
+                        "Network" => "network",
+                        "Snapshot" => "snapshot",
+                        other => return Err(format!("Unsupported object type: {other}")),
+                    }
+                    .into();
+                }
+                let negative =
+                    n.attribute("equals") == Some("no") || n.attribute("contains") == Some("no");
+                Ok(format!(
+                    "{}{}:{}",
+                    if negative { "NOT " } else { "" },
+                    field,
+                    quoted(&if field == "tag" || field == "power" || field == "kind" {
+                        value
+                    } else {
+                        format!("={value}")
+                    })
+                ))
+            }
+            "IntPropertyQuery" => {
+                if property()? != "memory" {
+                    return Err("Unsupported numeric property".into());
+                }
+                let value = attr("query")?
+                    .parse::<u64>()
+                    .map_err(|_| "Invalid numeric query")?;
+                let op = match attr("type")? {
+                    "exactmatch" => "=",
+                    "gt" => ">",
+                    "lt" => "<",
+                    other => return Err(format!("Unsupported numeric comparison: {other}")),
+                };
+                Ok(format!("memory:{op}{value}"))
+            }
+            other => Err(format!("Unsupported upstream condition: {other}")),
+        }
+    }
+    translate(query)
+}
+
+/// Export the compatible subset; callers retain native queries if not representable.
+pub fn export_upstream(input: &str) -> Option<String> {
+    fn xml(expr: &Expr) -> Option<String> {
+        let esc = |s: &str| quick_xml::escape::escape(s).into_owned();
+        match expr {
+            Expr::And(a, b) | Expr::Or(a, b) => Some(format!(
+                "<GroupQuery type=\"{}\">{}{}</GroupQuery>",
+                if matches!(expr, Expr::And(..)) {
+                    "And"
+                } else {
+                    "Or"
+                },
+                xml(a)?,
+                xml(b)?
+            )),
+            Expr::Not(child) => Some(format!(
+                "<GroupQuery type=\"Nor\">{}</GroupQuery>",
+                xml(child)?
+            )),
+            Expr::Term(term) => {
+                let property = match term.field {
+                    Some(Field::Name) => "label",
+                    Some(Field::Folder) => "folder",
+                    Some(Field::Tag) => "tags",
+                    Some(Field::Memory) => "memory",
+                    Some(Field::Os) => "os_name",
+                    Some(Field::PowerState) => "power_state",
+                    Some(Field::Kind) => "type",
+                    Some(Field::Custom) => "",
+                    _ => return None,
+                };
+                let value = &term.value;
+                let result = match term.field {
+                    Some(Field::Memory) => format!(
+                        "<IntPropertyQuery property=\"memory\" type=\"{}\" query=\"{}\"/>",
+                        match term.comparison? {
+                            Comparison::Eq => "exactmatch",
+                            Comparison::Gt => "gt",
+                            Comparison::Lt => "lt",
+                            _ => return None,
+                        },
+                        term.number?
+                    ),
+                    Some(Field::Tag) => format!(
+                        "<StringListContainsQuery property=\"tags\" contains=\"yes\" query=\"{}\"/>",
+                        esc(value)
+                    ),
+                    Some(Field::PowerState | Field::Kind) => {
+                        let value = if term.field == Some(Field::Kind) {
+                            match value.to_lowercase().as_str() {
+                                "vm" => "VM",
+                                "template" => return None,
+                                "snapshot" => "Snapshot",
+                                _ => return None,
+                            }
+                        } else {
+                            match value.to_lowercase().as_str() {
+                                "running" => "Running",
+                                "halted" | "stopped" | "off" => "Halted",
+                                "paused" => "Paused",
+                                "suspended" => "Suspended",
+                                _ => return None,
+                            }
+                        };
+                        format!(
+                            "<EnumPropertyQuery property=\"{property}\" query=\"{value}\" equals=\"yes\"/>"
+                        )
+                    }
+                    _ => {
+                        let (mode, value) = if let Some(v) = value.strip_prefix('=') {
+                            ("exactmatch", v)
+                        } else if let Some(v) = value.strip_prefix('^') {
+                            ("startswith", v)
+                        } else if let Some(v) = value.strip_prefix('$') {
+                            ("endswith", v)
+                        } else {
+                            ("contains", value.as_str())
+                        };
+                        if term.field == Some(Field::Folder) {
+                            format!(
+                                "<RecursiveXMOPropertyQuery property=\"folder\"><StringPropertyQuery property=\"uuid\" type=\"{mode}\" query=\"{}\" casesensitive=\"{}\"/></RecursiveXMOPropertyQuery>",
+                                esc(value),
+                                if term.case_sensitive { "yes" } else { "no" }
+                            )
+                        } else if term.field == Some(Field::Custom) {
+                            format!(
+                                "<CustomFieldQuery type=\"{mode}\" query=\"{}\"><CustomFieldDefinition name=\"{}\" type=\"String\" defaultValue=\"\"/></CustomFieldQuery>",
+                                esc(value),
+                                esc(term.custom_key.as_ref()?)
+                            )
+                        } else {
+                            format!(
+                                "<StringPropertyQuery property=\"{property}\" type=\"{mode}\" query=\"{}\" casesensitive=\"{}\"/>",
+                                esc(value),
+                                if term.case_sensitive { "yes" } else { "no" }
+                            )
+                        }
+                    }
+                };
+                Some(if term.negated {
+                    format!("<GroupQuery type=\"Nor\">{result}</GroupQuery>")
+                } else {
+                    result
+                })
+            }
+        }
+    }
+    let filter = if input.trim().is_empty() {
+        String::new()
+    } else {
+        xml(&Parser::new(tokenize(input)).parse()?)?
+    };
+    Some(format!(
+        "<Query><QueryScope><VM/><Snapshot/><UserTemplate/><DefaultTemplate/></QueryScope>{filter}</Query>"
+    ))
+}
+
+#[cfg(test)]
+mod xml_tests {
+    use super::*;
+    #[test]
+    fn upstream_xml_translates_conditions_and_boolean_groups() {
+        let xml = r#"<Query><QueryScope><VM/></QueryScope><GroupQuery type="And"><StringPropertyQuery property="label" query="web &amp; prod" type="exactmatch" casesensitive="yes"/><StringListContainsQuery property="tags" query="prod" contains="yes"/><IntPropertyQuery property="memory" query="1024" type="gt"/><CustomFieldQuery type="contains" query="team"><CustomFieldDefinition name="Owner" type="String"/></CustomFieldQuery></GroupQuery></Query>"#;
+        let doc = roxmltree::Document::parse(xml).unwrap();
+        let query = import_upstream(doc.root_element()).unwrap();
+        let mut vm = super::tests::sample_vm("web & prod", &["prod"], "Running");
+        vm.custom_fields.push(("Owner".into(), "team-a".into()));
+        assert!(SearchQuery::parse(&query).matches(&vm, "conn"), "{query}");
+        vm.name = "Web & prod".into();
+        assert!(!SearchQuery::parse(&query).matches(&vm, "conn"));
+        assert!(
+            import_upstream(
+                roxmltree::Document::parse("<Unknown/>")
+                    .unwrap()
+                    .root_element()
+            )
+            .is_err()
+        );
+    }
+    #[test]
+    fn upstream_export_round_trip_matches_behavior() {
+        for query in [
+            "name:web tag:prod",
+            "NOT power:halted",
+            "memory:>1024 OR folder:=/one",
+            r#"field.Owner:"=Team & ops""#,
+        ] {
+            let xml = export_upstream(query).unwrap();
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            let imported = import_upstream(doc.root_element()).unwrap();
+            for name in ["web", "db"] {
+                let mut vm = super::tests::sample_vm(name, &["prod"], "Running");
+                vm.folder = "/one".into();
+                vm.custom_fields.push(("Owner".into(), "Team & ops".into()));
+                assert_eq!(
+                    SearchQuery::parse(query).matches(&vm, "conn"),
+                    SearchQuery::parse(&imported).matches(&vm, "conn"),
+                    "{query} => {imported}"
+                );
+            }
+        }
     }
 }

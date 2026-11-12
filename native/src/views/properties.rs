@@ -188,6 +188,109 @@ pub fn show(
     let Some(dialog) = state.properties.as_mut() else {
         return;
     };
+    if dialog.folder_editor {
+        let response = egui::Modal::new(egui::Id::unique("move-to-folder")).show(ctx, |ui| {
+            ui.set_width(480.0);
+            ui.heading("Move to Folder");
+            if let LoadState::Ready(p) = &mut dialog.properties {
+                ui.label("Choose a folder or enter a new path. Apply in Properties to save.");
+                let mut paths = std::collections::BTreeSet::from([String::new()]);
+                if let Some(inv) = find_connection(workspace, &dialog.connection_id)
+                    .and_then(crate::state::connection_inventory)
+                {
+                    paths.extend(inv.empty_folders.iter().cloned());
+                    for node in inv.navigation.values() {
+                        if !node.folder.is_empty() {
+                            paths.insert(node.folder.clone());
+                        }
+                    }
+                }
+                for path in paths {
+                    ui.selectable_value(
+                        &mut p.folder,
+                        path.clone(),
+                        if path.is_empty() {
+                            "/ (No folder)"
+                        } else {
+                            &path
+                        },
+                    );
+                }
+                ui.label("Folder path");
+                ui.text_edit_singleline(&mut p.folder);
+            } else {
+                ui.spinner();
+            }
+            if ui.button("OK").clicked() {
+                dialog.folder_editor = false;
+            }
+        });
+        if response.should_close() {
+            dialog.folder_editor = false;
+        }
+        return;
+    }
+    if dialog.tag_editor {
+        let writable = find_connection(workspace, &dialog.connection_id)
+            .is_some_and(|c| is_online(c) && !is_read_only(c));
+        let response = egui::Modal::new(egui::Id::unique("edit-tags")).show(ctx, |ui| {
+            ui.set_width(440.0);
+            ui.heading("Edit Tags");
+            ui.label("Choose tags for this object. Apply in Properties to save.");
+            if let LoadState::Ready(p) = &mut dialog.properties {
+                let mut tags = std::collections::BTreeSet::new();
+                for connection in &workspace.connections {
+                    if let Some(inventory) = crate::state::connection_inventory(connection) {
+                        for node in inventory.navigation.values() {
+                            tags.extend(node.tags.iter().cloned());
+                        }
+                    }
+                }
+                tags.extend(p.tags.iter().cloned());
+                ui.add_enabled_ui(writable, |ui| {
+                    for tag in tags {
+                        let mut checked = p.tags.contains(&tag);
+                        if ui.checkbox(&mut checked, &tag).changed() {
+                            if checked {
+                                p.tags.push(tag);
+                            } else {
+                                p.tags.retain(|v| v != &tag);
+                            }
+                        }
+                    }
+                    ui.horizontal(|ui| {
+                        ui.text_edit_singleline(&mut dialog.new_tag);
+                        if ui.button("New").clicked() && !dialog.new_tag.trim().is_empty() {
+                            p.tags
+                                .push(std::mem::take(&mut dialog.new_tag).trim().into());
+                        }
+                    });
+                    ui.label("Rename and delete selected object tags:");
+                    let mut remove = None;
+                    for (index, tag) in p.tags.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.text_edit_singleline(tag);
+                            if ui.button("Delete").clicked() {
+                                remove = Some(index);
+                            }
+                        });
+                    }
+                    if let Some(index) = remove {
+                        p.tags.remove(index);
+                    }
+                });
+            } else {
+                ui.spinner();
+            }
+            if ui.button("OK").clicked() {
+                dialog.tag_editor = false;
+            }
+        });
+        if response.should_close() {
+            dialog.tag_editor = false;
+        }
+        return;
+    }
     let connection = find_connection(workspace, &dialog.connection_id);
     let writable = connection.is_some_and(|c| is_online(c) && !is_read_only(c));
     let name = dialog
@@ -369,26 +472,17 @@ fn content(ui: &mut egui::Ui, dialog: &mut PropertiesDialog, workspace: &Workspa
                         .desired_rows(4)
                         .char_limit(xen_core::properties::MAX_DESCRIPTION_CHARS),
                 );
-                field(ui, "Folder", &mut p.folder);
-                widgets::field_label(ui, "Tags");
-                let mut remove = None;
-                for (i, tag) in p.tags.iter_mut().enumerate() {
-                    ui.horizontal(|ui| {
-                        ui.text_edit_singleline(tag);
-                        if ui.small_button("Remove").clicked() {
-                            remove = Some(i);
-                        }
-                    });
+                ui.label(format!(
+                    "Folder: {}",
+                    if p.folder.is_empty() { "/" } else { &p.folder }
+                ));
+                if ui.button("Move to Folder…").clicked() {
+                    dialog.folder_editor = true;
                 }
-                if let Some(i) = remove {
-                    p.tags.remove(i);
+                ui.label(format!("Tags: {}", p.tags.join(", ")));
+                if ui.button("Edit Tags…").clicked() {
+                    dialog.tag_editor = true;
                 }
-                ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut dialog.new_tag).hint_text("New tag"));
-                    if ui.button("Add").clicked() && !dialog.new_tag.trim().is_empty() {
-                        p.tags.push(std::mem::take(&mut dialog.new_tag));
-                    }
-                });
             }
             LoadState::Error(e) => {
                 ui.colored_label(theme::red(), e);
@@ -396,6 +490,46 @@ fn content(ui: &mut egui::Ui, dialog: &mut PropertiesDialog, workspace: &Workspa
             _ => {
                 ui.spinner();
             }
+        }
+        return;
+    }
+    if page == "Custom Fields" {
+        if let LoadState::Ready(p) = &mut dialog.properties {
+            let mut remove = None;
+            for (index, definition) in p.custom_definitions.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(&definition.name);
+                    if ui.small_button("Delete definition").clicked() {
+                        remove = Some(index);
+                    }
+                });
+                let value = p.custom_fields.entry(definition.name.clone()).or_default();
+                ui.add(
+                    egui::TextEdit::singleline(value).hint_text(if definition.date {
+                        "2026-11-12T00:00:00Z"
+                    } else {
+                        "Text"
+                    }),
+                );
+            }
+            if let Some(index) = remove {
+                let removed = p.custom_definitions.remove(index);
+                p.custom_fields.remove(&removed.name);
+            }
+            ui.separator();
+            ui.label("New custom field definition (shared by this pool)");
+            ui.text_edit_singleline(&mut dialog.new_field_name);
+            ui.checkbox(&mut dialog.new_field_date, "Date and time");
+            if ui.button("New…").clicked() && !dialog.new_field_name.trim().is_empty() {
+                p.custom_definitions
+                    .push(xen_core::organization::CustomFieldDefinition {
+                        name: std::mem::take(&mut dialog.new_field_name).trim().into(),
+                        date: dialog.new_field_date,
+                    });
+            }
+            ui.label("Apply saves definitions and this object's values.");
+        } else {
+            ui.spinner();
         }
         return;
     }

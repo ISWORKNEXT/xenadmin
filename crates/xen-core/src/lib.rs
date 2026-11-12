@@ -25,3 +25,6 @@ pub mod server_admin;
 
 pub mod appliance;
 pub mod ovf;
+
+pub mod organization;
+pub mod updates;

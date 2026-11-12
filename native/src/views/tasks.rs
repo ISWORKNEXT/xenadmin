@@ -23,8 +23,10 @@ pub struct Notifications {
     export_error: String,
     overwrite: bool,
     help: Option<(String, String)>,
+    pending_dismiss: Vec<(Entry, bool)>,
 }
 
+#[derive(Clone)]
 enum NotificationAction {
     Cancel(String),
     Check(String),
@@ -60,6 +62,7 @@ impl NotificationAction {
     }
 }
 
+#[derive(Clone)]
 struct Entry {
     id: String,
     connection: String,
@@ -294,6 +297,18 @@ fn matches(e: &Entry, n: &Notifications, alerts: bool) -> bool {
 }
 
 fn dismiss(e: &Entry, n: &mut Notifications, alerts: bool, actions: &mut Vec<UiAction>) {
+    let options = super::utilities::load_options();
+    if if alerts {
+        options.confirm_alerts
+    } else {
+        options.confirm_events
+    } {
+        n.pending_dismiss.push((e.clone(), alerts));
+    } else {
+        dismiss_now(e, n, alerts, actions);
+    }
+}
+fn dismiss_now(e: &Entry, n: &mut Notifications, alerts: bool, actions: &mut Vec<UiAction>) {
     if alerts {
         if let Some(action) = &e.dismiss {
             actions.push(action.action());
@@ -310,6 +325,32 @@ pub fn show(
     actions: &mut Vec<UiAction>,
 ) {
     let n = &mut state.notifications;
+    if !n.pending_dismiss.is_empty() {
+        let response = egui::Modal::new(egui::Id::unique("dismiss-confirm")).show(ui.ctx(), |ui| {
+            ui.heading("Confirm Dismiss");
+            ui.label(format!(
+                "Dismiss {} selected notification(s)?",
+                n.pending_dismiss.len()
+            ));
+            if ui.button("Dismiss").clicked() {
+                return Some(true);
+            }
+            if ui.button("Cancel").clicked() {
+                return Some(false);
+            }
+            None
+        });
+        if let Some(confirm) = response.inner {
+            let pending = std::mem::take(&mut n.pending_dismiss);
+            if confirm {
+                for (entry, alerts) in pending {
+                    dismiss_now(&entry, n, alerts, actions);
+                }
+            }
+        } else if response.should_close() {
+            n.pending_dismiss.clear();
+        }
+    }
     let alerts = n.alerts;
     let all = entries(workspace, alerts);
     let visible: Vec<_> = all
@@ -666,7 +707,11 @@ pub fn show(
 }
 
 fn date(time: u64) -> String {
-    crate::format::timestamp(time)
+    if super::utilities::load_options().timestamps {
+        crate::format::timestamp(time)
+    } else {
+        String::new()
+    }
 }
 
 fn csv(entries: &[&Entry]) -> String {
@@ -713,14 +758,14 @@ mod tests {
         let rows = entries(&workspace, false);
         assert!(!matches(&rows[0], &n, false));
         let mut actions = vec![];
-        dismiss(&rows[0], &mut n, false, &mut actions);
+        dismiss_now(&rows[0], &mut n, false, &mut actions);
         assert!(n.dismissed.is_empty());
         assert!(rows[0].cancel.is_some());
         workspace.tasks[0].status = TaskStatus::Failed;
         let rows = entries(&workspace, false);
         assert!(matches(&rows[0], &n, false));
         assert!(rows[0].cancel.is_none());
-        dismiss(&rows[0], &mut n, false, &mut actions);
+        dismiss_now(&rows[0], &mut n, false, &mut actions);
         assert!(n.dismissed.contains(&rows[0].id));
         n.server = "another-server".into();
         assert!(!matches(&rows[0], &n, false));

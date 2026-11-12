@@ -51,23 +51,67 @@ pub fn show(
                 && state.power.matches(&vm.power_state))
                 || !node.children.is_empty();
         }
-        state.query.trim().is_empty()
-            || node
-                .name
-                .to_lowercase()
-                .contains(&state.query.to_lowercase())
-            || !node.children.is_empty()
+        if state.query.trim().is_empty() || !node.children.is_empty() {
+            return true;
+        }
+        let Some(key) = &node.key else {
+            return false;
+        };
+        let kind = match key {
+            ObjectKey::Host { .. } => "host",
+            ObjectKey::Pool(_) => "pool",
+            ObjectKey::Storage { .. } => "storage",
+            ObjectKey::Network { .. } => "network",
+            ObjectKey::Vdi { .. } => "disk",
+            ObjectKey::Group(_) => return false,
+            _ => return false,
+        };
+        let mut object = xen_core::xapi::VirtualMachine {
+            name: node.name.clone(),
+            uuid: object_uuid(key).unwrap_or_default().into(),
+            kind: kind.into(),
+            folder: node.metadata.folder.clone(),
+            tags: node.metadata.tags.clone(),
+            custom_fields: node
+                .metadata
+                .custom_fields
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            ..Default::default()
+        };
+        let connection = key
+            .connection_id()
+            .and_then(|id| state::find_connection(workspace, id));
+        if let ObjectKey::Storage { sr_uuid, .. } = key
+            && let Some(sr) = connection
+                .and_then(state::connection_inventory)
+                .and_then(|inv| inv.storage.iter().find(|sr| &sr.uuid == sr_uuid))
+        {
+            object.kind = if sr.shared { "remote_sr" } else { "local_sr" }.into();
+        }
+        if let ObjectKey::Host { host_uuid, .. } = key
+            && let Some(host) = connection
+                .and_then(state::connection_inventory)
+                .and_then(|inv| inv.hosts.iter().find(|h| &h.uuid == host_uuid))
+        {
+            object.memory = host.memory_total;
+        }
+        query.matches(
+            &object,
+            &connection.map(state::connection_name).unwrap_or_default(),
+        )
     }
     roots.retain_mut(|node| filter(node, &query, state, workspace));
     ui.horizontal(|ui| {
         if ui.button("New Search…").clicked() {
-            state.query.clear();
-            state.power = Default::default();
-            state.focus_search = true;
+            actions.push(UiAction::OpenSaveSearch);
         }
-        for label in ["Export…", "Import…"] {
-            ui.add_enabled(false, egui::Button::new(label))
-                .on_disabled_hover_text("Not implemented yet");
+        if ui.button("Export…").clicked() {
+            actions.push(UiAction::OpenFileInterchange("ExportSearchCommand"));
+        }
+        if ui.button("Import…").clicked() {
+            actions.push(UiAction::OpenFileInterchange("ImportSearchCommand"));
         }
     });
     fn count(nodes: &[Node]) -> usize {
@@ -79,6 +123,7 @@ pub fn show(
     super::inventory::toolbar(ui, state, actions, count(&roots), "objects");
     let mut rows = Vec::new();
     flatten(ui, &roots, 0, &mut rows);
+    let columns = state.search_columns.clone();
     egui::ScrollArea::horizontal()
         .id_salt("overview-scroll")
         .show(ui, |ui| {
@@ -88,17 +133,17 @@ pub fn show(
                 .sense(Sense::click())
                 .cell_layout(Layout::left_to_right(Align::Center))
                 .column(Column::initial(300.0).at_least(180.0))
-                .columns(Column::initial(100.0).at_least(75.0), 6)
+                .columns(Column::initial(100.0).at_least(75.0), columns.len())
                 .header(24.0, |mut header| {
-                    for name in [
-                        "Name",
+                    let names = [
                         "CPU Usage",
                         "Used Memory",
                         "Disks",
                         "Network",
                         "Address",
                         "Uptime",
-                    ] {
+                    ];
+                    for name in std::iter::once("Name").chain(columns.iter().map(|i| names[*i])) {
                         header.col(|ui| {
                             ui.label(RichText::new(name).size(11.0));
                         });
@@ -152,7 +197,8 @@ pub fn show(
                                 }
                             });
                         });
-                        for value in values {
+                        for index in &columns {
+                            let value = &values[*index];
                             row.col(|ui| {
                                 ui.add(
                                     egui::Label::new(RichText::new(value).size(11.0))
@@ -425,6 +471,13 @@ fn regroup(roots: Vec<Node>, state: &UiState, workspace: &WorkspaceView) -> Vec<
                     tags
                 }
             }
+            GroupBy::Folder => vec![node.metadata.folder.clone()],
+            GroupBy::CustomField => node
+                .metadata
+                .custom_fields
+                .iter()
+                .map(|(k, v)| format!("{k}: {v}"))
+                .collect(),
             GroupBy::None => unreachable!(),
         };
         for label in labels {

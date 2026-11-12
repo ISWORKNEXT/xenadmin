@@ -537,6 +537,40 @@ impl App {
                         }
                     }
                 }
+                Event::ExtraCompleted { result } => match result {
+                    Ok(()) => {
+                        self.state.extra = None;
+                        self.state
+                            .toasts
+                            .push(Toast::new("Command completed.", ToastKind::Success));
+                    }
+                    Err(error) => {
+                        if let Some((_, _, busy, message)) = &mut self.state.extra {
+                            *busy = false;
+                            *message = Some(error);
+                        } else {
+                            self.state.toasts.push(Toast::new(error, ToastKind::Error));
+                        }
+                    }
+                },
+                Event::OrganizationChanged { result } => {
+                    if let Some(dialog) = &mut self.state.organization {
+                        dialog.submitting = false;
+                    }
+                    match result {
+                        Ok(()) => {
+                            self.state.organization = None;
+                            self.state
+                                .toasts
+                                .push(Toast::new("Organization updated.", ToastKind::Success));
+                        }
+                        Err(error) => {
+                            if let Some(dialog) = &mut self.state.organization {
+                                dialog.error = Some(error);
+                            }
+                        }
+                    }
+                }
                 Event::ObjectProperties { seq, result } => {
                     if seq == self.state.properties_seq
                         && let Some(dialog) = self.state.properties.as_mut()
@@ -2161,6 +2195,52 @@ impl App {
     fn apply(&mut self, actions: Vec<UiAction>) {
         for action in actions {
             match action {
+                UiAction::ForgetPassword(id) => self.worker.send(Command::ForgetPassword(id)),
+                UiAction::ExtraConfirm {
+                    connection_id,
+                    action,
+                } => {
+                    self.state.extra = Some((connection_id, action, false, None));
+                }
+                UiAction::SubmitExtra => {
+                    if let Some((id, action, busy, _)) = &mut self.state.extra {
+                        *busy = true;
+                        self.worker.send(Command::Extra {
+                            connection_id: id.clone(),
+                            action: action.clone(),
+                        });
+                    }
+                }
+                UiAction::OpenOrganization(command) => {
+                    self.state.organization =
+                        Some(crate::views::organization::OrganizationDialog::new(
+                            command,
+                            &self.workspace,
+                        ));
+                }
+                UiAction::SubmitOrganization => {
+                    if let Some(dialog) = &mut self.state.organization {
+                        dialog.submitting = true;
+                        self.worker.send(Command::Organization {
+                            connection_id: dialog.connection_id.clone(),
+                            change: dialog.change(),
+                        });
+                    }
+                }
+                UiAction::OpenUtility(command) => {
+                    self.state.utility = Some(crate::views::utilities::UtilityDialog::new(command));
+                }
+                UiAction::EditOrganization(page) => {
+                    if let Some(dialog) = self.state.properties.as_mut() {
+                        if page == "Tags" {
+                            dialog.tag_editor = true;
+                        } else if page == "Folder" {
+                            dialog.folder_editor = true;
+                        } else {
+                            dialog.page = page.into();
+                        }
+                    }
+                }
                 UiAction::SelectPropertyPage(page) => {
                     if let Some(dialog) = self.state.properties.as_mut() {
                         dialog.page = page.into();
@@ -2172,6 +2252,10 @@ impl App {
                 } => {
                     self.state.properties_seq += 1;
                     self.state.properties = Some(crate::state::PropertiesDialog {
+                        tag_editor: false,
+                        folder_editor: false,
+                        new_field_date: false,
+                        new_field_name: String::new(),
                         connection_id: connection_id.clone(),
                         target: target.clone(),
                         page: "General".into(),
@@ -5289,7 +5373,11 @@ impl App {
                     if let Some(d) = self.state.server_admin.as_ref() {
                         self.worker.send(Command::PickServerBackup {
                             seq: self.state.server_admin_seq,
-                            save: d.page == crate::views::server_admin::Page::Backup,
+                            save: matches!(
+                                d.page,
+                                crate::views::server_admin::Page::Backup
+                                    | crate::views::server_admin::Page::StatusReport
+                            ),
                         });
                     }
                 }
@@ -5628,6 +5716,7 @@ impl App {
                     let Some(saved) = self.state.saved_searches.get(index).cloned() else {
                         continue;
                     };
+                    self.state.search_columns = saved.columns.clone();
                     self.state.query = saved.query;
                     self.state.group_by = saved.group_by;
                     self.state.page = 0;
@@ -5645,6 +5734,9 @@ impl App {
                 UiAction::EditSavedSearch(index) => {
                     if let Some(saved) = self.state.saved_searches.get(index) {
                         self.state.save_search = Some(crate::state::SaveSearchState {
+                            columns: saved.columns.clone(),
+                            condition_field: "name".into(),
+                            condition_value: String::new(),
                             name: saved.name.clone(),
                             query: saved.query.clone(),
                             group_by: saved.group_by,
@@ -5660,6 +5752,9 @@ impl App {
                         self.state.query.trim().chars().take(48).collect()
                     };
                     self.state.save_search = Some(crate::state::SaveSearchState {
+                        columns: self.state.search_columns.clone(),
+                        condition_field: "name".into(),
+                        condition_value: String::new(),
                         name: suggested,
                         query: self.state.query.clone(),
                         group_by: self.state.group_by,
@@ -5679,10 +5774,14 @@ impl App {
                         continue;
                     }
                     let saved = crate::config::SavedSearch {
+                        columns: dialog.columns.clone(),
                         name: name.clone(),
                         query: dialog.query.trim().to_owned(),
                         group_by: dialog.group_by,
                     };
+                    self.state.search_columns = saved.columns.clone();
+                    self.state.query = saved.query.clone();
+                    self.state.group_by = saved.group_by;
                     crate::config::upsert_saved_search(
                         &mut self.state.saved_searches,
                         saved,
@@ -6020,14 +6119,16 @@ impl App {
                         ));
                         continue;
                     }
-                    match std::process::Command::new("xfreerdp")
-                        .args([
-                            format!("/v:{address}"),
-                            "/cert:ignore".into(),
-                            "/dynamic-resolution".into(),
-                            "/network:auto".into(),
-                        ])
-                        .spawn()
+                    match std::process::Command::new(
+                        crate::views::utilities::load_options().rdp_program,
+                    )
+                    .args([
+                        format!("/v:{address}"),
+                        "/cert:ignore".into(),
+                        "/dynamic-resolution".into(),
+                        "/network:auto".into(),
+                    ])
+                    .spawn()
                     {
                         Ok(_) => self
                             .state

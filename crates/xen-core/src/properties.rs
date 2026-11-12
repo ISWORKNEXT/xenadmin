@@ -54,6 +54,14 @@ pub struct ObjectProperties {
     pub tags: Vec<String>,
     pub folder: String,
     #[serde(default)]
+    pub custom_fields: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    pub custom_definitions: Vec<crate::organization::CustomFieldDefinition>,
+    #[serde(default)]
+    pub definition_xml: String,
+    #[serde(default)]
+    pub organization_pool: String,
+    #[serde(default)]
     pub page_summaries: std::collections::BTreeMap<String, String>,
     pub disk: Option<DiskProperties>,
     #[serde(default)]
@@ -130,6 +138,18 @@ impl Connection {
     ) -> Result<ObjectProperties, ApiError> {
         let (_, record) = self.property_record(target).await?;
         let mut properties = properties_from_record(target, &record);
+        let pools: std::collections::BTreeMap<String, Value> = self
+            .request("pool.get_all_records", json!([self.session]))
+            .await?;
+        if let Some((pool, record)) = pools.into_iter().next() {
+            properties.definition_xml = record["gui_config"][crate::organization::CUSTOM_FIELDS]
+                .as_str()
+                .unwrap_or_default()
+                .into();
+            properties.custom_definitions =
+                crate::organization::decode_definitions(&properties.definition_xml)?;
+            properties.organization_pool = pool;
+        }
         if target.kind == ObjectKind::Disk {
             let mut devices = Vec::new();
             for reference in record["VBDs"]
@@ -269,6 +289,40 @@ impl Connection {
                 }
             }
         }
+        let folder = crate::organization::normalize_folder(&edited.folder)?;
+        let definitions = crate::organization::encode_definitions(&edited.custom_definitions)?;
+        for definition in &edited.custom_definitions {
+            if definition.date
+                && edited.custom_fields.get(&definition.name)
+                    != original.custom_fields.get(&definition.name)
+                && let Some(value) = edited.custom_fields.get(&definition.name)
+                && !value.is_empty()
+                && chrono::DateTime::parse_from_rfc3339(value).is_err()
+            {
+                return Err(ApiError::Xen(format!(
+                    "{} must be an ISO 8601 date and time (e.g. 2026-11-12T00:00:00Z).",
+                    definition.name
+                )));
+            }
+        }
+        let definitions_changed = edited.custom_definitions != original.custom_definitions;
+        if definitions_changed {
+            let actual: Value = self
+                .request(
+                    "pool.get_gui_config",
+                    json!([self.session, original.organization_pool]),
+                )
+                .await?;
+            if actual[crate::organization::CUSTOM_FIELDS]
+                .as_str()
+                .unwrap_or_default()
+                != original.definition_xml
+            {
+                return Err(ApiError::Xen(
+                    "Custom field definitions changed. Reopen Properties.".into(),
+                ));
+            }
+        }
         let (reference, record) = self.property_record(&edited.target).await?;
         let current = properties_from_record(&edited.target, &record);
         let fields = [
@@ -316,27 +370,91 @@ impl Connection {
                 .await?;
             }
         }
-        if edited.folder != original.folder {
-            let actual = record["other_config"]["folder"]
-                .as_str()
-                .unwrap_or_default();
-            if actual != original.folder && actual != edited.folder {
-                return Err(ApiError::Xen(
-                    "The folder changed on the host. Reopen Properties.".into(),
-                ));
+        let mut changes = std::collections::BTreeMap::new();
+        if folder != original.folder {
+            changes.insert("folder".to_owned(), (original.folder.clone(), folder));
+        }
+        for key in original
+            .custom_fields
+            .keys()
+            .chain(edited.custom_fields.keys())
+        {
+            let before = original.custom_fields.get(key).cloned().unwrap_or_default();
+            let after = edited.custom_fields.get(key).cloned().unwrap_or_default();
+            if before != after {
+                changes.insert(
+                    format!("{}{key}", crate::organization::CUSTOM_PREFIX),
+                    (before, after),
+                );
             }
-            let mut other = record["other_config"]
-                .as_object()
-                .cloned()
-                .unwrap_or_default();
-            if edited.folder.is_empty() {
-                other.remove("folder");
-            } else {
-                other.insert("folder".into(), json!(edited.folder));
+        }
+        for (key, (before, after)) in &changes {
+            let actual = record["other_config"][key].as_str().unwrap_or_default();
+            if actual != before && actual != after {
+                return Err(ApiError::Xen(format!(
+                    "{key} changed on the host. Reopen Properties."
+                )));
             }
+        }
+        for (key, (_, after)) in changes {
             self.request::<Value>(
-                &format!("{class}.set_other_config"),
-                json!([self.session, reference, other]),
+                &format!("{class}.remove_from_other_config"),
+                json!([self.session, reference, key]),
+            )
+            .await?;
+            if !after.is_empty() {
+                self.request::<Value>(
+                    &format!("{class}.add_to_other_config"),
+                    json!([self.session, reference, key, after]),
+                )
+                .await?;
+            }
+        }
+        if definitions_changed {
+            let removed: Vec<_> = original
+                .custom_definitions
+                .iter()
+                .filter(|d| !edited.custom_definitions.iter().any(|e| e.name == d.name))
+                .collect();
+            if !removed.is_empty() {
+                for class in ["pool", "host", "VM", "SR", "VDI", "network"] {
+                    for (reference, record) in self.records(class).await? {
+                        for definition in &removed {
+                            let key = format!(
+                                "{}{}",
+                                crate::organization::CUSTOM_PREFIX,
+                                definition.name
+                            );
+                            if record["other_config"].get(&key).is_some() {
+                                self.request::<Value>(
+                                    &format!("{class}.remove_from_other_config"),
+                                    json!([self.session, reference, key]),
+                                )
+                                .await?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if definitions_changed {
+            self.request::<Value>(
+                "pool.remove_from_gui_config",
+                json!([
+                    self.session,
+                    original.organization_pool,
+                    crate::organization::CUSTOM_FIELDS
+                ]),
+            )
+            .await?;
+            self.request::<Value>(
+                "pool.add_to_gui_config",
+                json!([
+                    self.session,
+                    original.organization_pool,
+                    crate::organization::CUSTOM_FIELDS,
+                    definitions
+                ]),
             )
             .await?;
         }
@@ -387,6 +505,21 @@ impl Connection {
 
 fn properties_from_record(target: &ObjectTarget, record: &Value) -> ObjectProperties {
     ObjectProperties {
+        custom_fields: record["other_config"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter_map(|(k, v)| {
+                Some((
+                    k.strip_prefix(crate::organization::CUSTOM_PREFIX)?
+                        .to_owned(),
+                    v.as_str()?.to_owned(),
+                ))
+            })
+            .collect(),
+        custom_definitions: Vec::new(),
+        definition_xml: String::new(),
+        organization_pool: String::new(),
         page_summaries: {
             let mut summaries = std::collections::BTreeMap::new();
             let alarms = record["other_config"]["perfmon"]

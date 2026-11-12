@@ -1,150 +1,162 @@
-menu	item	upstream_command	status	ui_action
-File	Import...	ImportCommand	wired	OpenXvaImport
-File	Import Search...	ImportSearchCommand	disabled-not-implemented	
-File	Import Server List...	ImportServerList	disabled-not-implemented	
-File	Export Server List...	ExportServerList	disabled-not-implemented	
-File	Exit	Exit	wired	ViewportCommand::Close
-View	Custom Templates	CustomTemplates	wired	tree_preferences.custom_templates
-View	Xen Desktop Templates	XenDesktopTemplates	wired	tree_preferences.default_templates
-View	Local Storage	LocalStorage	wired	tree_preferences.local_storage
-View	Hidden Objects	HiddenObjects	wired	tree_preferences.hidden_objects
-View	Toolbar	Toolbar	wired	toolbar_visible
-View	Theme		wired	submenu
-View > Theme	Light / Dark	Theme	wired	theme::toggle
-View	Zoom		wired	submenu
-View > Zoom	Zoom In	ZoomIn	wired	Context::set_zoom_factor
-View > Zoom	Zoom Out	ZoomOut	wired	Context::set_zoom_factor
-View > Zoom	Reset Zoom	ZoomReset	wired	Context::set_zoom_factor
-View	Refresh	Refresh	wired	Refresh + selected detail refresh
-Pool	New Pool...	NewPoolCommand	wired	OpenServerAdmin(NewPool); coordinator and standalone member selection; joins untested-lab
-Pool	Add Server	AddServer	wired	OpenServerAdmin(AddMember); untested-lab
-Pool	Remove Server	RemoveServer	wired	OpenServerAdmin(Eject); coordinator/HA guards; untested-lab
-Pool	Reconnect As...	PoolReconnectAsCommand	disabled-out-of-scope	
-Pool	Disconnect	DisconnectPoolCommand	wired	Disconnect
-Pool	vApps...	VMGroupCommandVM_appliance	disabled-not-implemented	
-Pool	High Availability	HACommand	wired	submenu
-Pool > High Availability	Configure HA...	HAConfigureCommand	wired	OpenHaEnable
-Pool > High Availability	Disable HA	HADisableCommand	wired	PromptHaDisable
-Pool	Disaster Recovery	DRCommand	wired	submenu
-Pool > Disaster Recovery	Configure...	DRConfigureCommand	wired	OpenDrTaskDialog
-Pool > Disaster Recovery	Disaster Recovery Wizard...	DisasterRecoveryCommand	disabled-not-implemented	
-Pool	VM Snapshot Schedule Policies...	VMGroupCommandVMSS	wired	OpenObject(PoolStatus)
-Pool	Export Resource Data...	ExportResourceReportCommand	disabled-not-implemented	
-Pool	Workload Balancing	WlbCommand	wired	submenu
-Pool > Workload Balancing	View Workload Reports...	ViewWorkloadReportsCommand	disabled-not-implemented	
-Pool > Workload Balancing	Disconnect Workload Balancing Server	DisconnectWlbServerCommand	wired	PromptWlbDeconfigure
-Pool	Change Server Password...	ChangeHostPasswordCommand	wired	OpenServerAdmin(Password); confirmation and reconnect credential update; code path only
-Pool	Rotate Pool Secret	RotatePoolSecretCommand	wired	OpenServerAdmin(RotateSecret); HA/rolling-upgrade guard; untested-lab
-Pool	Enable Certificate Verification	EnableTlsVerificationCommand	disabled-out-of-scope	
-Pool	Make into standalone server	DeletePoolCommand	wired	OpenServerAdmin(Standalone); member eject then clear pool name; untested-lab
-Pool	Properties	PoolPropertiesCommand	wired	OpenProperties
-Server	Add...	AddHostCommand	wired	ConnectState::empty
-Server	Reboot	RebootHostCommand	wired	Evacuation/maintenance preparation then host reboot; code path only
-Server	Power On	PowerOnHostCommand	wired	PromptHostAction; live/power-on mode/allowed-operation guards
-Server	Shut Down	ShutDownHostCommand	wired	Evacuation/maintenance preparation then host shutdown; code path only; never run live
-Server	Restart Toolstack	RestartToolstackCommand	wired	PromptHostAction; request restart_agent then wait and reconnect XenAPI
-Server	Connect/Disconnect	Connect/Disconnect	wired	submenu
-Server > Connect/Disconnect	Connect	ReconnectHostCommand	wired	Reconnect
-Server > Connect/Disconnect	Disconnect	DisconnectHostCommand	wired	Disconnect
-Server > Connect/Disconnect	Reconnect As...	HostReconnectAsCommand	disabled-out-of-scope	
-Server > Connect/Disconnect	Connect All	ConnectAllHostsCommand	wired	Reconnect (each offline connection)
-Server > Connect/Disconnect	Disconnect All	DisconnectAllHostsCommand	wired	Disconnect (each online connection)
-Server	Add to Pool	AddtoPool	wired	OpenServerAdmin(JoinPool); standalone guard and reconnect to coordinator; untested-lab
-Server	Remove From Pool	RemoveHostFromPoolCommand	wired	OpenServerAdmin(Eject); coordinator/HA guards; untested-lab
-Server	Back Up...	BackupHostCommand	wired	OpenServerAdmin(Backup); local file picker and streaming HTTP /host_backup
-Server	Restore From Backup...	RestoreHostFromBackupCommand	wired	OpenServerAdmin(Restore); confirmation and HTTP /host_restore; code path only
-Server	Certificate	CertificateCommand	disabled-out-of-scope	submenu
-Server > Certificate	Install Certificate...	InstallCertificateCommand	disabled-out-of-scope	
-Server > Certificate	Reset Certificate	ResetCertificateCommand	disabled-out-of-scope	
-Server	Enter Maintenance Mode	HostMaintenanceModeCommand	wired	Evacuation VM list with suspend/shutdown choices; maintenance marker; exit optionally restores VMs
-Server	Control Domain Memory...	ChangeControlDomainMemoryCommand	wired	OpenServerAdmin(Memory); maintenance/range guards; confirmation and reboot; code path only
-Server	Password	HostPasswordCommand	wired	submenu; Change implemented; Forget Password remains disabled
-Server > Password	Change...	ChangeHostPasswordCommand	wired	OpenServerAdmin(Password); confirmation and reconnect credential update; code path only
-Server > Password	Forget Password	ForgetSavedPasswordCommand	disabled-not-implemented	
-Server	Destroy	DestroyHostCommand	disabled-not-implemented	
-Server	Remove from Xen Desktop	RemoveHostCommand	wired	ConfirmRemove
-Server	Properties	HostPropertiesCommand	wired	OpenProperties
-VM	New VM...	NewVMCommand	wired	OpenNewVmWizard
-VM	Start/Shut down	Start/Shutdown	wired	submenu
-VM > Start/Shut down	Start	StartVMCommand	wired	Propose (whole selection; sequential ActionBatch)
-VM > Start/Shut down	Shut Down	ShutDownVMCommand	wired	Propose (whole selection; sequential ActionBatch)
-VM > Start/Shut down	Resume	ResumeVMCommand	wired	Propose (whole selection; sequential ActionBatch)
-VM > Start/Shut down	Suspend	SuspendVMCommand	wired	Propose (whole selection; sequential ActionBatch)
-VM > Start/Shut down	Reboot	RebootVMCommand	wired	Propose (whole selection; sequential ActionBatch)
-VM > Start/Shut down	Start in Recovery Mode	VMRecoveryModeCommand	disabled-not-implemented	
-VM > Start/Shut down	Force Shut Down	ForceVMShutDownCommand	wired	Propose (whole selection; sequential ActionBatch)
-VM > Start/Shut down	Force Reboot	ForceVMRebootCommand	wired	Propose (whole selection; sequential ActionBatch)
-VM > Start/Shut down	Start vApp	VappStartCommand	disabled-not-implemented	
-VM > Start/Shut down	Shut Down vApp	VappShutDownCommand	disabled-not-implemented	
-VM	Resume on Server	ResumeVMOnHostCommand	wired	submenu
-VM > Resume on Server	<selected server>	ResumeVMOnHostCommand	wired	ProposeOnHost(Resume)
-VM	Migrate to Server	MigratetoServer	disabled-not-implemented	
-VM	Start on Server	StartVMOnHostCommand	wired	submenu
-VM > Start on Server	<selected server>	StartVMOnHostCommand	wired	ProposeOnHost(Start)
-VM	Assign to Snapshot Schedule...	AssigntoSnapshotSchedule...	disabled-not-implemented	
-VM	Assign to vApp	AssigntovApp	disabled-not-implemented	
-VM	Copy VM	CopyVMCommand	wired	OpenVmCopy
-VM	Move VM	MoveVMCommand	disabled-not-implemented	
-VM	Take a Snapshot	TakeSnapshotCommand	wired	Propose
-VM	Convert to Template	ConvertVMToTemplateCommand	wired	Propose
-VM	Export...	ExportCommand	wired	OpenXvaExport / OpenXvaExportMany (sequential XvaBatch)
-VM	Trusted Platform Module Manager...	VtpmCommand	disabled-not-implemented	
-VM	Disable Changed Block Tracking	DisableChangedBlockTrackingCommand	disabled-not-implemented	
-VM	Enable PVS-Accelerator...	EnablePvsReadCachingCommand	disabled-not-implemented	
-VM	Disable PVS-Accelerator	DisablePvsReadCachingCommand	disabled-not-implemented	
-VM	Install XenServer VM Tools...	Install XenServer VM Tools...	disabled-not-implemented	
-VM	Send Ctrl+Alt+Del	SendCtrlAltDel	wired	ConsoleKey (six key transitions)
-VM	Delete VM	DeleteVMCommand	wired	Propose (whole selection; sequential ActionBatch)
-VM	Properties	VMPropertiesCommand	wired	OpenProperties
-Storage	New Storage...	NewSRCommand	wired	OpenSrCreate shared Type/Name/Provisioning/Location/Finish wizard; NFS/iSCSI/HBA/SMB disk targets untested-lab
-Storage	Repair...	RepairSRCommand	wired	RepairSr PBD-per-host dialog
-Storage	Set as Default	SetAsDefaultSRCommand	wired	PromptSrAction
-Storage	Virtual Disks	VirtualDiskCommand	wired	submenu
-Storage > Virtual Disks	New Virtual Disk...	AddVirtualDiskCommand	wired	OpenAddDisk standalone SR or create+attach VM; name/description/size/SR
-Storage > Virtual Disks	Attach Virtual Disk...	AttachVirtualDiskCommand	wired	OpenAttachVdi SR-to-VDI tree with read-only option
-Storage	Reclaim freed space	TrimSRCommand	wired	PromptSrAction
-Storage	Detach	DetachSRCommand	wired	PromptSrAction; running VM guard in inventory and backend
-Storage	Reattach...	ReattachSRCommand	wired	OpenSrReattach shared wizard location fields
-Storage	Forget	ForgetSRCommand	wired	PromptSrAction
-Storage	Destroy	DestroySRCommand	wired	PromptSrAction
-Storage	Properties	SRPropertiesCommand	wired	OpenProperties
-Templates	Create VM From Selection	CreateVMFromTemplateCommand	wired	submenu
-Templates > Create VM From Selection	New VM wizard...	NewVMFromTemplateCommand	wired	OpenNewVmWizard
-Templates > Create VM From Selection	Quick Create	InstantVMFromTemplateCommand	disabled-not-implemented	
-Templates	Export to File...	ExportTemplateCommand	wired	OpenXvaExport
-Templates	Copy...	CopyTemplateCommand	wired	OpenVmCopy
-Templates	Delete Template	DeleteTemplateCommand	wired	Propose (whole selection; sequential ActionBatch)
-Templates	Properties	TemplatePropertiesCommand	wired	OpenProperties
-Tools	Options...	Options	disabled-not-implemented	
-Help	View Xen Desktop Log Files	ViewXenDesktopLogFiles	disabled-not-implemented	
-Help	Check for Xen Desktop Updates	CheckforXenDesktopUpdates	disabled-not-implemented	
-Help	Xen Desktop on the Web	XenDesktopontheWeb	disabled-not-implemented	
-Help	Xen Desktop Plugins online	XenDesktopPluginsonline	disabled-not-implemented	
-Help	About	About	disabled-not-implemented	
-Tree / Search	Object context menu	ContextMenuBuilder	wired	Shared menubar resolver; Ctrl/Shift selection
-Tree / Search	Delete Snapshot	DeleteSnapshotCommand	wired	Propose (whole selection)
-Tree / Search	Delete VMs and Templates	DeleteVMsAndTemplatesCommand	wired	Propose (whole selection)
-Tree / Search	New VM from Snapshot…	NewVMFromSnapshotCommand	wired	Propose SnapshotToVm
-Tree / Search	New Template from Snapshot…	NewTemplateFromSnapshotCommand	wired	Propose SnapshotToTemplate
-Tree / Search	Export Snapshot as Template…	ExportSnapshotAsTemplateCommand	wired	OpenXvaExport
-Tree / Search	Network / VDI Properties	PropertiesCommand	wired	OpenProperties
-VM Storage	Properties / Resize…	PropertiesCommand	wired	OpenProperties > Size and Location (apply on OK)
-VM Storage	Properties / Mode	PropertiesCommand	wired	OpenProperties > VM device page (apply on OK)
-VM Storage	Properties / Bootable	PropertiesCommand	wired	OpenProperties > VM device page (apply on OK)
-VM Storage	Properties / Position		disabled-not-implemented	No existing position setter
-VM Storage / Networking / Snapshots	Row context menus		wired	Same actions as table buttons
-Host Networking / NICs / SR Storage	Row context menus		wired	Same actions as table buttons; NIC Delete Bond and Copy; management bonds protected
-VM General	Section Edit…	PropertiesCommand	wired	OpenProperties on CPU / Boot Options / High Availability / Home Server
-Pool / standalone host	Properties pages	PoolPropertiesCommand	wired	OpenProperties > Live Patching / Network Options / Advanced
-VM Networking	Properties	PropertiesCommand	wired	OpenProperties > Network Settings
-Host / Pool / SR General	Properties	PropertiesCommand	wired	OpenProperties
-SR Storage	Add… / Move…		wired	Standalone VDI create and copy-then-delete move; destination SR selection
-Server	Remove Crash Dumps	RemoveCrashDumpsCommand	wired	OpenServerAdmin(CrashDumps); confirmation; code path only
-Server	Server Status Report...	ServerStatusReportCommand	disabled-not-implemented	No corresponding upstream command in the referenced checkout
-Host Networking	Add Network...	NewNetworkWizard	wired	Shared Type/Name/Details/Finish wizard; VLAN/private/bond/CHIN/SR-IOV; hardware and multi-host types untested-lab
-Host Networking	Properties	NetworkProperties	wired	General plus MTU/automatic/NIC/VLAN; active/physical/management interface guards
-Host Networking	Remove	RemoveNetwork	wired	Confirmation; backend management and VIF guards
-Host Networking	Configure...	NetworkingProperties	wired	IP mode/address/mask/gateway/DNS; management-interface selection and acknowledgement; code path only
-NICs	Create Bond...	CreateBond	wired	Shared network wizard with NIC/mode/MTU details; untested-lab
-NICs	Delete Bond	DestroyBondCommand	wired	Shared guarded network removal; management and VIF-bearing bonds protected; untested-lab
-NICs	Rescan	PIF.scan	wired	PromptHostAction(RescanPifs); code path only
+menu	item	upstream_command	status	ui_action	verified
+File	Import...	ImportCommand	wired	OpenXvaImport	code
+File	Import Search...	ImportSearchCommand	wired	OpenFileInterchange(ImportSearchCommand); native and supported upstream XML	code
+File	Import Server List...	ImportServerList	wired	OpenFileInterchange(ImportServerList)	code
+File	Export Server List...	ExportServerList	wired	OpenFileInterchange(ExportServerList)	code
+File	Exit	Exit	wired	ViewportCommand::Close	code
+View	Custom Templates	CustomTemplates	wired	tree_preferences.custom_templates	code
+View	Xen Desktop Templates	XenDesktopTemplates	wired	tree_preferences.default_templates	code
+View	Local Storage	LocalStorage	wired	tree_preferences.local_storage	code
+View	Hidden Objects	HiddenObjects	wired	tree_preferences.hidden_objects	code
+View	Toolbar	Toolbar	wired	toolbar_visible	code
+View	Theme		wired	submenu	code
+View > Theme	Light / Dark	Theme	wired	theme::toggle	code
+View	Zoom		wired	submenu	code
+View > Zoom	Zoom In	ZoomIn	wired	Context::set_zoom_factor	code
+View > Zoom	Zoom Out	ZoomOut	wired	Context::set_zoom_factor	code
+View > Zoom	Reset Zoom	ZoomReset	wired	Context::set_zoom_factor	code
+View	Refresh	Refresh	wired	Refresh + selected detail refresh	code
+Pool	New Pool...	NewPoolCommand	wired	OpenServerAdmin(NewPool); coordinator and standalone member selection; joins untested-lab	untested-lab
+Pool	Add Server	AddServer	wired	OpenServerAdmin(AddMember); untested-lab	untested-lab
+Pool	Remove Server	RemoveServer	wired	OpenServerAdmin(Eject); coordinator/HA guards; untested-lab	untested-lab
+Pool	Reconnect As...	PoolReconnectAsCommand	disabled-out-of-scope		code
+Pool	Disconnect	DisconnectPoolCommand	wired	Disconnect	code
+Pool	vApps...	VMGroupCommandVM_appliance	disabled-not-implemented	No enabled command resolver	code
+Pool	High Availability	HACommand	wired	submenu	code
+Pool > High Availability	Configure HA...	HAConfigureCommand	wired	OpenHaEnable	untested-lab
+Pool > High Availability	Disable HA	HADisableCommand	wired	PromptHaDisable	untested-lab
+Pool	Disaster Recovery	DRCommand	wired	submenu	code
+Pool > Disaster Recovery	Configure...	DRConfigureCommand	wired	OpenDrTaskDialog	code
+Pool > Disaster Recovery	Disaster Recovery Wizard...	DisasterRecoveryCommand	disabled-not-implemented	No enabled command resolver	code
+Pool	VM Snapshot Schedule Policies...	VMGroupCommandVMSS	wired	OpenObject(PoolStatus)	code
+Pool	Export Resource Data...	ExportResourceReportCommand	disabled-not-implemented	No enabled command resolver	code
+Pool	Workload Balancing	WlbCommand	wired	submenu	code
+Pool > Workload Balancing	View Workload Reports...	ViewWorkloadReportsCommand	disabled-not-implemented	No enabled command resolver	code
+Pool > Workload Balancing	Disconnect Workload Balancing Server	DisconnectWlbServerCommand	wired	PromptWlbDeconfigure	code
+Pool	Change Server Password...	ChangeHostPasswordCommand	wired	OpenServerAdmin(Password); confirmation and reconnect credential update; code path only	code
+Pool	Rotate Pool Secret	RotatePoolSecretCommand	wired	OpenServerAdmin(RotateSecret); HA/rolling-upgrade guard; untested-lab	untested-lab
+Pool	Enable Certificate Verification	EnableTlsVerificationCommand	disabled-out-of-scope		code
+Pool	Make into standalone server	DeletePoolCommand	wired	OpenServerAdmin(Standalone); member eject then clear pool name; untested-lab	untested-lab
+Pool	Properties	PoolPropertiesCommand	wired	OpenProperties	code
+Server	Add...	AddHostCommand	wired	ConnectState::empty	code
+Server	Reboot	RebootHostCommand	wired	Evacuation/maintenance preparation then host reboot; code path only	code
+Server	Power On	PowerOnHostCommand	wired	PromptHostAction; live/power-on mode/allowed-operation guards	code
+Server	Shut Down	ShutDownHostCommand	wired	Evacuation/maintenance preparation then host shutdown; code path only; never run live	code
+Server	Restart Toolstack	RestartToolstackCommand	wired	PromptHostAction; request restart_agent then wait and reconnect XenAPI	code
+Server	Connect/Disconnect	Connect/Disconnect	wired	submenu	code
+Server > Connect/Disconnect	Connect	ReconnectHostCommand	wired	Reconnect	code
+Server > Connect/Disconnect	Disconnect	DisconnectHostCommand	wired	Disconnect	code
+Server > Connect/Disconnect	Reconnect As...	HostReconnectAsCommand	disabled-out-of-scope		code
+Server > Connect/Disconnect	Connect All	ConnectAllHostsCommand	wired	Reconnect (each offline connection)	code
+Server > Connect/Disconnect	Disconnect All	DisconnectAllHostsCommand	wired	Disconnect (each online connection)	code
+Server	Add to Pool	AddtoPool	wired	OpenServerAdmin(JoinPool); standalone guard and reconnect to coordinator; untested-lab	untested-lab
+Server	Remove From Pool	RemoveHostFromPoolCommand	wired	OpenServerAdmin(Eject); coordinator/HA guards; untested-lab	untested-lab
+Server	Back Up...	BackupHostCommand	wired	OpenServerAdmin(Backup); local file picker and streaming HTTP /host_backup	code
+Server	Restore From Backup...	RestoreHostFromBackupCommand	wired	OpenServerAdmin(Restore); confirmation and HTTP /host_restore; code path only	code
+Server	Certificate	CertificateCommand	disabled-out-of-scope	submenu	code
+Server > Certificate	Install Certificate...	InstallCertificateCommand	disabled-out-of-scope		code
+Server > Certificate	Reset Certificate	ResetCertificateCommand	disabled-out-of-scope		code
+Server	Enter Maintenance Mode	HostMaintenanceModeCommand	wired	Evacuation VM list with suspend/shutdown choices; maintenance marker; exit optionally restores VMs	code
+Server	Control Domain Memory...	ChangeControlDomainMemoryCommand	wired	OpenServerAdmin(Memory); maintenance/range guards; confirmation and reboot; code path only	code
+Server	Password	HostPasswordCommand	wired	submenu; Change and Forget Password implemented	code
+Server > Password	Change...	ChangeHostPasswordCommand	wired	OpenServerAdmin(Password); confirmation and reconnect credential update; code path only	code
+Server > Password	Forget Password	ForgetSavedPasswordCommand	wired	ForgetPassword; clear in-memory reconnect password; profiles never store passwords	code
+Server	Destroy	DestroyHostCommand	wired	ExtraConfirm(DestroyHost); backend offline/non-coordinator guards	untested-lab
+Server	Remove from Xen Desktop	RemoveHostCommand	wired	ConfirmRemove	code
+Server	Properties	HostPropertiesCommand	wired	OpenProperties	code
+VM	New VM...	NewVMCommand	wired	OpenNewVmWizard	code
+VM	Start/Shut down	Start/Shutdown	wired	submenu	code
+VM > Start/Shut down	Start	StartVMCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+VM > Start/Shut down	Shut Down	ShutDownVMCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+VM > Start/Shut down	Resume	ResumeVMCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+VM > Start/Shut down	Suspend	SuspendVMCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+VM > Start/Shut down	Reboot	RebootVMCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+VM > Start/Shut down	Start in Recovery Mode	VMRecoveryModeCommand	wired	ExtraConfirm(Recovery); boot DN then restore original HVM policy/params; live start failed FAILED_TO_START_EMULATOR; restore requests succeeded; unqualified	code
+VM > Start/Shut down	Force Shut Down	ForceVMShutDownCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+VM > Start/Shut down	Force Reboot	ForceVMRebootCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+VM > Start/Shut down	Start vApp	VappStartCommand	disabled-not-implemented	No enabled command resolver	code
+VM > Start/Shut down	Shut Down vApp	VappShutDownCommand	disabled-not-implemented	No enabled command resolver	code
+VM	Resume on Server	ResumeVMOnHostCommand	wired	submenu	code
+VM > Resume on Server	<selected server>	ResumeVMOnHostCommand	wired	ProposeOnHost(Resume)	code
+VM	Migrate to Server	MigratetoServer	disabled-not-implemented	No enabled command resolver	untested-lab
+VM	Start on Server	StartVMOnHostCommand	wired	submenu	code
+VM > Start on Server	<selected server>	StartVMOnHostCommand	wired	ProposeOnHost(Start)	code
+VM	Assign to Snapshot Schedule...	AssigntoSnapshotSchedule...	disabled-not-implemented	No enabled command resolver	code
+VM	Assign to vApp	AssigntovApp	disabled-not-implemented	No enabled command resolver	code
+VM	Copy VM	CopyVMCommand	wired	OpenVmCopy	code
+VM	Move VM	MoveVMCommand	wired	OpenVmMove; halted VM and task guards	code
+VM	Take a Snapshot	TakeSnapshotCommand	wired	Propose	code
+VM	Convert to Template	ConvertVMToTemplateCommand	wired	Propose	code
+VM	Export...	ExportCommand	wired	OpenXvaExport / OpenXvaExportMany (sequential XvaBatch)	code
+VM	Trusted Platform Module Manager...	VtpmCommand	disabled-not-implemented	No enabled command resolver	code
+VM	Disable Changed Block Tracking	DisableChangedBlockTrackingCommand	wired	ExtraConfirm(DisableCbt); VDI.disable_cbt on enabled disks; eligibility projected in inventory; live menu run inconclusive	code
+VM	Enable PVS-Accelerator...	EnablePvsReadCachingCommand	disabled-not-implemented	No enabled command resolver	code
+VM	Disable PVS-Accelerator	DisablePvsReadCachingCommand	disabled-not-implemented	No enabled command resolver	code
+VM	Install Guest Tools...	Install Guest Tools...	wired	Propose(InstallGuestTools); tools ISO and VM state guards	code
+VM	Send Ctrl+Alt+Del	SendCtrlAltDel	wired	ConsoleKey (six key transitions)	code
+VM	Delete VM	DeleteVMCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+VM	Properties	VMPropertiesCommand	wired	OpenProperties	code
+Storage	New Storage...	NewSRCommand	wired	OpenSrCreate shared Type/Name/Provisioning/Location/Finish wizard; NFS/iSCSI/HBA/SMB disk targets untested-lab	untested-lab
+Storage	Repair...	RepairSRCommand	wired	RepairSr PBD-per-host dialog	code
+Storage	Set as Default	SetAsDefaultSRCommand	wired	PromptSrAction	code
+Storage	Virtual Disks	VirtualDiskCommand	wired	submenu	code
+Storage > Virtual Disks	New Virtual Disk...	AddVirtualDiskCommand	wired	OpenAddDisk standalone SR or create+attach VM; name/description/size/SR	code
+Storage > Virtual Disks	Attach Virtual Disk...	AttachVirtualDiskCommand	wired	OpenAttachVdi SR-to-VDI tree with read-only option	code
+Storage	Reclaim freed space	TrimSRCommand	wired	PromptSrAction	code
+Storage	Detach	DetachSRCommand	wired	PromptSrAction; running VM guard in inventory and backend	code
+Storage	Reattach...	ReattachSRCommand	wired	OpenSrReattach shared wizard location fields	code
+Storage	Forget	ForgetSRCommand	wired	PromptSrAction	code
+Storage	Destroy	DestroySRCommand	wired	PromptSrAction	code
+Storage	Properties	SRPropertiesCommand	wired	OpenProperties	code
+Templates	Create VM From Selection	CreateVMFromTemplateCommand	wired	submenu	code
+Templates > Create VM From Selection	New VM wizard...	NewVMFromTemplateCommand	wired	OpenNewVmWizard	code
+Templates > Create VM From Selection	Quick Create	InstantVMFromTemplateCommand	wired	ExtraConfirm(QuickCreate); instant/unlocked template guard; clone/provision/start; eligibility projected in inventory; live menu run inconclusive	code
+Templates	Export to File...	ExportTemplateCommand	wired	OpenXvaExport	code
+Templates	Copy...	CopyTemplateCommand	wired	OpenVmCopy	code
+Templates	Delete Template	DeleteTemplateCommand	wired	Propose (whole selection; sequential ActionBatch)	code
+Templates	Properties	TemplatePropertiesCommand	wired	OpenProperties	code
+Tools	Options...	Options	wired	OpenUtility(Options); persisted vertical pages	live
+Help	View Xen Desktop Log Files	ViewXenDesktopLogFiles	wired	OpenUtility; open config/logs with system file manager	code
+Help	Check for Xen Desktop Updates	CheckforXenDesktopUpdates	wired	OpenUtility; GitHub releases API version comparison	code
+Help	Xen Desktop on the Web	XenDesktopontheWeb	wired	Open repository in system browser	code
+Help	Xen Desktop Plugins online	XenDesktopPluginsonline	omitted	Plugins omitted by M6 brief	code
+Help	About	About	wired	OpenUtility; version/commit/licence/credits	live
+Tree / Search	Object context menu	ContextMenuBuilder	wired	Shared menubar resolver; Ctrl/Shift selection	code
+Tree / Search	Delete Snapshot	DeleteSnapshotCommand	wired	Propose (whole selection)	code
+Tree / Search	Delete VMs and Templates	DeleteVMsAndTemplatesCommand	wired	Propose (whole selection)	code
+Tree / Search	New VM from Snapshot…	NewVMFromSnapshotCommand	wired	Propose SnapshotToVm	code
+Tree / Search	New Template from Snapshot…	NewTemplateFromSnapshotCommand	wired	Propose SnapshotToTemplate	code
+Tree / Search	Export Snapshot as Template…	ExportSnapshotAsTemplateCommand	wired	OpenXvaExport	code
+Tree / Search	Network / VDI Properties	PropertiesCommand	wired	OpenProperties	code
+VM Storage	Properties / Resize…	PropertiesCommand	wired	OpenProperties > Size and Location (apply on OK)	code
+VM Storage	Properties / Mode	PropertiesCommand	wired	OpenProperties > VM device page (apply on OK)	code
+VM Storage	Properties / Bootable	PropertiesCommand	wired	OpenProperties > VM device page (apply on OK)	code
+VM Storage	Properties / Position		wired	No existing position setter	code
+VM Storage / Networking / Snapshots	Row context menus		wired	Same actions as table buttons	code
+Host Networking / NICs / SR Storage	Row context menus		wired	Same actions as table buttons; NIC Delete Bond and Copy; management bonds protected	code
+VM General	Section Edit…	PropertiesCommand	wired	OpenProperties on CPU / Boot Options / High Availability / Home Server	code
+Pool / standalone host	Properties pages	PoolPropertiesCommand	wired	OpenProperties > Live Patching / Network Options / Advanced	code
+VM Networking	Properties	PropertiesCommand	wired	OpenProperties > Network Settings	code
+Host / Pool / SR General	Properties	PropertiesCommand	wired	OpenProperties	code
+SR Storage	Add… / Move…		wired	Standalone VDI create and copy-then-delete move; destination SR selection	code
+Server	Remove Crash Dumps	RemoveCrashDumpsCommand	wired	OpenServerAdmin(CrashDumps); confirmation; code path only	code
+Server	Server Status Report...	ServerStatusReportCommand	wired	OpenServerAdmin(StatusReport); stream /system-status to new local file; live menu run inconclusive	code
+Host Networking	Add Network...	NewNetworkWizard	wired	Shared Type/Name/Details/Finish wizard; VLAN/private/bond/CHIN/SR-IOV; hardware and multi-host types untested-lab	untested-lab
+Host Networking	Properties	NetworkProperties	wired	General plus MTU/automatic/NIC/VLAN; active/physical/management interface guards	code
+Host Networking	Remove	RemoveNetwork	wired	Confirmation; backend management and VIF guards	code
+Host Networking	Configure...	NetworkingProperties	wired	IP mode/address/mask/gateway/DNS; management-interface selection and acknowledgement; code path only	code
+NICs	Create Bond...	CreateBond	wired	Shared network wizard with NIC/mode/MTU details; untested-lab	untested-lab
+NICs	Delete Bond	DestroyBondCommand	wired	Shared guarded network removal; management and VIF-bearing bonds protected; untested-lab	untested-lab
+NICs	Rescan	PIF.scan	wired	PromptHostAction(RescanPifs); code path only	code
+File	Export...	ExportCommand	wired	OpenXvaExport / OpenXvaExportMany	code
+File	Export Search...	ExportSearchCommand	wired	OpenFileInterchange(ExportSearchCommand)	code
+View	New Search...	NewSearchCommand	wired	OpenSaveSearch; condition builder/grouping/columns	live
+View	New Folder...	NewFolderCommand	wired	OpenOrganization; EMPTY_FOLDERS	live
+Help	Help Topics	HelpTopics	wired	Open README in system browser	code
+Tree / Search	Edit Tags…	EditTagsCommand	wired	Properties tag checklist; selected object tags	live
+Tree / Search	Move to Folder…	MoveToFolderCommand	wired	Properties General; other_config.folder	live
+Tree / Search	Rename Folder	PutFolderIntoRenameModeCommand	wired	OpenOrganization; global path update	live
+Tree / Search	Delete Folder	DeleteFolderCommand	wired	OpenOrganization; global folder removal	live
+Tree / Search	Rename Tag	PutTagIntoRenameModeCommand	wired	OpenOrganization; global tag rename	live
+Tree / Search	Delete Tag	DeleteTagCommand	wired	OpenOrganization; global tag removal	live
+Properties	Custom Fields		wired	Definitions in pool.gui_config; values in object.other_config	live

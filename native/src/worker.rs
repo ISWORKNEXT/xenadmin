@@ -12,6 +12,15 @@ use xen_core::{
 
 /// Commands sent from the UI thread to the background workspace thread.
 pub enum Command {
+    Extra {
+        connection_id: String,
+        action: xen_core::organization::ExtraAction,
+    },
+    ForgetPassword(String),
+    Organization {
+        connection_id: String,
+        change: xen_core::organization::OrganizationChange,
+    },
     ConfigurePool {
         connection_id: String,
         name: Option<String>,
@@ -496,6 +505,12 @@ pub enum Command {
 
 /// Results sent back to the UI thread.
 pub enum Event {
+    ExtraCompleted {
+        result: Result<(), String>,
+    },
+    OrganizationChanged {
+        result: Result<(), String>,
+    },
     ServerBackupPicked {
         seq: u64,
         result: Result<Option<String>, String>,
@@ -825,6 +840,11 @@ fn run_worker(mut commands: UnboundedReceiver<Command>, events: UnboundedSender<
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
+        let profiles = if crate::views::utilities::load_options().save_servers {
+            profiles
+        } else {
+            Vec::new()
+        };
         let workspace = Workspace::with_profiles(profiles);
         let consoles = crate::console::ConsoleHandles::default();
         let ssh = crate::ssh::SshHandles::default();
@@ -893,6 +913,24 @@ fn dispatch(
                 }
                 .await;
                 let _ = events.send(Event::PropertyExtras { seq, result });
+            }
+            Command::Extra {
+                connection_id,
+                action,
+            } => {
+                let result = workspace.extra_action(&connection_id, &action).await;
+                let _ = events.send(Event::ExtraCompleted { result });
+            }
+            Command::ForgetPassword(id) => {
+                let result = workspace.forget_password(&id).await;
+                let _ = events.send(Event::ExtraCompleted { result });
+            }
+            Command::Organization {
+                connection_id,
+                change,
+            } => {
+                let result = workspace.change_organization(&connection_id, &change).await;
+                let _ = events.send(Event::OrganizationChanged { result });
             }
             Command::SavePropertiesDialog { seq, dialog } => {
                 let result = save_properties_dialog(&workspace, &dialog).await;
@@ -2082,6 +2120,9 @@ fn dispatch(
 }
 
 async fn save_profiles(workspace: &Workspace, path: &Path) {
+    if !crate::views::utilities::load_options().save_servers {
+        return;
+    }
     let profiles = workspace.profiles().await;
     let Ok(bytes) = serde_json::to_vec_pretty(&profiles) else {
         return;

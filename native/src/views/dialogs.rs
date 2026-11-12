@@ -15,6 +15,8 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
+    super::organization::show(ctx, state, workspace, actions);
+    super::utilities::show(ctx, state);
     super::server_admin::show(ctx, state, actions);
     if state.vm_copy.is_some() {
         super::vm_copy::show(ctx, state, workspace, actions);
@@ -602,7 +604,7 @@ fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
                 if dialog.editing.is_some() {
                     "Edit saved search"
                 } else {
-                    "Save search"
+                    "New Search"
                 },
                 "Saves the query and grouping for this workspace.",
             );
@@ -614,6 +616,32 @@ fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
                     .margin(egui::Margin::symmetric(8, 5)),
             );
             ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_id_salt("search-condition-field")
+                    .selected_text(&dialog.condition_field)
+                    .show_ui(ui, |ui| {
+                        for field in ["kind", "name", "tag", "folder", "power", "memory", "os"] {
+                            ui.selectable_value(&mut dialog.condition_field, field.into(), field);
+                        }
+                    });
+                ui.text_edit_singleline(&mut dialog.condition_field)
+                    .on_hover_text("Use field.NAME for a custom field");
+            });
+            ui.add(
+                egui::TextEdit::singleline(&mut dialog.condition_value)
+                    .hint_text("Value; memory supports >, <, >= and units, e.g. >=4g"),
+            );
+            if ui.button("Add condition (AND)").clicked() && !dialog.condition_value.is_empty() {
+                if !dialog.query.is_empty() {
+                    dialog.query.push_str(" AND ");
+                }
+                dialog.query += &format!(
+                    "{}:{}",
+                    serde_json::to_string(&dialog.condition_field).unwrap_or_default(),
+                    serde_json::to_string(&dialog.condition_value).unwrap_or_default()
+                );
+                dialog.condition_value.clear();
+            }
             widgets::field_label(ui, "Query");
             ui.add(
                 egui::TextEdit::singleline(&mut dialog.query)
@@ -623,6 +651,30 @@ fn save_search_dialog(ctx: &egui::Context, state: &mut UiState, actions: &mut Ve
                     .margin(egui::Margin::symmetric(8, 5)),
             );
             ui.add_space(8.0);
+            widgets::field_label(ui, "Columns (Name is always shown)");
+            ui.horizontal_wrapped(|ui| {
+                for (index, name) in [
+                    "CPU Usage",
+                    "Used Memory",
+                    "Disks",
+                    "Network",
+                    "Address",
+                    "Uptime",
+                ]
+                .iter()
+                .enumerate()
+                {
+                    let mut selected = dialog.columns.contains(&index);
+                    if ui.checkbox(&mut selected, *name).changed() {
+                        if selected {
+                            dialog.columns.push(index);
+                            dialog.columns.sort();
+                        } else {
+                            dialog.columns.retain(|i| *i != index);
+                        }
+                    }
+                }
+            });
             widgets::field_label(ui, "Grouping");
             egui::ComboBox::from_id_salt("save-search-group")
                 .selected_text(RichText::new(dialog.group_by.label()).size(11.0))

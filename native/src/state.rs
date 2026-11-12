@@ -532,10 +532,12 @@ impl ConnectState {
                 label: String::new(),
                 read_only: false,
                 tls: Default::default(),
-                proxy: None,
+                proxy: Some(crate::views::utilities::load_options().proxy)
+                    .filter(|s| !s.is_empty()),
+                timeout_seconds: crate::views::utilities::load_options().timeout,
             },
             password: String::new(),
-            proxy: String::new(),
+            proxy: crate::views::utilities::load_options().proxy,
             error: None,
             submitting: false,
         }
@@ -664,6 +666,10 @@ pub struct RecordDialog {
 
 #[derive(Clone)]
 pub struct PropertiesDialog {
+    pub tag_editor: bool,
+    pub folder_editor: bool,
+    pub new_field_date: bool,
+    pub new_field_name: String,
     pub guest_setup: Option<xen_core::guest_setup::GuestSetup>,
     pub reset_password: bool,
     pub page: String,
@@ -1215,6 +1221,9 @@ pub struct SrActionConfirm {
 }
 
 pub struct SaveSearchState {
+    pub columns: Vec<usize>,
+    pub condition_field: String,
+    pub condition_value: String,
     pub name: String,
     pub query: String,
     pub group_by: GroupBy,
@@ -1628,6 +1637,7 @@ pub struct UiState {
     pub network_destroy_confirm: Option<NetworkDestroyConfirm>,
     pub query: String,
     pub group_by: GroupBy,
+    pub search_columns: Vec<usize>,
     pub saved_searches: Vec<SavedSearch>,
     pub save_search: Option<SaveSearchState>,
     pub power: PowerFilter,
@@ -1653,7 +1663,16 @@ pub struct UiState {
     pub perf_seq: u64,
     pub perf_query: String,
     pub perf_page: usize,
+    pub organization: Option<crate::views::organization::OrganizationDialog>,
+    pub extra: Option<(
+        String,
+        xen_core::organization::ExtraAction,
+        bool,
+        Option<String>,
+    )>,
+    pub options: crate::views::utilities::Options,
     pub help: bool,
+    pub utility: Option<crate::views::utilities::UtilityDialog>,
     pub resource: Option<ResourceDialog>,
     pub record_query: String,
     pub record_page: usize,
@@ -1767,6 +1786,7 @@ impl Default for UiState {
             network_destroy_confirm: None,
             query: String::new(),
             group_by: GroupBy::None,
+            search_columns: crate::config::default_search_columns(),
             saved_searches: Vec::new(),
             save_search: None,
             power: PowerFilter::All,
@@ -1792,7 +1812,11 @@ impl Default for UiState {
             perf_seq: 0,
             perf_query: String::new(),
             perf_page: 0,
+            organization: None,
+            extra: None,
+            options: crate::views::utilities::load_options(),
             help: false,
+            utility: None,
             resource: None,
             record_query: String::new(),
             record_page: 0,
@@ -1806,6 +1830,16 @@ impl Default for UiState {
 }
 
 pub enum UiAction {
+    ExtraConfirm {
+        connection_id: String,
+        action: xen_core::organization::ExtraAction,
+    },
+    SubmitExtra,
+    ForgetPassword(String),
+    OpenOrganization(&'static str),
+    SubmitOrganization,
+    EditOrganization(&'static str),
+    OpenUtility(&'static str),
     SelectPropertyPage(&'static str),
     OpenProperties {
         connection_id: String,

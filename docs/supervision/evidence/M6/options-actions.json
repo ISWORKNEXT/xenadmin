@@ -1,0 +1,51 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        344,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        367,
+        51
+      ],
+      "snap": "04-options"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        235,
+        115
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        120,
+        449
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

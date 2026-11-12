@@ -48,6 +48,37 @@ fn startup_entries() -> Vec<Startup> {
 }
 
 fn main() -> eframe::Result {
+    let log_folder = config::config_dir().join("logs");
+    let _ = std::fs::create_dir_all(&log_folder);
+    let log_path = log_folder.join("xen-desktop.log");
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        let _ = writeln!(
+            file,
+            "{} Xen Desktop {} starting",
+            chrono::Utc::now().to_rfc3339(),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+    std::panic::set_hook(Box::new(move |info| {
+        // Panic payloads may contain host data; record only source location.
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            let _ = writeln!(
+                file,
+                "{} panic at {:?}",
+                chrono::Utc::now().to_rfc3339(),
+                info.location()
+            );
+        }
+    }));
     let startup = startup_entries();
     let open_connect = std::env::args().any(|arg| arg == "--connect");
     let startup_view = argument("--view").and_then(|value| state::View::from_key(&value));

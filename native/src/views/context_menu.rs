@@ -343,7 +343,7 @@ pub fn items(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
         }
         None
     }
-    commands
+    let mut result: Vec<MenuItem> = commands
         .iter()
         .map(|command| {
             let command = match *command {
@@ -406,7 +406,26 @@ pub fn items(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
                 )
             })
         })
-        .collect()
+        .collect();
+    if !multi
+        && matches!(
+            key,
+            ObjectKey::Vm { .. }
+                | ObjectKey::Template { .. }
+                | ObjectKey::Snapshot { .. }
+                | ObjectKey::Host { .. }
+                | ObjectKey::Pool(_)
+                | ObjectKey::Storage { .. }
+                | ObjectKey::Vdi { .. }
+                | ObjectKey::Network { .. }
+        )
+    {
+        if !result.iter().any(|item| item.command == "EditTagsCommand") {
+            result.push(MenuItem::item("Edit Tags…", "EditTagsCommand"));
+        }
+        result.push(MenuItem::item("Move to Folder…", "MoveToFolderCommand"));
+    }
+    result
 }
 
 /// Preserve the table button order while laying out popup commands vertically.

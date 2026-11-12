@@ -89,7 +89,26 @@ pub fn implemented(command: &str) -> bool {
     vm_kind(command).is_some()
         || matches!(
             command,
-            "CustomTemplates"
+            "ForgetSavedPasswordCommand"
+                | "DestroyHostCommand"
+                | "VMRecoveryModeCommand"
+                | "DisableChangedBlockTrackingCommand"
+                | "InstantVMFromTemplateCommand"
+                | "NewFolderCommand"
+                | "PutFolderIntoRenameModeCommand"
+                | "DeleteFolderCommand"
+                | "PutTagIntoRenameModeCommand"
+                | "DeleteTagCommand"
+                | "Options"
+                | "About"
+                | "HelpTopics"
+                | "ViewXenDesktopLogFiles"
+                | "CheckforXenDesktopUpdates"
+                | "XenDesktopontheWeb"
+                | "EditTagsCommand"
+                | "MoveToFolderCommand"
+                | "NewSearchCommand"
+                | "CustomTemplates"
                 | "XenDesktopTemplates"
                 | "LocalStorage"
                 | "HiddenObjects"
@@ -131,6 +150,7 @@ pub fn implemented(command: &str) -> bool {
                 | "RemoveHostFromPoolCommand"
                 | "DeletePoolCommand"
                 | "RotatePoolSecretCommand"
+                | "ServerStatusReportCommand"
                 | "BackupHostCommand"
                 | "RestoreHostFromBackupCommand"
                 | "PoolPropertiesCommand"
@@ -189,7 +209,19 @@ pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Res
     }
     if matches!(
         command,
-        "AddHostCommand"
+        "NewFolderCommand"
+            | "PutFolderIntoRenameModeCommand"
+            | "DeleteFolderCommand"
+            | "PutTagIntoRenameModeCommand"
+            | "DeleteTagCommand"
+            | "Options"
+            | "About"
+            | "HelpTopics"
+            | "ViewXenDesktopLogFiles"
+            | "CheckforXenDesktopUpdates"
+            | "XenDesktopontheWeb"
+            | "NewSearchCommand"
+            | "AddHostCommand"
             | "ImportServerList"
             | "ExportServerList"
             | "ImportSearchCommand"
@@ -280,6 +312,32 @@ fn resolve_single(
         return Err("Not implemented yet");
     }
     match command {
+        "NewFolderCommand" => return Ok(Dispatch(UiAction::OpenOrganization("NewFolderCommand"))),
+        "PutFolderIntoRenameModeCommand" => {
+            return Ok(Dispatch(UiAction::OpenOrganization(
+                "PutFolderIntoRenameModeCommand",
+            )));
+        }
+        "DeleteFolderCommand" => {
+            return Ok(Dispatch(UiAction::OpenOrganization("DeleteFolderCommand")));
+        }
+        "PutTagIntoRenameModeCommand" => {
+            return Ok(Dispatch(UiAction::OpenOrganization(
+                "PutTagIntoRenameModeCommand",
+            )));
+        }
+        "DeleteTagCommand" => return Ok(Dispatch(UiAction::OpenOrganization("DeleteTagCommand"))),
+        "Options" => return Ok(Dispatch(UiAction::OpenUtility("Options"))),
+        "About" => return Ok(Dispatch(UiAction::OpenUtility("About"))),
+        "HelpTopics" => return Ok(Dispatch(UiAction::OpenUtility("HelpTopics"))),
+        "ViewXenDesktopLogFiles" => {
+            return Ok(Dispatch(UiAction::OpenUtility("ViewXenDesktopLogFiles")));
+        }
+        "CheckforXenDesktopUpdates" => {
+            return Ok(Dispatch(UiAction::OpenUtility("CheckforXenDesktopUpdates")));
+        }
+        "XenDesktopontheWeb" => return Ok(Dispatch(UiAction::OpenUtility("XenDesktopontheWeb"))),
+        "NewSearchCommand" => return Ok(Dispatch(UiAction::OpenSaveSearch)),
         "ImportServerList" | "ExportServerList" | "ImportSearchCommand" | "ExportSearchCommand" => {
             let command = match command {
                 "ImportServerList" => "ImportServerList",
@@ -403,6 +461,89 @@ fn resolve_single(
         return Ok(DispatchMany(batch));
     }
     let inventory = connection_inventory(connection).ok_or("Refresh the connection first.")?;
+    if command == "ForgetSavedPasswordCommand" {
+        return Ok(Dispatch(UiAction::ForgetPassword(id.into())));
+    }
+    if matches!(
+        command,
+        "DestroyHostCommand"
+            | "VMRecoveryModeCommand"
+            | "DisableChangedBlockTrackingCommand"
+            | "InstantVMFromTemplateCommand"
+    ) {
+        if is_read_only(connection) {
+            return Err("This connection is read-only.");
+        }
+        use xen_core::organization::ExtraAction;
+        let action = match (command, key) {
+            ("DestroyHostCommand", ObjectKey::Host { host_uuid, .. }) => {
+                let host = inventory
+                    .hosts
+                    .iter()
+                    .find(|h| &h.uuid == host_uuid)
+                    .ok_or("Host unavailable")?;
+                if host.live || host.reference == inventory.coordinator_reference {
+                    return Err("Select an offline pool member, not the coordinator.");
+                }
+                ExtraAction::DestroyHost(host_uuid.clone())
+            }
+            ("VMRecoveryModeCommand", ObjectKey::Vm { vm_uuid, .. }) => {
+                let (_, vm) = find_vm(workspace, id, vm_uuid).ok_or("VM unavailable")?;
+                if !vm.allowed_operations.iter().any(|op| op == "start") {
+                    return Err("The VM cannot be started.");
+                }
+                ExtraAction::Recovery(vm_uuid.clone())
+            }
+            ("DisableChangedBlockTrackingCommand", ObjectKey::Vm { vm_uuid, .. }) => {
+                if !find_vm(workspace, id, vm_uuid).is_some_and(|(_, vm)| vm.cbt_enabled) {
+                    return Err("No disks have Changed Block Tracking enabled.");
+                }
+                ExtraAction::DisableCbt(vm_uuid.clone())
+            }
+            ("InstantVMFromTemplateCommand", ObjectKey::Template { vm_uuid, .. }) => {
+                if !find_vm(workspace, id, vm_uuid).is_some_and(|(_, vm)| {
+                    vm.instant_template && vm.allowed_operations.iter().any(|op| op == "clone")
+                }) {
+                    return Err("Select an unlocked instant template.");
+                }
+                ExtraAction::QuickCreate(vm_uuid.clone())
+            }
+            _ => return Err("Select an object of the appropriate type."),
+        };
+        return Ok(Dispatch(UiAction::ExtraConfirm {
+            connection_id: id.into(),
+            action,
+        }));
+    }
+    if matches!(command, "EditTagsCommand" | "MoveToFolderCommand") {
+        if is_read_only(connection) {
+            return Err("This connection is read-only.");
+        }
+        let (kind, uuid) = match key {
+            ObjectKey::Vm { vm_uuid, .. }
+            | ObjectKey::Template { vm_uuid, .. }
+            | ObjectKey::Snapshot { vm_uuid, .. } => (ObjectKind::Vm, vm_uuid),
+            ObjectKey::Host { host_uuid, .. } => (ObjectKind::Host, host_uuid),
+            ObjectKey::Storage { sr_uuid, .. } => (ObjectKind::Storage, sr_uuid),
+            ObjectKey::Network { network_uuid, .. } => (ObjectKind::Network, network_uuid),
+            ObjectKey::Pool(_) => (ObjectKind::Pool, &inventory.pool_id),
+            _ => return Err("Select a managed object."),
+        };
+        return Ok(DispatchMany(vec![
+            UiAction::OpenProperties {
+                connection_id: id.into(),
+                target: ObjectTarget {
+                    kind,
+                    uuid: uuid.clone(),
+                },
+            },
+            UiAction::EditOrganization(if command == "EditTagsCommand" {
+                "Tags"
+            } else {
+                "General"
+            }),
+        ]));
+    }
     if command == "PropertiesCommand" {
         let (kind, uuid) = match key {
             ObjectKey::Network { network_uuid, .. } => (ObjectKind::Network, network_uuid),
@@ -632,6 +773,7 @@ fn resolve_single(
         "ChangeControlDomainMemoryCommand"
         | "ChangeHostPasswordCommand"
         | "RemoveCrashDumpsCommand"
+        | "ServerStatusReportCommand"
         | "BackupHostCommand"
         | "RestoreHostFromBackupCommand" => {
             let host_uuid = if let ObjectKey::Host { host_uuid, .. } = key {
@@ -650,6 +792,7 @@ fn resolve_single(
                 connection_id: id.into(),
                 host_uuid,
                 page: match command {
+                    "ServerStatusReportCommand" => super::server_admin::Page::StatusReport,
                     "BackupHostCommand" => super::server_admin::Page::Backup,
                     "RestoreHostFromBackupCommand" => super::server_admin::Page::Restore,
                     "ChangeControlDomainMemoryCommand" => super::server_admin::Page::Memory,
@@ -900,6 +1043,8 @@ pub fn menus(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
                         MenuItem::item("Reset Zoom", "ZoomReset"),
                     ],
                 ),
+                MenuItem::item("New Search...", "NewSearchCommand"),
+                MenuItem::item("New Folder...", "NewFolderCommand"),
                 MenuItem::item("Refresh", "Refresh"),
             ],
         ),
@@ -1122,11 +1267,11 @@ pub fn menus(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
             "Help",
             "Help",
             vec![
+                MenuItem::item("Help Topics", "HelpTopics"),
                 MenuItem::item("View Xen Desktop Log Files", "ViewXenDesktopLogFiles"),
                 MenuItem::separator(),
                 MenuItem::item("Check for Xen Desktop Updates", "CheckforXenDesktopUpdates"),
                 MenuItem::item("Xen Desktop on the Web", "XenDesktopontheWeb"),
-                MenuItem::item("Xen Desktop Plugins online", "XenDesktopPluginsonline"),
                 MenuItem::separator(),
                 MenuItem::item("About", "About"),
             ],

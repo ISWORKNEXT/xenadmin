@@ -20,6 +20,14 @@ pub struct HostTransport {
 
 impl HostTransport {
     pub fn new(origin: Url, tls: TlsOptions, proxy: Option<&str>) -> Result<Self, TransportError> {
+        Self::with_timeout(origin, tls, proxy, 45)
+    }
+    pub fn with_timeout(
+        origin: Url,
+        tls: TlsOptions,
+        proxy: Option<&str>,
+        timeout: u64,
+    ) -> Result<Self, TransportError> {
         if origin.scheme() != "https"
             || origin.host_str().is_none()
             || !origin.username().is_empty()
@@ -40,7 +48,7 @@ impl HostTransport {
             .redirect(redirect::Policy::none())
             .retry(reqwest::retry::never())
             .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(45));
+            .timeout(Duration::from_secs(timeout.clamp(5, 600)));
         if let Some(proxy) = proxy.as_deref() {
             builder = builder
                 .proxy(reqwest::Proxy::all(proxy).map_err(|_| TransportError::InvalidProxy)?);
@@ -65,6 +73,20 @@ impl HostTransport {
         self.client.post(endpoint).json(request).send().await
     }
 
+    pub(crate) async fn system_status(&self, session: &str) -> Result<Response, reqwest::Error> {
+        let mut endpoint = self.origin.clone();
+        endpoint.set_path("/system-status");
+        self.client
+            .get(endpoint)
+            .query(&[
+                ("session_id", session),
+                ("entries", "all"),
+                ("output", "tar.bz2"),
+            ])
+            .timeout(Duration::from_secs(600))
+            .send()
+            .await
+    }
     pub(crate) async fn host_backup(&self, session: &str) -> Result<Response, reqwest::Error> {
         let mut endpoint = self.origin.clone();
         endpoint.set_path("/host_backup");

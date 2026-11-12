@@ -1,0 +1,224 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        408,
+        207
+      ],
+      "wait": 2,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        617,
+        512
+      ],
+      "snap": "01-edit-tags"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        500,
+        630
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        385,
+        247
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1043,
+        735
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        160,
+        788
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        95,
+        670
+      ],
+      "snap": "02-objects-by-folder"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        150,
+        788
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        100,
+        710
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        927,
+        164
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        428,
+        207
+      ],
+      "snap": "03-new-search"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        600,
+        330
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M6-search"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        570,
+        416
+      ],
+      "text": "zz-parity-M6"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        509,
+        453
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        970,
+        695
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        344,
+        14
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        367,
+        51
+      ],
+      "snap": "04-options"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        784,
+        34
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        446,
+        14
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        783,
+        15
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        446,
+        14
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        465,
+        164
+      ],
+      "snap": "05-about"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]
