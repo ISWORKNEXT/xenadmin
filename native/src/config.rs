@@ -208,6 +208,77 @@ pub fn save_ui_preferences(preferences: &UiPreferences) {
     }
 }
 
+pub fn decode_xml(bytes: &[u8]) -> Result<String, String> {
+    if bytes.starts_with(&[0xff, 0xfe]) || bytes.starts_with(&[0xfe, 0xff]) {
+        let little = bytes[0] == 0xff;
+        let units: Vec<_> = bytes[2..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| {
+                if little {
+                    u16::from_le_bytes([c[0], c[1]])
+                } else {
+                    u16::from_be_bytes([c[0], c[1]])
+                }
+            })
+            .collect();
+        String::from_utf16(&units).map_err(|e| e.to_string())
+    } else {
+        String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string())
+    }
+}
+pub fn write_new_file(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| e.to_string())?;
+    file.write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .map_err(|e| e.to_string())
+}
+pub fn export_searches(searches: &[SavedSearch]) -> String {
+    let esc = |value: &str| quick_xml::escape::escape(value).into_owned();
+    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Searches>");
+    for search in searches {
+        xml += &format!(
+            "<Search name=\"{}\" major_version=\"2\" minor_version=\"0\"><XenDesktopQuery group_by=\"{}\">{}</XenDesktopQuery></Search>",
+            esc(&search.name),
+            esc(search.group_by.label()),
+            esc(&search.query)
+        );
+    }
+    xml += "</Searches>";
+    xml
+}
+pub fn import_searches(xml: &str) -> Result<Vec<SavedSearch>, String> {
+    let doc = roxmltree::Document::parse(xml).map_err(|e| e.to_string())?;
+    let mut searches = Vec::new();
+    for n in doc
+        .descendants()
+        .filter(|n| n.tag_name().name() == "Search")
+    {
+        let query = n
+            .children()
+            .find(|n| n.tag_name().name() == "XenDesktopQuery")
+            .ok_or("This search uses an upstream query type that is not supported yet.")?;
+        searches.push(SavedSearch {
+            name: n.attribute("name").unwrap_or("Imported search").into(),
+            query: query.text().unwrap_or_default().into(),
+            group_by: query
+                .attribute("group_by")
+                .and_then(GroupBy::from_key)
+                .unwrap_or_default(),
+        });
+    }
+    if searches.is_empty() {
+        return Err("The file contains no supported saved searches.".into());
+    }
+    Ok(searches)
+}
+
 #[cfg(test)]
 mod saved_search_tests {
     use super::*;

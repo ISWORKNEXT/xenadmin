@@ -1500,6 +1500,19 @@ pub struct NewVmWizard {
 }
 
 pub struct XvaDialog {
+    pub frame: crate::views::wizard::WizardState,
+    pub format: xen_core::appliance::Format,
+    pub host_uuid: Option<String>,
+    pub vcpus: u64,
+    pub memory_mib: u64,
+    pub uefi: bool,
+    pub start: bool,
+    pub manifest: bool,
+    pub accepted_eula: bool,
+    pub envelope: Option<xen_core::ovf::Envelope>,
+    pub disk_storage: Vec<String>,
+    pub networks: Vec<Option<String>>,
+
     pub export_targets: Vec<(String, String, String)>,
     pub connection_id: String,
     pub vm_uuid: Option<String>,
@@ -1511,7 +1524,14 @@ pub struct XvaDialog {
     pub submitting: bool,
 }
 
+pub struct FileInterchangeDialog {
+    pub command: &'static str,
+    pub path: String,
+    pub error: Option<String>,
+}
+
 pub struct UiState {
+    pub file_interchange: Option<FileInterchangeDialog>,
     pub toolbar_visible: bool,
     pub selection_history: Vec<ObjectKey>,
     pub history_index: usize,
@@ -1653,6 +1673,7 @@ impl Default for UiState {
             navigating_history: false,
             properties: None,
             properties_seq: 0,
+            file_interchange: None,
             xva_dialog: None,
             new_vm: None,
             new_vm_seq: 0,
@@ -1800,6 +1821,9 @@ pub enum UiAction {
     OpenXvaImport(String),
     CloseXvaDialog,
     SubmitXvaTransfer,
+    OpenFileInterchange(&'static str),
+    SubmitFileInterchange,
+    CloseFileInterchange,
     OpenNewVmWizard {
         connection_id: String,
         source: xen_core::provisioning::VmCreationSource,

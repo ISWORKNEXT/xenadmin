@@ -22,3 +22,6 @@ pub mod xapi;
 pub mod xva;
 
 pub mod server_admin;
+
+pub mod appliance;
+pub mod ovf;

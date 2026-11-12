@@ -226,6 +226,84 @@ impl Workspace {
             .collect()
     }
 
+    pub async fn import_server_list(&self, xml: &str) -> Result<(), String> {
+        let doc =
+            roxmltree::Document::parse(xml).map_err(|e| format!("Invalid server list: {e}"))?;
+        if doc.root_element().tag_name().name() != "XenConnections" {
+            return Err("Select a XenConnections XML server list.".into());
+        }
+        let mut profiles = Vec::new();
+        for node in doc
+            .descendants()
+            .filter(|n| n.tag_name().name() == "XenConnection")
+        {
+            let text = |key| {
+                node.children()
+                    .find(|n| n.tag_name().name() == key)
+                    .and_then(|n| n.text())
+                    .unwrap_or_default()
+            };
+            let hostname = text("Hostname");
+            let port: u16 = text("Port").parse().map_err(|_| "Invalid server port.")?;
+            if hostname.is_empty() || hostname.contains(['/', '@', '?', '#']) || port == 0 {
+                return Err("Invalid server address.".into());
+            }
+            let host = if port == 443 {
+                hostname.to_owned()
+            } else if hostname.contains(':') && !hostname.starts_with('[') {
+                format!("[{hostname}]:{port}")
+            } else {
+                format!("{hostname}:{port}")
+            };
+            profiles.push(Profile {
+                id: Uuid::now_v7().to_string(),
+                settings: ConnectionSettings {
+                    host,
+                    username: "root".into(),
+                    label: text("FriendlyName").into(),
+                    read_only: false,
+                    tls: Default::default(),
+                    proxy: None,
+                },
+            });
+        }
+        let mut entries = self.entries.write().await;
+        for profile in profiles {
+            if !entries
+                .values()
+                .any(|e| e.profile.settings.host == profile.settings.host)
+            {
+                entries.insert(
+                    profile.id.clone(),
+                    Entry {
+                        profile,
+                        active: None,
+                    },
+                );
+            }
+        }
+        Ok(())
+    }
+    pub async fn export_server_list(&self) -> Result<String, String> {
+        let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?><XenConnections>");
+        for profile in self.profiles().await {
+            let address = if profile.settings.host.starts_with("https://") {
+                profile.settings.host.clone()
+            } else {
+                format!("https://{}", profile.settings.host)
+            };
+            let url = url::Url::parse(&address).map_err(|_| "Invalid stored server address.")?;
+            xml += &format!(
+                "<XenConnection><Hostname>{}</Hostname><Port>{}</Port><FriendlyName>{}</FriendlyName></XenConnection>",
+                quick_xml::escape::escape(url.host_str().unwrap_or_default()),
+                url.port_or_known_default().unwrap_or(443),
+                quick_xml::escape::escape(&profile.settings.label)
+            );
+        }
+        xml += "</XenConnections>";
+        Ok(xml)
+    }
+
     pub async fn add_connected(
         self: &Arc<Self>,
         mut connection: Connection,
@@ -2364,6 +2442,16 @@ impl Workspace {
             return Err("This connection is read-only.".into());
         }
         let (busy_key, action, object_name) = match &request {
+            XvaRequest::ConfiguredImport(r) => ("xva-import".into(), "Import XVA", r.name.clone()),
+            XvaRequest::Appliance(request) => (
+                "appliance-transfer".into(),
+                if request.is_import() {
+                    "Import appliance"
+                } else {
+                    "Export appliance"
+                },
+                request.label(),
+            ),
             XvaRequest::Export { vm_uuid, .. } => {
                 let snapshot = active.snapshot.read().await;
                 let vm = snapshot
@@ -2441,9 +2529,9 @@ impl Workspace {
                 Ok(outcome) => {
                     let message = match outcome {
                         XvaOutcome::Exported { bytes } => {
-                            format!("Exported {bytes} bytes to the selected XVA file.")
+                            format!("Exported {bytes} bytes to the selected file.")
                         }
-                        XvaOutcome::Imported { uuid } => format!("Imported halted object {uuid}."),
+                        XvaOutcome::Imported { uuid } => format!("Imported object {uuid}."),
                     };
                     match refresh_inventory_cache(&active).await {
                         Ok(()) => (TaskStatus::Succeeded, message),

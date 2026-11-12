@@ -46,8 +46,10 @@ pub enum Command {
         connection_id: String,
         target: xen_core::properties::ObjectTarget,
     },
-    XvaBatch {
-        requests: Vec<(String, xen_core::xva::XvaRequest)>,
+    FileInterchange {
+        command: &'static str,
+        path: String,
+        searches: Vec<crate::config::SavedSearch>,
     },
     XvaTransfer {
         connection_id: String,
@@ -523,6 +525,9 @@ pub enum Event {
         seq: u64,
         result: Result<xen_core::properties::ObjectProperties, String>,
     },
+    FileInterchange {
+        result: Result<Option<Vec<crate::config::SavedSearch>>, String>,
+    },
     XvaQueued {
         result: Result<(), String>,
     },
@@ -901,34 +906,47 @@ fn dispatch(
                 let result = workspace.object_properties(&connection_id, &target).await;
                 let _ = events.send(Event::ObjectProperties { seq, result });
             }
-            Command::XvaBatch { requests } => {
-                let workspace = workspace.clone();
-                let events = events.clone();
-                let _ = events.send(Event::XvaQueued { result: Ok(()) });
-                tokio::spawn(async move {
-                    for (connection_id, request) in requests {
-                        match workspace.start_xva_transfer(connection_id, request).await {
-                            Ok(task) => {
-                                let _ = events.send(Event::ActionQueued);
-                                loop {
-                                    let view = workspace.view().await;
-                                    if view.tasks.iter().find(|t| t.id == task.id).is_none_or(|t| {
-                                        t.status != xen_core::operations::TaskStatus::Running
-                                    }) {
-                                        break;
-                                    }
-                                    tokio::time::sleep(Duration::from_millis(250)).await;
-                                }
-                            }
-                            Err(message) => {
-                                let _ = events.send(Event::Failed {
-                                    context: "export".into(),
-                                    message,
-                                });
-                            }
+            Command::FileInterchange {
+                command,
+                path: destination,
+                searches,
+            } => {
+                let result = async {
+                    let imported = match command {
+                        "ImportServerList" => {
+                            let bytes = std::fs::read(&destination).map_err(|e| e.to_string())?;
+                            let xml = crate::config::decode_xml(&bytes)?;
+                            workspace.import_server_list(&xml).await?;
+                            save_profiles(&workspace, &path).await;
+                            None
                         }
-                    }
-                });
+                        "ExportServerList" => {
+                            crate::config::write_new_file(
+                                std::path::Path::new(&destination),
+                                workspace.export_server_list().await?.as_bytes(),
+                            )?;
+                            None
+                        }
+                        "ImportSearchCommand" => {
+                            let bytes = std::fs::read(&destination).map_err(|e| e.to_string())?;
+                            Some(crate::config::import_searches(&crate::config::decode_xml(
+                                &bytes,
+                            )?)?)
+                        }
+                        "ExportSearchCommand" => {
+                            crate::config::write_new_file(
+                                std::path::Path::new(&destination),
+                                crate::config::export_searches(&searches).as_bytes(),
+                            )?;
+                            None
+                        }
+                        _ => return Err("Unknown file operation.".into()),
+                    };
+                    Ok(imported)
+                }
+                .await;
+                let _ = events.send(Event::FileInterchange { result });
+                let _ = events.send(Event::Workspace(workspace.view().await));
             }
             Command::XvaTransfer {
                 connection_id,

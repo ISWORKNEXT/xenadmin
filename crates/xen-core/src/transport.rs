@@ -137,6 +137,43 @@ impl HostTransport {
             .await
     }
 
+    pub(crate) async fn raw_vdi(
+        &self,
+        session: &str,
+        vdi: &str,
+        task: &str,
+        upload: Option<(tokio::fs::File, u64, &str)>,
+    ) -> Result<Response, reqwest::Error> {
+        let mut endpoint = self.origin.clone();
+        endpoint.set_path(if upload.is_some() {
+            "/import_raw_vdi"
+        } else {
+            "/export_raw_vdi"
+        });
+        let (method, format) = if let Some((_, _, format)) = &upload {
+            (reqwest::Method::PUT, *format)
+        } else {
+            (reqwest::Method::GET, "vhd")
+        };
+        let mut request = self
+            .client
+            .request(method, endpoint)
+            .query(&[
+                ("session_id", session),
+                ("vdi", vdi),
+                ("task_id", task),
+                ("format", format),
+            ])
+            .timeout(Duration::from_secs(24 * 60 * 60));
+        if let Some((file, length, _)) = upload {
+            request = request
+                .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+                .header(reqwest::header::CONTENT_LENGTH, length)
+                .body(reqwest::Body::from(file));
+        }
+        request.send().await
+    }
+
     /// Only called after resolving a member host from the authenticated pool.
     pub(crate) fn for_member(
         &self,

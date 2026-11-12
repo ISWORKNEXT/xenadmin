@@ -18,6 +18,8 @@ use crate::{
 
 #[derive(Clone)]
 pub enum XvaRequest {
+    Appliance(Box<crate::appliance::Request>),
+    ConfiguredImport(crate::appliance::Import),
     Export {
         vm_uuid: String,
         path: PathBuf,
@@ -199,11 +201,40 @@ impl Connection {
         task: &str,
         cancel: &AtomicBool,
     ) -> Result<XvaOutcome, ApiError> {
+        if let XvaRequest::Appliance(request) = request {
+            let result = self.run_appliance(request, task, cancel).await;
+            let _ = self
+                .request::<Value>(
+                    "task.set_status",
+                    json!([
+                        self.session,
+                        task,
+                        if result.is_ok() { "success" } else { "failure" }
+                    ]),
+                )
+                .await;
+            self.destroy_task(task).await;
+            return result;
+        }
         let mut submitted = false;
         let result = if self.settings.read_only {
             Err(ApiError::Xen("This connection is read-only.".into()))
         } else {
             match request {
+                XvaRequest::Appliance(_) => unreachable!(),
+                XvaRequest::ConfiguredImport(r) => {
+                    self.import_xva(
+                        &r.path,
+                        &r.sr_uuid,
+                        &r.name,
+                        r.network_uuid.as_deref(),
+                        task,
+                        &mut submitted,
+                        cancel,
+                        Some(r),
+                    )
+                    .await
+                }
                 XvaRequest::Export { vm_uuid, path } => {
                     self.export_xva(vm_uuid, path, task, &mut submitted, cancel)
                         .await
@@ -222,6 +253,7 @@ impl Connection {
                         task,
                         &mut submitted,
                         cancel,
+                        None,
                     )
                     .await
                 }
@@ -268,7 +300,7 @@ impl Connection {
         false
     }
 
-    async fn xva_task_result(&self, task: &str) -> Result<Value, ApiError> {
+    pub(crate) async fn xva_task_result(&self, task: &str) -> Result<Value, ApiError> {
         for _ in 0..86400 {
             let record = self.task_record(task).await?;
             match record.status {
@@ -406,6 +438,7 @@ impl Connection {
         task: &str,
         submitted: &mut bool,
         cancel: &AtomicBool,
+        options: Option<&crate::appliance::Import>,
     ) -> Result<XvaOutcome, ApiError> {
         if name.trim().is_empty() || name.chars().count() > 255 {
             return Err(ApiError::Xen(
@@ -506,6 +539,24 @@ impl Connection {
                 }
             }
             self.cleanup_import_networks(task, &before_networks).await?;
+            if let Some(options) = options {
+                if let Some(host) = &options.host_uuid {
+                    let host: String = self
+                        .request("host.get_by_uuid", json!([self.session, host]))
+                        .await?;
+                    self.request::<Value>(
+                        "VM.set_affinity",
+                        json!([self.session, reference, host]),
+                    )
+                    .await?;
+                }
+                if options.start {
+                    let start = self
+                        .begin_vm_action(&uuid, &crate::operations::VmAction::Start)
+                        .await?;
+                    self.wait_task(&start).await?;
+                }
+            }
             Ok(XvaOutcome::Imported { uuid })
         };
         let result = tokio::select! {

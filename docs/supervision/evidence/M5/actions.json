@@ -1,0 +1,515 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "click": [
+        20,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        45,
+        51
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        706,
+        315
+      ],
+      "text": "/tmp/zz-parity-M5-ui.raw"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        665,
+        398
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M5-cancel-ui"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        520,
+        292
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        735,
+        317
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        592,
+        355
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        765
+      ],
+      "wait": 4,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "click": [
+        1363,
+        251
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1364,
+        283
+      ],
+      "wait": 3,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        372,
+        225
+      ],
+      "snap": "working",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        128,
+        729
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        130,
+        170
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        20,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        45,
+        51
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        706,
+        315
+      ],
+      "text": "/tmp/zz-parity-M5-ui.raw"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        665,
+        398
+      ],
+      "key": "Control_L+a",
+      "text": "zz-parity-M5-cancel-ui"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        520,
+        292
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        735,
+        317
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        592,
+        355
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1068,
+        765
+      ],
+      "wait": 3
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        372,
+        277
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        731,
+        316
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        932,
+        316
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "key": "space",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        592,
+        355
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1066,
+        776
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1067,
+        765
+      ],
+      "wait": 4,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        372,
+        251
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "click": [
+        1362,
+        272
+      ],
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1364,
+        304
+      ],
+      "wait": 5,
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "exec": "redacted",
+      "snap": "working"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

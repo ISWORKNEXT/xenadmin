@@ -938,6 +938,29 @@ impl App {
                         };
                     }
                 }
+                Event::FileInterchange { result } => match result {
+                    Ok(searches) => {
+                        if let Some(searches) = searches {
+                            for search in searches {
+                                crate::config::upsert_saved_search(
+                                    &mut self.state.saved_searches,
+                                    search,
+                                    None,
+                                );
+                            }
+                            crate::config::save_saved_searches(&self.state.saved_searches);
+                        }
+                        self.state.file_interchange = None;
+                        self.state
+                            .toasts
+                            .push(Toast::new("File transfer complete.", ToastKind::Success));
+                    }
+                    Err(error) => {
+                        if let Some(dialog) = self.state.file_interchange.as_mut() {
+                            dialog.error = Some(error);
+                        }
+                    }
+                },
                 Event::XvaQueued { result } => match result {
                     Ok(()) => {
                         self.state.xva_dialog = None;
@@ -2252,6 +2275,18 @@ impl App {
                         .map(std::path::PathBuf::from)
                         .unwrap_or_else(|| std::path::PathBuf::from("."));
                     self.state.xva_dialog = Some(crate::state::XvaDialog {
+                        frame: Default::default(),
+                        format: Default::default(),
+                        host_uuid: None,
+                        vcpus: 1,
+                        memory_mib: 256,
+                        uefi: false,
+                        start: false,
+                        manifest: true,
+                        accepted_eula: false,
+                        envelope: None,
+                        disk_storage: Vec::new(),
+                        networks: Vec::new(),
                         export_targets: Vec::new(),
                         connection_id,
                         vm_uuid: Some(vm_uuid),
@@ -2268,6 +2303,18 @@ impl App {
                 }
                 UiAction::OpenXvaImport(connection_id) => {
                     self.state.xva_dialog = Some(crate::state::XvaDialog {
+                        frame: Default::default(),
+                        format: Default::default(),
+                        host_uuid: None,
+                        vcpus: 1,
+                        memory_mib: 256,
+                        uefi: false,
+                        start: false,
+                        manifest: true,
+                        accepted_eula: false,
+                        envelope: None,
+                        disk_storage: Vec::new(),
+                        networks: Vec::new(),
                         export_targets: Vec::new(),
                         connection_id,
                         vm_uuid: None,
@@ -2289,60 +2336,77 @@ impl App {
                         self.state.xva_dialog = None;
                     }
                 }
+                UiAction::OpenFileInterchange(command) => {
+                    self.state.file_interchange = Some(crate::state::FileInterchangeDialog {
+                        command,
+                        path: String::new(),
+                        error: None,
+                    });
+                }
+                UiAction::CloseFileInterchange => {
+                    self.state.file_interchange = None;
+                }
+                UiAction::SubmitFileInterchange => {
+                    if let Some(dialog) = &self.state.file_interchange {
+                        self.worker.send(Command::FileInterchange {
+                            command: dialog.command,
+                            path: dialog.path.clone(),
+                            searches: self.state.saved_searches.clone(),
+                        });
+                    }
+                }
                 UiAction::SubmitXvaTransfer => {
                     if let Some(dialog) = self.state.xva_dialog.as_mut()
                         && !dialog.submitting
                     {
-                        if !dialog.export_targets.is_empty() {
-                            let path = std::path::PathBuf::from(&dialog.path);
-                            let directory =
-                                path.parent().unwrap_or_else(|| std::path::Path::new("."));
-                            let requests = dialog
-                                .export_targets
-                                .iter()
-                                .enumerate()
-                                .map(|(index, (id, uuid, name))| {
-                                    let file_name: String = name
-                                        .chars()
-                                        .take(64)
-                                        .map(|c| {
-                                            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
-                                                c
-                                            } else {
-                                                '_'
-                                            }
-                                        })
-                                        .collect();
-                                    let destination = if index == 0 {
-                                        path.clone()
-                                    } else {
-                                        directory.join(format!("{file_name}-{uuid}.xva"))
-                                    };
-                                    (
-                                        id.clone(),
-                                        xen_core::xva::XvaRequest::Export {
-                                            vm_uuid: uuid.clone(),
-                                            path: destination,
-                                        },
-                                    )
-                                })
-                                .collect();
-                            dialog.submitting = true;
-                            dialog.error = None;
-                            self.worker.send(Command::XvaBatch { requests });
-                            continue;
-                        }
-                        let request = match &dialog.vm_uuid {
-                            Some(vm_uuid) => xen_core::xva::XvaRequest::Export {
-                                vm_uuid: vm_uuid.clone(),
-                                path: dialog.path.clone().into(),
-                            },
-                            None => xen_core::xva::XvaRequest::Import {
-                                path: dialog.path.clone().into(),
-                                sr_uuid: dialog.sr_uuid.clone().unwrap_or_default(),
+                        let path = std::path::PathBuf::from(&dialog.path);
+                        let request = if let Some(uuid) = &dialog.vm_uuid {
+                            let uuids = if dialog.export_targets.is_empty() {
+                                vec![uuid.clone()]
+                            } else {
+                                dialog
+                                    .export_targets
+                                    .iter()
+                                    .map(|(_, uuid, _)| uuid.clone())
+                                    .collect()
+                            };
+                            if dialog.format == xen_core::appliance::Format::Xva {
+                                xen_core::xva::XvaRequest::Export {
+                                    vm_uuid: uuids[0].clone(),
+                                    path,
+                                }
+                            } else {
+                                xen_core::xva::XvaRequest::Appliance(Box::new(
+                                    xen_core::appliance::Request::Export {
+                                        vm_uuids: uuids,
+                                        path,
+                                        format: dialog.format,
+                                        manifest: dialog.manifest,
+                                    },
+                                ))
+                            }
+                        } else {
+                            let import = xen_core::appliance::Import {
+                                path: path.clone(),
                                 name: dialog.name.clone(),
+                                vcpus: dialog.vcpus,
+                                memory_mib: dialog.memory_mib,
+                                host_uuid: dialog.host_uuid.clone(),
+                                sr_uuid: dialog.sr_uuid.clone().unwrap_or_default(),
                                 network_uuid: dialog.network_uuid.clone(),
-                            },
+                                disk_storage: dialog.disk_storage.clone(),
+                                networks: dialog.networks.clone(),
+                                uefi: dialog.uefi,
+                                start: dialog.start,
+                                verify_manifest: dialog.manifest,
+                            };
+                            if xen_core::appliance::source_kind(&path) == Some("XVA") {
+                                xen_core::xva::XvaRequest::ConfiguredImport(import)
+                            } else {
+                                xen_core::xva::XvaRequest::Appliance(Box::new(
+                                    xen_core::appliance::Request::Import(import),
+                                ))
+                            }
                         };
                         dialog.submitting = true;
                         dialog.error = None;

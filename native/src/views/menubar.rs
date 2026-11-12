@@ -93,6 +93,10 @@ pub fn implemented(command: &str) -> bool {
                 | "XenDesktopTemplates"
                 | "LocalStorage"
                 | "HiddenObjects"
+                | "ImportServerList"
+                | "ExportServerList"
+                | "ImportSearchCommand"
+                | "ExportSearchCommand"
                 | "AddHostCommand"
                 | "Exit"
                 | "Toolbar"
@@ -186,6 +190,10 @@ pub fn resolve(command: &str, state: &UiState, workspace: &WorkspaceView) -> Res
     if matches!(
         command,
         "AddHostCommand"
+            | "ImportServerList"
+            | "ExportServerList"
+            | "ImportSearchCommand"
+            | "ExportSearchCommand"
             | "Exit"
             | "Toolbar"
             | "Theme"
@@ -272,6 +280,15 @@ fn resolve_single(
         return Err("Not implemented yet");
     }
     match command {
+        "ImportServerList" | "ExportServerList" | "ImportSearchCommand" | "ExportSearchCommand" => {
+            let command = match command {
+                "ImportServerList" => "ImportServerList",
+                "ExportServerList" => "ExportServerList",
+                "ImportSearchCommand" => "ImportSearchCommand",
+                _ => "ExportSearchCommand",
+            };
+            return Ok(Dispatch(UiAction::OpenFileInterchange(command)));
+        }
         "AddHostCommand" => return Ok(Connect),
         "Exit" => return Ok(Exit),
         "Toolbar" => return Ok(Toolbar),
@@ -852,7 +869,9 @@ pub fn menus(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
             "File",
             vec![
                 MenuItem::item("Import...", "ImportCommand"),
+                MenuItem::item("Export...", "ExportCommand"),
                 MenuItem::item("Import Search...", "ImportSearchCommand"),
+                MenuItem::item("Export Search...", "ExportSearchCommand"),
                 MenuItem::separator(),
                 MenuItem::item("Import Server List...", "ImportServerList"),
                 MenuItem::item("Export Server List...", "ExportServerList"),
