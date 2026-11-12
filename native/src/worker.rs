@@ -12,6 +12,25 @@ use xen_core::{
 
 /// Commands sent from the UI thread to the background workspace thread.
 pub enum Command {
+    ConfigurePool {
+        connection_id: String,
+        name: Option<String>,
+        members: Vec<String>,
+    },
+    PickServerBackup {
+        seq: u64,
+        save: bool,
+    },
+    ServerInfo {
+        connection_id: String,
+        host_uuid: String,
+        seq: u64,
+    },
+    ServerChange {
+        connection_id: String,
+        host_uuid: String,
+        change: xen_core::server_admin::ServerChange,
+    },
     PropertyExtras {
         seq: u64,
         connection_id: String,
@@ -128,6 +147,7 @@ pub enum Command {
         name: String,
         description: String,
         mtu: u64,
+        autoplug: bool,
     },
     DestroyNetwork {
         connection_id: String,
@@ -474,6 +494,17 @@ pub enum Command {
 
 /// Results sent back to the UI thread.
 pub enum Event {
+    ServerBackupPicked {
+        seq: u64,
+        result: Result<Option<String>, String>,
+    },
+    ServerInfo {
+        seq: u64,
+        result: Result<xen_core::server_admin::ServerInfo, String>,
+    },
+    ServerChanged {
+        result: Result<(), String>,
+    },
     PropertyExtras {
         seq: u64,
         result: Result<
@@ -1559,9 +1590,10 @@ fn dispatch(
                 name,
                 description,
                 mtu,
+                autoplug,
             } => {
                 let result = workspace
-                    .create_network(&connection_id, name, description, mtu)
+                    .create_network(&connection_id, name, description, mtu, autoplug)
                     .await;
                 let _ = events.send(Event::NetworkChanged {
                     action: "create".into(),
@@ -1596,6 +1628,56 @@ fn dispatch(
             } => {
                 let result = workspace.dismiss_alert(&connection_id, &message_uuid).await;
                 let _ = events.send(Event::AlertDismissed { result });
+            }
+            Command::PickServerBackup { seq, save } => {
+                let result = tokio::task::spawn_blocking(move || {
+                    let mut dialog = std::process::Command::new("zenity");
+                    dialog.args(["--file-selection", "--title=Server backup"]);
+                    if save {
+                        dialog.args(["--save", "--filename=server-backup.xbk"]);
+                    }
+                    let output = dialog.output().map_err(|_| {
+                        "The file picker could not be opened. Enter a path in the dialog."
+                            .to_string()
+                    })?;
+                    if !output.status.success() {
+                        return Ok(None);
+                    }
+                    Ok(Some(
+                        String::from_utf8_lossy(&output.stdout).trim().to_owned(),
+                    ))
+                })
+                .await
+                .unwrap_or_else(|_| Err("The file picker failed.".into()));
+                let _ = events.send(Event::ServerBackupPicked { seq, result });
+            }
+            Command::ConfigurePool {
+                connection_id,
+                name,
+                members,
+            } => {
+                let result = workspace
+                    .configure_pool(&connection_id, name, members)
+                    .await;
+                let _ = events.send(Event::ServerChanged { result });
+            }
+            Command::ServerInfo {
+                connection_id,
+                host_uuid,
+                seq,
+            } => {
+                let result = workspace.server_info(&connection_id, &host_uuid).await;
+                let _ = events.send(Event::ServerInfo { seq, result });
+            }
+            Command::ServerChange {
+                connection_id,
+                host_uuid,
+                change,
+            } => {
+                let result = workspace
+                    .server_change(&connection_id, &host_uuid, change)
+                    .await;
+                let _ = events.send(Event::ServerChanged { result });
             }
             Command::HostAction {
                 connection_id,

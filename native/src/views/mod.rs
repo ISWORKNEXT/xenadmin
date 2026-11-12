@@ -34,3 +34,7 @@ mod alert_titles;
 pub mod guest_setup;
 
 pub mod wizard;
+
+pub mod server_admin;
+
+pub mod network_wizard;

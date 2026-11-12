@@ -1,0 +1,10 @@
+[
+  {
+    "uuid": "000524e9-740b-d12f-5d7d-f977b1bb805e",
+    "name_label": "zz-parity-M4-net",
+    "name_description": "",
+    "MTU": 1500,
+    "PIFs": [],
+    "VIFs": []
+  }
+]

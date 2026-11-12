@@ -117,6 +117,18 @@ pub fn implemented(command: &str) -> bool {
                 | "PowerOnHostCommand"
                 | "RestartToolstackCommand"
                 | "HostMaintenanceModeCommand"
+                | "ChangeControlDomainMemoryCommand"
+                | "ChangeHostPasswordCommand"
+                | "RemoveCrashDumpsCommand"
+                | "NewPoolCommand"
+                | "AddServer"
+                | "RemoveServer"
+                | "AddtoPool"
+                | "RemoveHostFromPoolCommand"
+                | "DeletePoolCommand"
+                | "RotatePoolSecretCommand"
+                | "BackupHostCommand"
+                | "RestoreHostFromBackupCommand"
                 | "PoolPropertiesCommand"
                 | "HostPropertiesCommand"
                 | "PropertiesCommand"
@@ -563,6 +575,72 @@ fn resolve_single(
                 }
             }
         }
+        "NewPoolCommand"
+        | "AddServer"
+        | "RemoveServer"
+        | "AddtoPool"
+        | "RemoveHostFromPoolCommand"
+        | "DeletePoolCommand"
+        | "RotatePoolSecretCommand" => {
+            let host_uuid = if let ObjectKey::Host { host_uuid, .. } = key {
+                host_uuid.clone()
+            } else {
+                inventory
+                    .hosts
+                    .first()
+                    .ok_or("No server is available.")?
+                    .uuid
+                    .clone()
+            };
+            if command == "NewPoolCommand"
+                && (inventory.hosts.len() != 1 || !inventory.pool_name.is_empty())
+            {
+                return Err("Select a standalone server.");
+            }
+            UiAction::OpenServerAdmin {
+                connection_id: id.into(),
+                host_uuid,
+                page: match command {
+                    "NewPoolCommand" => super::server_admin::Page::NewPool,
+                    "AddServer" => super::server_admin::Page::AddMember,
+                    "AddtoPool" => super::server_admin::Page::JoinPool,
+                    "RemoveServer" | "RemoveHostFromPoolCommand" => {
+                        super::server_admin::Page::Eject
+                    }
+                    "DeletePoolCommand" => super::server_admin::Page::Standalone,
+                    _ => super::server_admin::Page::RotateSecret,
+                },
+            }
+        }
+        "ChangeControlDomainMemoryCommand"
+        | "ChangeHostPasswordCommand"
+        | "RemoveCrashDumpsCommand"
+        | "BackupHostCommand"
+        | "RestoreHostFromBackupCommand" => {
+            let host_uuid = if let ObjectKey::Host { host_uuid, .. } = key {
+                host_uuid.clone()
+            } else if command == "ChangeHostPasswordCommand" {
+                inventory
+                    .hosts
+                    .first()
+                    .ok_or("No server is available.")?
+                    .uuid
+                    .clone()
+            } else {
+                return Err("Select a server.");
+            };
+            UiAction::OpenServerAdmin {
+                connection_id: id.into(),
+                host_uuid,
+                page: match command {
+                    "BackupHostCommand" => super::server_admin::Page::Backup,
+                    "RestoreHostFromBackupCommand" => super::server_admin::Page::Restore,
+                    "ChangeControlDomainMemoryCommand" => super::server_admin::Page::Memory,
+                    "ChangeHostPasswordCommand" => super::server_admin::Page::Password,
+                    _ => super::server_admin::Page::CrashDumps,
+                },
+            }
+        }
         "RebootHostCommand"
         | "ShutDownHostCommand"
         | "PowerOnHostCommand"
@@ -576,9 +654,15 @@ fn resolve_single(
                 .iter()
                 .find(|h| &h.uuid == host_uuid)
                 .ok_or("The selected server is unavailable.")?;
-            if command == "PowerOnHostCommand" {
-                // Host inventory does not contain liveness or power-on capability.
-                return Err("Server power-on capability is unavailable.");
+            if command == "PowerOnHostCommand"
+                && (host.live
+                    || host.power_on_mode.is_empty()
+                    || !host.allowed_operations.iter().any(|op| op == "power_on"))
+            {
+                return Err("Power On requires an offline server with power-on configured.");
+            }
+            if command != "PowerOnHostCommand" && !host.live {
+                return Err("This server is offline.");
             }
             let action = match command {
                 "RebootHostCommand" => HostAction::Reboot,
@@ -587,9 +671,9 @@ fn resolve_single(
                 "RestartToolstackCommand" => HostAction::RestartToolstack,
                 _ => {
                     if host.enabled {
-                        HostAction::Disable
+                        HostAction::EnterMaintenance
                     } else {
-                        HostAction::Enable
+                        HostAction::ExitMaintenance
                     }
                 }
             };
@@ -906,6 +990,8 @@ pub fn menus(state: &UiState, workspace: &WorkspaceView) -> Vec<MenuItem> {
                     ],
                 ),
                 MenuItem::separator(),
+                MenuItem::item("Remove Crash Dumps", "RemoveCrashDumpsCommand"),
+                MenuItem::item("Server Status Report...", "ServerStatusReportCommand"),
                 MenuItem::item("Destroy", "DestroyHostCommand"),
                 MenuItem::item("Remove from Xen Desktop", "RemoveHostCommand"),
                 MenuItem::separator(),

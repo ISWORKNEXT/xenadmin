@@ -1,0 +1,32 @@
+{
+  "hosts": [
+    {
+      "uuid": "f2347fdf-e320-4d3b-994b-7eb12f860c58",
+      "name": "OIIO-Server",
+      "enabled": true,
+      "maintenance": null
+    }
+  ],
+  "running_vms": [
+    {
+      "uuid": "c6438f32-f841-39ef-7b0b-72333ad68cc1",
+      "name": "Windows 10 (64-bit) (1)",
+      "power_state": "Running"
+    },
+    {
+      "uuid": "a0740b7f-0120-051f-557c-9a1a5accfdb2",
+      "name": "XOA",
+      "power_state": "Running"
+    }
+  ],
+  "interfaces": [
+    {
+      "uuid": "3dc0505f-f8dd-fb15-ab54-9a4ff80a765c",
+      "device": "eth0",
+      "management": true,
+      "physical": true,
+      "mode": "DHCP",
+      "capabilities": []
+    }
+  ]
+}

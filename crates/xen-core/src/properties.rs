@@ -56,6 +56,20 @@ pub struct ObjectProperties {
     #[serde(default)]
     pub page_summaries: std::collections::BTreeMap<String, String>,
     pub disk: Option<DiskProperties>,
+    #[serde(default)]
+    pub network: Option<NetworkProperties>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NetworkProperties {
+    pub mtu: u64,
+    pub autoplug: bool,
+    pub interfaces: Vec<String>,
+    pub external: bool,
+    pub parent_uuid: String,
+    pub vlan: u16,
+    pub can_reconfigure: bool,
+    pub parents: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -150,6 +164,60 @@ impl Connection {
                     .unwrap_or_default(),
                 sr_name: sr["name_label"].as_str().unwrap_or_default().into(),
                 devices,
+            });
+        }
+        if target.kind == ObjectKind::Network {
+            let mut interfaces = Vec::new();
+            for pif in self.network_pifs(&target.uuid).await? {
+                interfaces.push(format!(
+                    "{} — {} — VLAN {}",
+                    pif.host_name, pif.device, pif.vlan
+                ));
+            }
+            let catalog = self.pif_catalog().await?;
+            let connected: Vec<_> = catalog
+                .iter()
+                .filter(|p| p.network_uuid == target.uuid)
+                .collect();
+            let mut parent_uuid = String::new();
+            if let Some(pif) = connected.first()
+                && pif.vlan >= 0
+            {
+                let reference: String = self
+                    .request("PIF.get_by_uuid", json!([self.session, pif.uuid]))
+                    .await?;
+                let pif: Value = self
+                    .request("PIF.get_record", json!([self.session, reference]))
+                    .await?;
+                let vlan: Value = self
+                    .request(
+                        "VLAN.get_record",
+                        json!([self.session, pif["VLAN_master_of"]]),
+                    )
+                    .await?;
+                let parent: Value = self
+                    .request("PIF.get_record", json!([self.session, vlan["tagged_PIF"]]))
+                    .await?;
+                parent_uuid = parent["uuid"].as_str().unwrap_or_default().into();
+            }
+            properties.network = Some(NetworkProperties {
+                mtu: record["MTU"]
+                    .as_u64()
+                    .or_else(|| record["MTU"].as_str()?.parse().ok())
+                    .unwrap_or(1500),
+                autoplug: record["other_config"]["automatic"].as_str() != Some("false"),
+                external: !connected.is_empty(),
+                vlan: connected.first().map(|p| p.vlan.max(0) as u16).unwrap_or(0),
+                can_reconfigure: connected
+                    .iter()
+                    .all(|p| !p.physical && !p.management && p.vlan >= 0),
+                parent_uuid,
+                parents: catalog
+                    .iter()
+                    .filter(|p| p.physical && p.vlan == -1 && p.bond_network_uuid.is_empty())
+                    .map(|p| (p.uuid.clone(), format!("{} — {}", p.host_name, p.device)))
+                    .collect(),
+                interfaces,
             });
         }
         Ok(properties)
@@ -272,6 +340,47 @@ impl Connection {
             )
             .await?;
         }
+        if let (Some(before), Some(network)) = (&original.network, &edited.network) {
+            if !(1500..=9000).contains(&network.mtu) {
+                return Err(ApiError::Xen("MTU must be between 1500 and 9000.".into()));
+            }
+            if before.external != network.external
+                || before.parent_uuid != network.parent_uuid
+                || before.vlan != network.vlan
+            {
+                self.reconfigure_network_external(
+                    &edited.target.uuid,
+                    network.external,
+                    &network.parent_uuid,
+                    network.vlan,
+                )
+                .await?;
+            }
+            if before.mtu != network.mtu {
+                self.request::<Value>(
+                    "network.set_MTU",
+                    json!([self.session, reference, network.mtu]),
+                )
+                .await?;
+            }
+            if before.autoplug != network.autoplug {
+                self.request::<Value>(
+                    "network.remove_from_other_config",
+                    json!([self.session, reference, "automatic"]),
+                )
+                .await?;
+                self.request::<Value>(
+                    "network.add_to_other_config",
+                    json!([
+                        self.session,
+                        reference,
+                        "automatic",
+                        network.autoplug.to_string()
+                    ]),
+                )
+                .await?;
+            }
+        }
         self.object_properties(&edited.target).await
     }
 }
@@ -323,6 +432,7 @@ fn properties_from_record(target: &ObjectTarget, record: &Value) -> ObjectProper
             .unwrap_or_default()
             .into(),
         disk: None,
+        network: None,
         name: record["name_label"].as_str().unwrap_or_default().to_owned(),
         description: record["name_description"]
             .as_str()

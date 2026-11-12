@@ -16,17 +16,20 @@ pub struct PifSummary {
     pub mtu: u64,
     pub vlan: i64,
     pub physical: bool,
+    pub sriov_capable: bool,
     pub management: bool,
     pub attached: bool,
     pub disallow_unplug: bool,
     pub bond_master: String,
+    pub bond_network_uuid: String,
     pub ip: String,
     pub primary_address_type: String,
 }
 
 impl PifSummary {
     pub fn bond_candidate(&self) -> bool {
-        self.physical
+        self.bond_network_uuid.is_empty()
+            && self.physical
             && !self.management
             && self.attached
             && self.vlan == -1
@@ -42,7 +45,8 @@ impl PifSummary {
     }
 
     pub fn sriov_candidate(&self) -> bool {
-        self.physical
+        self.sriov_capable
+            && self.physical
             && !self.management
             && self.attached
             && self.vlan == -1
@@ -64,8 +68,8 @@ impl Connection {
         );
         let (pifs, hosts, networks, bonds) = (pifs?, hosts?, networks?, bonds?);
         let mut catalog: Vec<PifSummary> = pifs
-            .values()
-            .map(|pif| {
+            .iter()
+            .map(|(reference, pif)| {
                 let host_ref = text(pif, "host");
                 let network_ref = text(pif, "network");
                 let host = hosts.get(&host_ref);
@@ -81,9 +85,26 @@ impl Connection {
                     mtu: number(pif, "MTU"),
                     vlan: number_i64(pif, "VLAN"),
                     physical: pif["physical"].as_bool().unwrap_or(false),
+                    sriov_capable: pif["capabilities"]
+                        .as_array()
+                        .is_some_and(|caps| caps.iter().any(|c| c == "sriov")),
                     management: pif["management"].as_bool().unwrap_or(false),
                     attached: pif["currently_attached"].as_bool().unwrap_or(false),
                     disallow_unplug: pif["disallow_unplug"].as_bool().unwrap_or(false),
+                    bond_network_uuid: bonds
+                        .values()
+                        .find(|bond| {
+                            bond["master"].as_str() == Some(reference)
+                                || bond["slaves"].as_array().is_some_and(|slaves| {
+                                    slaves.iter().any(|s| s.as_str() == Some(reference))
+                                })
+                        })
+                        .and_then(|bond| bond["master"].as_str())
+                        .and_then(|master| pifs.get(master))
+                        .and_then(|master| master["network"].as_str())
+                        .and_then(|network| networks.get(network))
+                        .map(|network| text(network, "uuid"))
+                        .unwrap_or_default(),
                     bond_master: pif["bond_master_of"]
                         .as_array()
                         .and_then(|bonds| bonds.first())
@@ -199,7 +220,7 @@ impl Connection {
                     "name_label": name.trim(),
                     "name_description": description,
                     "MTU": mtu,
-                    "other_config": {"autoplug": autoplug.to_string()},
+                    "other_config": {"autoplug": autoplug.to_string(), "automatic": autoplug.to_string()},
                     "tags": [],
                     "bridge": "",
                     "managed": true
@@ -268,24 +289,25 @@ impl Connection {
                     "name_label": name.trim(),
                     "name_description": description,
                     "MTU": mtu,
-                    "other_config": {"autoplug": autoplug.to_string()},
+                    "other_config": {"autoplug": autoplug.to_string(), "automatic": autoplug.to_string()},
                     "tags": [],
                     "bridge": "",
                     "managed": true
                 }]),
             )
             .await?;
+        let network_uuid: String = self
+            .request("network.get_uuid", json!([self.session, network_ref]))
+            .await?;
         for pif_ref in &members {
             if let Err(error) = self
-                .request::<String>(
+                .async_task(
                     "Async.Tunnel.create",
                     json!([self.session, pif_ref, network_ref, protocol]),
                 )
                 .await
             {
-                let _ = self
-                    .request::<Value>("network.destroy", json!([self.session, network_ref]))
-                    .await;
+                let _ = self.destroy_network(&network_uuid).await;
                 return Err(error);
             }
         }
@@ -354,7 +376,7 @@ impl Connection {
                     "name_label": name.trim(),
                     "name_description": "",
                     "MTU": mtu,
-                    "other_config": {"autoplug": autoplug.to_string()},
+                    "other_config": {"autoplug": autoplug.to_string(), "automatic": autoplug.to_string()},
                     "tags": [],
                     "bridge": "",
                     "managed": true
@@ -377,6 +399,80 @@ impl Connection {
                 .request::<Value>("network.destroy", json!([self.session, network_ref]))
                 .await;
             return Err(error);
+        }
+        Ok(())
+    }
+
+    pub async fn reconfigure_network_external(
+        &self,
+        uuid: &str,
+        external: bool,
+        parent_uuid: &str,
+        tag: u16,
+    ) -> Result<(), ApiError> {
+        if self.settings.read_only {
+            return Err(ApiError::Xen("This connection is read-only.".into()));
+        }
+        if tag > 4094 {
+            return Err(ApiError::Xen("Enter a VLAN from 0 to 4094.".into()));
+        }
+        let network: String = self
+            .request("network.get_by_uuid", json!([self.session, uuid]))
+            .await?;
+        let record: Value = self
+            .request("network.get_record", json!([self.session, network]))
+            .await?;
+        if record["VIFs"].as_array().is_some_and(|v| !v.is_empty()) {
+            return Err(ApiError::Xen(
+                "Remove virtual interfaces before changing this network's NIC or VLAN.".into(),
+            ));
+        }
+        let pifs = self.records("PIF").await?;
+        let connected: Vec<_> = pifs
+            .values()
+            .filter(|p| p["network"].as_str() == Some(&network))
+            .collect();
+        if connected.iter().any(|p| {
+            p["management"].as_bool() == Some(true)
+                || p["physical"].as_bool() == Some(true)
+                || number_i64(p, "VLAN") < 0
+        }) {
+            return Err(ApiError::Xen(
+                "Only private networks and VLAN networks can change NIC or VLAN here.".into(),
+            ));
+        }
+        let parent = if external {
+            let (reference, pif) = pifs
+                .iter()
+                .find(|(_, p)| {
+                    p["uuid"].as_str() == Some(parent_uuid)
+                        && p["physical"].as_bool() == Some(true)
+                        && number_i64(p, "VLAN") == -1
+                })
+                .ok_or_else(|| ApiError::Xen("Select a physical NIC.".into()))?;
+            if pifs.values().any(|p| {
+                p["device"] == pif["device"]
+                    && number_i64(p, "VLAN") == i64::from(tag)
+                    && p["network"].as_str() != Some(&network)
+            }) {
+                return Err(ApiError::Xen(
+                    "This VLAN is already configured on the selected NIC.".into(),
+                ));
+            }
+            Some(reference)
+        } else {
+            None
+        };
+        for pif in connected {
+            self.request::<Value>("VLAN.destroy", json!([self.session, pif["VLAN_master_of"]]))
+                .await?;
+        }
+        if let Some(parent) = parent {
+            self.request::<Value>(
+                "pool.create_VLAN_from_PIF",
+                json!([self.session, parent, network, tag]),
+            )
+            .await?;
         }
         Ok(())
     }
@@ -424,7 +520,7 @@ impl Connection {
                     "name_label": name.trim(),
                     "name_description": description,
                     "MTU": mtu,
-                    "other_config": {"autoplug": autoplug.to_string()},
+                    "other_config": {"autoplug": autoplug.to_string(), "automatic": autoplug.to_string()},
                     "tags": [],
                     "bridge": "",
                     "managed": true

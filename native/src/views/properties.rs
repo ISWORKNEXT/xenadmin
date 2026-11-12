@@ -142,6 +142,12 @@ fn summary(dialog: &PropertiesDialog, page: &str) -> String {
             }
             .into()
         }
+        "Network Settings" => dialog
+            .properties
+            .ready()
+            .and_then(|p| p.network.as_ref())
+            .map(|n| format!("MTU {}", n.mtu))
+            .unwrap_or_default(),
         "Custom Fields" => "Custom field values".into(),
         "Size and Location" => dialog
             .properties
@@ -161,8 +167,8 @@ fn summary(dialog: &PropertiesDialog, page: &str) -> String {
                 }
             })
             .unwrap_or_else(|| "Loading…".into()),
-        "Log Destination" | "Power On" | "GPU" | "USB" | "Multipathing" | "Network Settings"
-        | "Clustering" | "Security" | "Read Caching" | "Advanced" => "Not implemented yet".into(),
+        "Log Destination" | "Power On" | "GPU" | "USB" | "Multipathing" | "Clustering"
+        | "Security" | "Read Caching" | "Advanced" => "Not implemented yet".into(),
         "Automatic Start" => if dialog.pool.as_ref().is_some_and(|p| p.vm_autostart) {
             "Enabled"
         } else {
@@ -660,6 +666,49 @@ fn content(ui: &mut egui::Ui, dialog: &mut PropertiesDialog, workspace: &Workspa
             .on_disabled_hover_text("Not implemented yet");
             return;
         }
+    }
+    if page == "Network Settings"
+        && let LoadState::Ready(properties) = &mut dialog.properties
+        && let Some(network) = properties.network.as_mut()
+    {
+        ui.horizontal(|ui| {
+            ui.label("MTU");
+            ui.add(egui::DragValue::new(&mut network.mtu).range(1500..=9000));
+        });
+        ui.checkbox(
+            &mut network.autoplug,
+            "Automatically add this network to new virtual machines",
+        );
+        ui.add_enabled_ui(network.can_reconfigure, |ui| {
+            ui.checkbox(
+                &mut network.external,
+                "Connect to an external network (VLAN)",
+            );
+            if network.external {
+                egui::ComboBox::from_id_salt("property-network-parent")
+                    .selected_text(
+                        network
+                            .parents
+                            .iter()
+                            .find(|(id, _)| id == &network.parent_uuid)
+                            .map(|(_, name)| name.as_str())
+                            .unwrap_or("Select a NIC"),
+                    )
+                    .show_ui(ui, |ui| {
+                        for (id, name) in &network.parents {
+                            ui.selectable_value(&mut network.parent_uuid, id.clone(), name);
+                        }
+                    });
+                ui.horizontal(|ui| {
+                    ui.label("VLAN");
+                    ui.add(egui::DragValue::new(&mut network.vlan).range(0..=4094));
+                });
+            }
+        });
+        for interface in &network.interfaces {
+            ui.label(interface);
+        }
+        return;
     }
     let labels: &[&str] = match page.as_str() {
         "Custom Fields" => &["Custom fields"],

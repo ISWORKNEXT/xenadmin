@@ -421,6 +421,28 @@ impl RawInventory {
                     version: text(&r["software_version"], "product_version"),
                     brand: text(&r["software_version"], "product_brand"),
                     enabled: boolean(r, "enabled"),
+                    live: boolean(metric, "live"),
+                    power_on_mode: text(r, "power_on_mode"),
+                    evacuated_vms: ["MIGRATED", "HALTED", "SUSPENDED"]
+                        .iter()
+                        .flat_map(|kind| {
+                            text(
+                                &r["other_config"],
+                                &format!("MAINTENANCE_MODE_EVACUATED_VMS_{kind}"),
+                            )
+                            .split(',')
+                            .filter(|s| !s.is_empty())
+                            .map(str::to_owned)
+                            .collect::<Vec<_>>()
+                        })
+                        .collect(),
+                    allowed_operations: r["allowed_operations"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect(),
                     cpu_count: r["host_CPUs"].as_array().map_or(0, Vec::len),
                     memory_total: number(metric, "memory_total"),
                     memory_free: number(metric, "memory_free"),
@@ -882,6 +904,10 @@ pub struct Host {
     pub version: String,
     pub brand: String,
     pub enabled: bool,
+    pub live: bool,
+    pub power_on_mode: String,
+    pub evacuated_vms: Vec<String>,
+    pub allowed_operations: Vec<String>,
     pub cpu_count: usize,
     pub memory_total: u64,
     pub memory_free: u64,

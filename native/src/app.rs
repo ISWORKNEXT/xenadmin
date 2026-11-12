@@ -1734,6 +1734,42 @@ impl App {
                         }
                     }
                 },
+                Event::ServerBackupPicked { seq, result } => {
+                    if seq == self.state.server_admin_seq
+                        && let Some(d) = self.state.server_admin.as_mut()
+                    {
+                        match result {
+                            Ok(Some(path)) => d.path = path,
+                            Ok(None) => {}
+                            Err(e) => d.error = Some(e),
+                        }
+                    }
+                }
+                Event::ServerInfo { seq, result } => {
+                    if seq == self.state.server_admin_seq
+                        && let Some(d) = self.state.server_admin.as_mut()
+                    {
+                        match result {
+                            Ok(info) => {
+                                d.memory = info.memory_mib.to_string();
+                                d.info = Some(info);
+                            }
+                            Err(e) => d.error = Some(e),
+                        }
+                    }
+                }
+                Event::ServerChanged { result } => match result {
+                    Ok(()) => {
+                        self.state.server_admin = None;
+                        self.state.page_hosts.clear();
+                    }
+                    Err(e) => {
+                        if let Some(d) = self.state.server_admin.as_mut() {
+                            d.busy = false;
+                            d.error = Some(e);
+                        }
+                    }
+                },
                 Event::HostActionFinished {
                     host_uuid,
                     action,
@@ -1749,7 +1785,15 @@ impl App {
                             self.state.host_action_confirm = None;
                         }
                         self.state.toasts.push(Toast::new(
-                            format!("{} completed.", action.title()),
+                            if matches!(
+                                action,
+                                xen_core::operations::HostAction::Shutdown
+                                    | xen_core::operations::HostAction::ShutdownPrepared { .. }
+                            ) {
+                                "Server shutdown requested.".into()
+                            } else {
+                                format!("{} completed.", action.title())
+                            },
                             ToastKind::Success,
                         ));
                         if self
@@ -4427,6 +4471,12 @@ impl App {
                         plugged,
                     });
                 }
+                UiAction::OpenBondWizard => {
+                    self.apply(vec![UiAction::OpenNetworkCreate]);
+                    if let Some(d) = self.state.network_create_dialog.as_mut() {
+                        d.kind = "bond".into();
+                    }
+                }
                 UiAction::OpenBondCreate => {
                     let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
                     else {
@@ -4558,27 +4608,7 @@ impl App {
                     });
                 }
                 UiAction::OpenNetworkChooser => {
-                    let Some(connection_id) = self.state.scope.connection_id().map(str::to_owned)
-                    else {
-                        continue;
-                    };
-                    if !find_connection(&self.workspace, &connection_id).is_some_and(|connection| {
-                        crate::state::is_online(connection)
-                            && !crate::state::is_read_only(connection)
-                    }) {
-                        continue;
-                    }
-                    let connection_id_for_pifs = connection_id.clone();
-                    self.state.pif_catalog = Vec::new();
-                    self.state.pif_catalog_error = None;
-                    self.state.pif_catalog_connection = Some(connection_id_for_pifs.clone());
-                    self.state.pif_catalog_loading = true;
-                    self.state.pif_catalog_seq += 1;
-                    self.worker.send(Command::PifCatalog {
-                        seq: self.state.pif_catalog_seq,
-                        connection_id: connection_id_for_pifs,
-                    });
-                    self.state.network_chooser = Some(false);
+                    self.apply(vec![UiAction::OpenNetworkCreate]);
                 }
                 UiAction::CloseNetworkChooser => self.state.network_chooser = None,
                 UiAction::OpenNetworkCreate => {
@@ -4601,6 +4631,10 @@ impl App {
                         connection_id: connection_id_for_pifs,
                     });
                     self.state.network_create_dialog = Some(crate::state::NetworkCreateDialog {
+                        wizard: Default::default(),
+                        members: Vec::new(),
+                        mode: "balance-slb".into(),
+                        tag: "0".into(),
                         connection_id,
                         kind: "internal".into(),
                         name: String::new(),
@@ -4639,11 +4673,11 @@ impl App {
                         dialog.error = Some("MTU must be between 1500 and 9000.".into());
                         continue;
                     }
-                    if dialog.kind != "internal" && dialog.pif_uuid.is_none() {
+                    if dialog.kind == "vlan" && dialog.pif_uuid.is_none() {
                         dialog.error = Some("Select a physical interface.".into());
                         continue;
                     }
-                    let pif_uuids: Vec<String> = dialog.pif_uuid.iter().cloned().collect();
+                    let pif_uuids: Vec<String> = dialog.members.clone();
                     if dialog.kind == "sriov"
                         && let Err(error) = xen_core::network::validate_sriov_network(
                             &dialog.name,
@@ -4673,6 +4707,32 @@ impl App {
                     let name = dialog.name.trim().to_owned();
                     let description = dialog.description.clone();
                     match dialog.kind.as_str() {
+                        "vlan" => {
+                            let Ok(tag) = dialog.tag.parse::<i64>() else {
+                                dialog.submitting = false;
+                                dialog.error = Some("Enter a VLAN between 0 and 4094.".into());
+                                continue;
+                            };
+                            self.worker.send(Command::CreateVlan {
+                                connection_id,
+                                pif_uuid: dialog.pif_uuid.clone().unwrap_or_default(),
+                                tag,
+                                name,
+                                description,
+                                mtu,
+                                autoplug: dialog.autoplug,
+                            });
+                        }
+                        "bond" => {
+                            self.worker.send(Command::CreateBond {
+                                connection_id,
+                                name,
+                                members: dialog.members.clone(),
+                                mode: dialog.mode.clone(),
+                                mtu,
+                                autoplug: dialog.autoplug,
+                            });
+                        }
                         "sriov" => {
                             self.worker.send(Command::CreateSriovNetwork {
                                 connection_id,
@@ -4700,6 +4760,7 @@ impl App {
                                 name,
                                 description,
                                 mtu,
+                                autoplug: dialog.autoplug,
                             });
                         }
                     }
@@ -5116,10 +5177,107 @@ impl App {
                         host_uuid,
                         host_name,
                         action,
+                        maintenance_policy: 0,
+                        return_vms: false,
                         acknowledged: !action.destructive(),
                         submitting: false,
                         error: None,
                     });
+                }
+                UiAction::OpenServerAdmin {
+                    connection_id,
+                    host_uuid,
+                    page,
+                } => {
+                    self.state.server_admin_seq += 1;
+                    self.worker.send(Command::ServerInfo {
+                        connection_id: connection_id.clone(),
+                        host_uuid: host_uuid.clone(),
+                        seq: self.state.server_admin_seq,
+                    });
+                    self.state.server_admin = Some(crate::views::server_admin::Dialog::new(
+                        connection_id,
+                        host_uuid,
+                        page,
+                    ));
+                    if let Some(d) = self.state.server_admin.as_mut() {
+                        d.candidates = self
+                            .workspace
+                            .connections
+                            .iter()
+                            .filter(|c| {
+                                crate::state::is_online(c) && !crate::state::is_read_only(c)
+                            })
+                            .filter_map(|c| {
+                                let inv = crate::state::connection_inventory(c)?;
+                                if inv.hosts.len() != 1 || !inv.pool_name.is_empty() {
+                                    return None;
+                                }
+                                Some((
+                                    crate::state::connection_id(c).to_owned(),
+                                    inv.hosts[0].name.clone(),
+                                ))
+                            })
+                            .collect();
+                    }
+                }
+                UiAction::BrowseServerBackup => {
+                    if let Some(d) = self.state.server_admin.as_ref() {
+                        self.worker.send(Command::PickServerBackup {
+                            seq: self.state.server_admin_seq,
+                            save: d.page == crate::views::server_admin::Page::Backup,
+                        });
+                    }
+                }
+                UiAction::CloseServerAdmin => {
+                    if !self.state.server_admin.as_ref().is_some_and(|d| d.busy) {
+                        self.state.server_admin = None;
+                    }
+                }
+                UiAction::SaveServerAdmin => {
+                    if let Some(d) = self.state.server_admin.as_mut() {
+                        if matches!(
+                            d.page,
+                            crate::views::server_admin::Page::NewPool
+                                | crate::views::server_admin::Page::AddMember
+                        ) {
+                            if d.page == crate::views::server_admin::Page::AddMember
+                                && d.members.is_empty()
+                            {
+                                d.error = Some("Select at least one standalone server.".into());
+                                continue;
+                            }
+                            d.busy = true;
+                            d.error = None;
+                            self.worker.send(Command::ConfigurePool {
+                                connection_id: d.coordinator.clone(),
+                                name: if d.page == crate::views::server_admin::Page::NewPool {
+                                    Some(d.name.clone())
+                                } else {
+                                    None
+                                },
+                                members: d
+                                    .members
+                                    .iter()
+                                    .filter(|id| *id != &d.coordinator)
+                                    .cloned()
+                                    .collect(),
+                            });
+                            continue;
+                        }
+                        match d.change() {
+                            Ok(change) => {
+                                d.busy = true;
+                                d.error = None;
+                                self.worker.send(Command::ServerChange {
+                                    connection_id: d.connection_id.clone(),
+                                    host_uuid: d.host_uuid.clone(),
+                                    change,
+                                });
+                            }
+                            Err(error) => d.error = Some(error),
+                        }
+                    }
                 }
                 UiAction::CancelHostAction => {
                     if !self
@@ -5144,7 +5302,41 @@ impl App {
                     self.worker.send(Command::HostAction {
                         connection_id: confirm.connection_id.clone(),
                         host_uuid: confirm.host_uuid.clone(),
-                        action: confirm.action,
+                        action: if confirm.maintenance_policy != 0
+                            && matches!(
+                                confirm.action,
+                                xen_core::operations::HostAction::Reboot
+                                    | xen_core::operations::HostAction::Shutdown
+                            ) {
+                            if matches!(confirm.action, xen_core::operations::HostAction::Reboot) {
+                                xen_core::operations::HostAction::RebootPrepared {
+                                    suspend: confirm.maintenance_policy == 1,
+                                }
+                            } else {
+                                xen_core::operations::HostAction::ShutdownPrepared {
+                                    suspend: confirm.maintenance_policy == 1,
+                                }
+                            }
+                        } else if matches!(
+                            confirm.action,
+                            xen_core::operations::HostAction::EnterMaintenance
+                        ) && confirm.maintenance_policy != 0
+                        {
+                            if confirm.maintenance_policy == 1 {
+                                xen_core::operations::HostAction::EnterMaintenanceSuspend
+                            } else {
+                                xen_core::operations::HostAction::EnterMaintenanceShutdown
+                            }
+                        } else if confirm.return_vms
+                            && matches!(
+                                confirm.action,
+                                xen_core::operations::HostAction::ExitMaintenance
+                            )
+                        {
+                            xen_core::operations::HostAction::ExitMaintenanceRestore
+                        } else {
+                            confirm.action
+                        },
                     });
                 }
                 UiAction::LoadSrVdis {

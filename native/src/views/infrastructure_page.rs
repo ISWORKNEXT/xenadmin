@@ -312,7 +312,7 @@ pub fn show(
                     )
                 })
                 .collect();
-            table_with_menu(
+            let selected = table_with_menu(
                 ui,
                 "nics",
                 &[
@@ -329,7 +329,15 @@ pub fn show(
                 ],
                 &rows,
                 |ui, key| {
-                    disabled(ui, "Delete Bond");
+                    let action = delete_bond_action(state, id, key, read_only, inv);
+                    if ui
+                        .add_enabled(action.is_some(), egui::Button::new("Delete Bond"))
+                        .clicked()
+                        && let Some(action) = action
+                    {
+                        actions.push(action);
+                        ui.close();
+                    }
                     ui.separator();
                     if ui.button("Copy").clicked() {
                         if let Some((_, values)) = rows.iter().find(|(id, _)| id == key) {
@@ -354,10 +362,27 @@ pub fn show(
                     .add_enabled(can_bond, egui::Button::new("Create Bond…"))
                     .clicked()
                 {
-                    actions.push(UiAction::OpenBondCreate);
+                    actions.push(UiAction::OpenBondWizard);
                 }
-                disabled(ui, "Delete Bond");
-                disabled(ui, "Rescan");
+                let action = delete_bond_action(state, id, &selected, read_only, inv);
+                if ui
+                    .add_enabled(action.is_some(), egui::Button::new("Delete Bond"))
+                    .clicked()
+                    && let Some(action) = action
+                {
+                    actions.push(action);
+                }
+                if ui
+                    .add_enabled(!read_only && host.is_some(), egui::Button::new("Rescan"))
+                    .clicked()
+                    && let Some(host) = host
+                {
+                    actions.push(UiAction::PromptHostAction {
+                        host_uuid: host.uuid.clone(),
+                        host_name: host.name.clone(),
+                        action: xen_core::operations::HostAction::RescanPifs,
+                    });
+                }
             });
         }
         VmTab::Gpu | VmTab::Usb => {
@@ -707,5 +732,44 @@ fn networking(
         ],
         &ips,
     );
-    disabled(ui, "Configure…");
+    if ui
+        .add_enabled(!read_only, egui::Button::new("Configure…"))
+        .clicked()
+        && let Some(detail) = details.first()
+    {
+        actions.push(UiAction::OpenServerAdmin {
+            connection_id: id.into(),
+            host_uuid: detail.host_uuid.clone(),
+            page: super::server_admin::Page::Ip,
+        });
+    }
+}
+
+fn delete_bond_action(
+    state: &UiState,
+    id: &str,
+    pif_uuid: &str,
+    read_only: bool,
+    inv: &xen_core::xapi::Inventory,
+) -> Option<UiAction> {
+    if read_only {
+        return None;
+    }
+    let pif = state.pif_catalog.iter().find(|p| p.uuid == pif_uuid)?;
+    let network = inv
+        .networks
+        .iter()
+        .find(|n| n.uuid == pif.bond_network_uuid && n.virtual_interface_count == 0)?;
+    if state
+        .pif_catalog
+        .iter()
+        .any(|p| p.network_uuid == network.uuid && p.management)
+    {
+        return None;
+    }
+    Some(UiAction::PromptDestroyNetwork {
+        connection_id: id.into(),
+        network_uuid: network.uuid.clone(),
+        name: format!("Bond: {}", network.name),
+    })
 }

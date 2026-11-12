@@ -386,12 +386,19 @@ impl SrAction {
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostAction {
+    EnterMaintenance,
+    EnterMaintenanceSuspend,
+    EnterMaintenanceShutdown,
+    ExitMaintenance,
+    ExitMaintenanceRestore,
     Enable,
     Disable,
     PowerOn,
     Evacuate,
     Reboot,
+    RebootPrepared { suspend: bool },
     Shutdown,
+    ShutdownPrepared { suspend: bool },
     RestartToolstack,
     RescanPifs,
 }
@@ -399,12 +406,17 @@ pub enum HostAction {
 impl HostAction {
     fn method(self) -> &'static str {
         match self {
-            Self::Enable => "Async.host.enable",
-            Self::Disable => "Async.host.disable",
+            Self::ExitMaintenanceRestore | Self::ExitMaintenance | Self::Enable => {
+                "Async.host.enable"
+            }
+            Self::EnterMaintenance
+            | Self::EnterMaintenanceSuspend
+            | Self::EnterMaintenanceShutdown
+            | Self::Disable => "Async.host.disable",
             Self::PowerOn => "Async.host.power_on",
             Self::Evacuate => "Async.host.evacuate",
-            Self::Reboot => "Async.host.reboot",
-            Self::Shutdown => "Async.host.shutdown",
+            Self::Reboot | Self::RebootPrepared { .. } => "Async.host.reboot",
+            Self::Shutdown | Self::ShutdownPrepared { .. } => "Async.host.shutdown",
             Self::RestartToolstack => "Async.host.restart_agent",
             Self::RescanPifs => "Async.PIF.scan",
         }
@@ -412,19 +424,29 @@ impl HostAction {
 
     pub fn title(self) -> &'static str {
         match self {
+            Self::EnterMaintenance
+            | Self::EnterMaintenanceSuspend
+            | Self::EnterMaintenanceShutdown => "Enter Maintenance Mode",
+            Self::ExitMaintenanceRestore | Self::ExitMaintenance => "Exit Maintenance Mode",
             Self::Enable => "Enable host",
             Self::Disable => "Disable host",
             Self::PowerOn => "Power on host",
             Self::Evacuate => "Evacuate host",
-            Self::Reboot => "Reboot host",
-            Self::Shutdown => "Shut down host",
+            Self::Reboot | Self::RebootPrepared { .. } => "Reboot host",
+            Self::Shutdown | Self::ShutdownPrepared { .. } => "Shut down host",
             Self::RestartToolstack => "Restart toolstack",
             Self::RescanPifs => "Rescan physical interfaces",
         }
     }
 
     pub fn destructive(self) -> bool {
-        matches!(self, Self::Reboot | Self::Shutdown)
+        matches!(
+            self,
+            Self::Reboot
+                | Self::RebootPrepared { .. }
+                | Self::Shutdown
+                | Self::ShutdownPrepared { .. }
+        )
     }
 }
 
@@ -434,6 +456,17 @@ impl Connection {
         name: &str,
         description: &str,
         mtu: u64,
+    ) -> Result<(), ApiError> {
+        self.create_private_network(name, description, mtu, true)
+            .await
+    }
+
+    pub async fn create_private_network(
+        &self,
+        name: &str,
+        description: &str,
+        mtu: u64,
+        autoplug: bool,
     ) -> Result<(), ApiError> {
         if self.settings.read_only {
             return Err(ApiError::Xen(
@@ -462,7 +495,7 @@ impl Connection {
                     "name_label": name,
                     "name_description": description,
                     "MTU": mtu,
-                    "other_config": {},
+                    "other_config": {"automatic": autoplug.to_string(), "autoplug": autoplug.to_string()},
                     "tags": [],
                     "bridge": ""
                 }
@@ -486,6 +519,14 @@ impl Connection {
             .await?;
         if network["uuid"].as_str() != Some(network_uuid) {
             return Err(ApiError::Protocol);
+        }
+        if network["VIFs"]
+            .as_array()
+            .is_some_and(|vifs| !vifs.is_empty())
+        {
+            return Err(ApiError::Xen(
+                "Remove this network's virtual interfaces before deleting it.".into(),
+            ));
         }
         let (pifs, bonds, network_sriovs, tunnels) = tokio::join!(
             self.records("PIF"),
@@ -874,6 +915,210 @@ impl Connection {
             .await?;
         if host["uuid"].as_str() != Some(host_uuid) {
             return Err(ApiError::Protocol);
+        }
+        if matches!(
+            action,
+            HostAction::Reboot
+                | HostAction::Shutdown
+                | HostAction::RebootPrepared { .. }
+                | HostAction::ShutdownPrepared { .. }
+        ) {
+            let maintenance = match action {
+                HostAction::RebootPrepared { suspend: true }
+                | HostAction::ShutdownPrepared { suspend: true } => {
+                    HostAction::EnterMaintenanceSuspend
+                }
+                HostAction::RebootPrepared { suspend: false }
+                | HostAction::ShutdownPrepared { suspend: false } => {
+                    HostAction::EnterMaintenanceShutdown
+                }
+                _ => HostAction::EnterMaintenance,
+            };
+            Box::pin(self.host_action(host_uuid, maintenance)).await?;
+            let _: String = self
+                .request(action.method(), json!([self.session, host_ref]))
+                .await?;
+            return Ok(());
+        }
+        if matches!(action, HostAction::RestartToolstack) {
+            let _: String = self
+                .request(action.method(), json!([self.session, host_ref]))
+                .await?;
+            return Ok(());
+        }
+        if matches!(
+            action,
+            HostAction::EnterMaintenance
+                | HostAction::EnterMaintenanceSuspend
+                | HostAction::EnterMaintenanceShutdown
+        ) {
+            let vms = self.records("VM").await?;
+            let running = vms.values().any(|v| {
+                v["resident_on"].as_str() == Some(&host_ref)
+                    && v["is_control_domain"].as_bool() == Some(false)
+                    && matches!(v["power_state"].as_str(), Some("Running" | "Paused"))
+            });
+            if running
+                && self.records("host").await?.len() == 1
+                && matches!(action, HostAction::EnterMaintenance)
+            {
+                return Err(ApiError::Xen("Running VMs must be suspended or shut down before entering maintenance mode on a standalone server.".into()));
+            }
+            let migrated = vms
+                .values()
+                .filter(|v| {
+                    v["resident_on"].as_str() == Some(&host_ref)
+                        && v["is_control_domain"].as_bool() == Some(false)
+                })
+                .filter_map(|v| v["uuid"].as_str())
+                .collect::<Vec<_>>()
+                .join(",");
+            self.request::<Value>(
+                "host.remove_from_other_config",
+                json!([
+                    self.session,
+                    host_ref,
+                    "MAINTENANCE_MODE_EVACUATED_VMS_MIGRATED"
+                ]),
+            )
+            .await?;
+            self.request::<Value>(
+                "host.add_to_other_config",
+                json!([
+                    self.session,
+                    host_ref,
+                    "MAINTENANCE_MODE_EVACUATED_VMS_MIGRATED",
+                    migrated
+                ]),
+            )
+            .await?;
+            self.request::<Value>(
+                "host.remove_from_other_config",
+                json!([self.session, host_ref, "MAINTENANCE_MODE"]),
+            )
+            .await?;
+            self.request::<Value>(
+                "host.add_to_other_config",
+                json!([self.session, host_ref, "MAINTENANCE_MODE", "true"]),
+            )
+            .await?;
+            self.async_task("Async.host.disable", json!([self.session, host_ref]))
+                .await?;
+            if running
+                && matches!(
+                    action,
+                    HostAction::EnterMaintenanceSuspend | HostAction::EnterMaintenanceShutdown
+                )
+            {
+                let mut suspended = Vec::new();
+                let mut halted = Vec::new();
+                for (reference, vm) in vms.iter().filter(|(_, v)| {
+                    v["resident_on"].as_str() == Some(&host_ref)
+                        && v["is_control_domain"].as_bool() == Some(false)
+                        && matches!(v["power_state"].as_str(), Some("Running" | "Paused"))
+                }) {
+                    let can_suspend = matches!(action, HostAction::EnterMaintenanceSuspend)
+                        && vm["allowed_operations"]
+                            .as_array()
+                            .is_some_and(|ops| ops.iter().any(|op| op == "suspend"));
+                    let method = if can_suspend {
+                        "Async.VM.suspend"
+                    } else {
+                        "Async.VM.clean_shutdown"
+                    };
+                    self.async_task(method, json!([self.session, reference]))
+                        .await?;
+                    if let Some(uuid) = vm["uuid"].as_str() {
+                        if can_suspend {
+                            suspended.push(uuid);
+                        } else {
+                            halted.push(uuid);
+                        }
+                    }
+                }
+                for (kind, uuids) in [("SUSPENDED", suspended), ("HALTED", halted)] {
+                    let key = format!("MAINTENANCE_MODE_EVACUATED_VMS_{kind}");
+                    self.request::<Value>(
+                        "host.remove_from_other_config",
+                        json!([self.session, host_ref, key]),
+                    )
+                    .await?;
+                    self.request::<Value>(
+                        "host.add_to_other_config",
+                        json!([self.session, host_ref, key, uuids.join(",")]),
+                    )
+                    .await?;
+                }
+                self.request::<Value>(
+                    "host.remove_from_other_config",
+                    json!([
+                        self.session,
+                        host_ref,
+                        "MAINTENANCE_MODE_EVACUATED_VMS_MIGRATED"
+                    ]),
+                )
+                .await?;
+            } else if running {
+                self.async_task("Async.host.evacuate", json!([self.session, host_ref]))
+                    .await?;
+            }
+            return Ok(());
+        }
+        if matches!(
+            action,
+            HostAction::ExitMaintenance | HostAction::ExitMaintenanceRestore
+        ) {
+            self.async_task("Async.host.enable", json!([self.session, host_ref]))
+                .await?;
+            self.request::<Value>(
+                "host.remove_from_other_config",
+                json!([self.session, host_ref, "MAINTENANCE_MODE"]),
+            )
+            .await?;
+            if matches!(action, HostAction::ExitMaintenanceRestore) {
+                let vms = self.records("VM").await?;
+                for (kind, state, method) in [
+                    ("MIGRATED", "Running", "Async.VM.pool_migrate"),
+                    ("HALTED", "Halted", "Async.VM.start_on"),
+                    ("SUSPENDED", "Suspended", "Async.VM.resume_on"),
+                ] {
+                    let key = format!("MAINTENANCE_MODE_EVACUATED_VMS_{kind}");
+                    for uuid in host["other_config"][&key]
+                        .as_str()
+                        .unwrap_or_default()
+                        .split(',')
+                        .filter(|s| !s.is_empty())
+                    {
+                        if let Some((reference, vm)) = vms.iter().find(|(_, v)| {
+                            v["uuid"].as_str() == Some(uuid)
+                                && v["power_state"].as_str() == Some(state)
+                                && v["is_control_domain"].as_bool() == Some(false)
+                        }) {
+                            if state == "Running" {
+                                if vm["resident_on"].as_str() != Some(&host_ref) {
+                                    self.async_task(
+                                        method,
+                                        json!([self.session,reference,host_ref,{"live":"true"}]),
+                                    )
+                                    .await?;
+                                }
+                            } else {
+                                self.async_task(
+                                    method,
+                                    json!([self.session, reference, host_ref, false, false]),
+                                )
+                                .await?;
+                            }
+                        }
+                    }
+                    self.request::<Value>(
+                        "host.remove_from_other_config",
+                        json!([self.session, host_ref, key]),
+                    )
+                    .await?;
+                }
+            }
+            return Ok(());
         }
         self.async_task(action.method(), json!([self.session, host_ref]))
             .await

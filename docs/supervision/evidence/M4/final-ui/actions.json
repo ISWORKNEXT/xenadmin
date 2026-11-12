@@ -1,0 +1,296 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ],
+      "snap": "/tmp/m4-final-menu",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Escape",
+      "snap": "/tmp/m4-final-connected",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Escape"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ],
+      "snap": "/tmp/m4-final-server-menu",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        205,
+        348
+      ],
+      "snap": "/tmp/m4-final-evacuate-open",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        113,
+        170
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ],
+      "snap": "/tmp/m4-final-hostmenu",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        201,
+        348
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        706,
+        400
+      ],
+      "snap": "/home/tinnerkun/Desktop/xen/xenadmin/docs/supervision/evidence/M4/01-evacuate",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        476,
+        647
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        205,
+        372
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        750,
+        410
+      ],
+      "snap": "/home/tinnerkun/Desktop/xen/xenadmin/docs/supervision/evidence/M4/02-control-domain-memory",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        446,
+        590
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        610,
+        164
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        430,
+        316
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        800,
+        240
+      ],
+      "snap": "/home/tinnerkun/Desktop/xen/xenadmin/docs/supervision/evidence/M4/03-network-type",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1142,
+        763
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        678,
+        164
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1100,
+        110
+      ],
+      "snap": "/home/tinnerkun/Desktop/xen/xenadmin/docs/supervision/evidence/M4/04-nics",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        610,
+        164
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        415,
+        461
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L",
+      "snap": "/home/tinnerkun/Desktop/xen/xenadmin/docs/supervision/evidence/M4/05-ip-configuration",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        446,
+        732
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        185,
+        155
+      ],
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L",
+      "snap": "/tmp/m4-restart-confirm",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        932,
+        527
+      ],
+      "snap": "/tmp/m4-toolstack-requested",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Shift_L",
+      "snap": "/tmp/m4-toolstack-result",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

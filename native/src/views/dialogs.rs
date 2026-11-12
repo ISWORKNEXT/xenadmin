@@ -15,6 +15,7 @@ pub fn show(
     workspace: &WorkspaceView,
     actions: &mut Vec<UiAction>,
 ) {
+    super::server_admin::show(ctx, state, actions);
     if state.vm_copy.is_some() {
         super::vm_copy::show(ctx, state, workspace, actions);
     }
@@ -167,7 +168,7 @@ pub fn show(
         dr_task_delete_dialog(ctx, state, actions);
     }
     if state.host_action_confirm.is_some() {
-        host_action_confirm(ctx, state, actions);
+        host_action_confirm(ctx, state, workspace, actions);
     }
     if state.snapshot_confirm.is_some() {
         snapshot_delete(ctx, state, actions);
@@ -727,238 +728,7 @@ fn network_chooser(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<U
 }
 
 fn network_create(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
-    let mut close = false;
-    let mut save = false;
-    let pifs: Vec<(String, String, String)> = state
-        .pif_catalog
-        .iter()
-        .map(|pif| (pif.uuid.clone(), pif.host_name.clone(), pif.device.clone()))
-        .collect();
-    let Some(dialog) = state.network_create_dialog.as_mut() else {
-        return;
-    };
-    let response = egui::Modal::new(egui::Id::unique("network-create-modal"))
-        .frame(theme::modal_frame())
-        .show(ctx, |ui| {
-            ui.set_width(560.0);
-            modal_title(
-                ui,
-                "Add network",
-                match dialog.kind.as_str() {
-                    "sriov" => "Creates an SR-IOV logical network on a physical function.",
-                    "chin" => "Creates a cross-host internal network tunnelled over management.",
-                    _ => "Creates an internal XenAPI network. Attach a PIF or VIF afterwards.",
-                },
-            );
-            widgets::field_label(ui, "Type");
-            egui::ComboBox::from_id_salt("network-kind")
-                .selected_text(
-                    RichText::new(match dialog.kind.as_str() {
-                        "sriov" => "SR-IOV logical network",
-                        "chin" => "Cross-host internal (CHIN)",
-                        _ => "Internal network",
-                    })
-                    .size(11.0),
-                )
-                .width(ui.available_width())
-                .show_ui(ui, |ui| {
-                    for (value, label) in [
-                        ("internal", "Internal network"),
-                        ("sriov", "SR-IOV logical network"),
-                        ("chin", "Cross-host internal (CHIN)"),
-                    ] {
-                        if ui
-                            .selectable_label(
-                                dialog.kind == value,
-                                RichText::new(label).size(11.0),
-                            )
-                            .clicked()
-                        {
-                            dialog.kind = value.into();
-                            dialog.pif_uuid = None;
-                        }
-                    }
-                });
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Name");
-            ui.add_enabled(
-                !dialog.submitting,
-                egui::TextEdit::singleline(&mut dialog.name)
-                    .desired_width(f32::INFINITY)
-                    .char_limit(255)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(8.0);
-            widgets::field_label(ui, "Description");
-            ui.add_enabled(
-                !dialog.submitting,
-                egui::TextEdit::multiline(&mut dialog.description)
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(2)
-                    .char_limit(1024)
-                    .margin(egui::Margin::symmetric(8, 5)),
-            );
-            ui.add_space(8.0);
-            ui.columns(2, |columns| {
-                widgets::field_label(&mut columns[0], "MTU");
-                columns[0].add_enabled(
-                    !dialog.submitting,
-                    egui::TextEdit::singleline(&mut dialog.mtu)
-                        .char_limit(4)
-                        .margin(egui::Margin::symmetric(8, 5)),
-                );
-                columns[1].add_enabled(
-                    !dialog.submitting,
-                    egui::Checkbox::new(
-                        &mut dialog.autoplug,
-                        RichText::new("Automatically plug new VIFs").size(10.0),
-                    ),
-                );
-            });
-            if dialog.kind != "internal" {
-                ui.add_space(8.0);
-                widgets::field_label(
-                    ui,
-                    if dialog.kind == "sriov" {
-                        "Physical function (PF)"
-                    } else {
-                        "Transport (management) interface"
-                    },
-                );
-                let candidates: Vec<&(String, String, String)> = pifs
-                    .iter()
-                    .filter(|(uuid, host, device)| {
-                        let Some(pif) = state.pif_catalog.iter().find(|pif| pif.uuid == *uuid)
-                        else {
-                            return false;
-                        };
-                        let _ = (host, device);
-                        if dialog.kind == "sriov" {
-                            pif.sriov_candidate()
-                        } else {
-                            pif.chin_candidate()
-                        }
-                    })
-                    .collect();
-                let selected = dialog
-                    .pif_uuid
-                    .as_ref()
-                    .and_then(|uuid| candidates.iter().find(|(id, _, _)| id == uuid))
-                    .map(|(_, host, device)| format!("{host} · {device}"))
-                    .unwrap_or_else(|| {
-                        if state.pif_catalog_loading {
-                            "Loading interfaces…".into()
-                        } else {
-                            "Select an interface".into()
-                        }
-                    });
-                egui::ComboBox::from_id_salt("network-pif")
-                    .selected_text(RichText::new(selected).size(11.0))
-                    .width(ui.available_width())
-                    .show_ui(ui, |ui| {
-                        for (uuid, host, device) in &candidates {
-                            if ui
-                                .selectable_label(
-                                    dialog.pif_uuid.as_deref() == Some(uuid.as_str()),
-                                    RichText::new(format!("{host} · {device}")).size(11.0),
-                                )
-                                .clicked()
-                            {
-                                dialog.pif_uuid = Some(uuid.clone());
-                            }
-                        }
-                    });
-                if candidates.is_empty() && !state.pif_catalog_loading {
-                    ui.label(
-                        RichText::new(if dialog.kind == "sriov" {
-                            "No spare physical function is available; management, VLAN and bonded interfaces are excluded."
-                        } else {
-                            "No attached management interface is available."
-                        })
-                        .size(9.0)
-                        .color(amber()),
-                    );
-                }
-                if dialog.kind == "chin" {
-                    ui.add_space(8.0);
-                    widgets::field_label(ui, "Tunnel protocol");
-                    egui::ComboBox::from_id_salt("chin-protocol")
-                        .selected_text(
-                            RichText::new(if dialog.protocol == "vxlan" {
-                                "VXLAN"
-                            } else {
-                                "GRE"
-                            })
-                            .size(11.0),
-                        )
-                        .width(ui.available_width())
-                        .show_ui(ui, |ui| {
-                            for (value, label) in [("gre", "GRE"), ("vxlan", "VXLAN")] {
-                                if ui
-                                    .selectable_label(
-                                        dialog.protocol == value,
-                                        RichText::new(label).size(11.0),
-                                    )
-                                    .clicked()
-                                {
-                                    dialog.protocol = value.into();
-                                }
-                            }
-                        });
-                }
-                ui.label(
-                    RichText::new(if dialog.kind == "sriov" {
-                        "SR-IOV on the management interface is blocked to protect connectivity."
-                    } else {
-                        "CHIN requires a management interface on every pool host; add hosts before creating it."
-                    })
-                    .size(9.0)
-                    .color(dim_fg()),
-                );
-            }
-            if let Some(error) = &dialog.error {
-                ui.add_space(8.0);
-                ui.label(RichText::new(error).size(10.0).color(red()));
-            }
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(
-                        !dialog.submitting,
-                        egui::Button::new(RichText::new("Cancel").size(11.0)),
-                    )
-                    .clicked()
-                {
-                    close = true;
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui
-                        .add_enabled(
-                            !dialog.submitting
-                                && !dialog.name.trim().is_empty()
-                                && (dialog.kind == "internal" || dialog.pif_uuid.is_some()),
-                            widgets::primary_button(if dialog.submitting {
-                                "Creating…"
-                            } else {
-                                "Create network"
-                            }),
-                        )
-                        .clicked()
-                    {
-                        save = true;
-                    }
-                });
-            });
-        });
-    if response.should_close() && !dialog.submitting {
-        close = true;
-    }
-    if save {
-        actions.push(UiAction::SaveNetwork);
-    }
-    if close {
-        actions.push(UiAction::CloseNetworkCreate);
-    }
+    super::network_wizard::show(ctx, state, actions);
 }
 
 fn network_destroy(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
@@ -2663,7 +2433,12 @@ fn snapshot_delete(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<U
     }
 }
 
-fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut Vec<UiAction>) {
+fn host_action_confirm(
+    ctx: &egui::Context,
+    state: &mut UiState,
+    workspace: &WorkspaceView,
+    actions: &mut Vec<UiAction>,
+) {
     let mut close = false;
     let mut confirm = false;
     let Some(dialog) = state.host_action_confirm.as_mut() else {
@@ -2691,15 +2466,35 @@ fn host_action_confirm(ctx: &egui::Context, state: &mut UiState, actions: &mut V
                     );
                 });
             });
+            if matches!(dialog.action, xen_core::operations::HostAction::EnterMaintenance | xen_core::operations::HostAction::ExitMaintenance | xen_core::operations::HostAction::Reboot | xen_core::operations::HostAction::Shutdown) {
+                let inventory = find_connection(workspace,&dialog.connection_id).and_then(crate::state::connection_inventory);
+                if !matches!(dialog.action,xen_core::operations::HostAction::ExitMaintenance) {
+                    ui.label("Evacuate Server — Virtual machines and destination");
+                    if let Some(inv)=inventory {
+                        for vm in inv.vms.iter().filter(|vm|vm.host_name==dialog.host_name && matches!(vm.power_state.as_str(),"Running"|"Paused")) {
+                            ui.horizontal(|ui| {ui.label(&vm.name);ui.label(if inv.hosts.len()==1 {"Suspend or shut down required"}else{"XenAPI selects an available destination server"});});
+                        }
+                        if inv.hosts.len()==1 {
+                            ui.label("No other server is available. Cancel to leave running VMs unchanged.");
+                            ui.radio_value(&mut dialog.maintenance_policy,0,"Do not stop virtual machines");
+                            ui.radio_value(&mut dialog.maintenance_policy,1,"Suspend where possible; shut down other virtual machines");
+                            ui.radio_value(&mut dialog.maintenance_policy,2,"Shut down virtual machines");
+                        }
+                    }
+                } else {ui.label("Enable this server to accept virtual machines again.");if let Some(inv)=inventory && let Some(host)=inv.hosts.iter().find(|h|h.uuid==dialog.host_uuid) {
+                        for uuid in &host.evacuated_vms {if let Some(vm)=inv.vms.iter().find(|v|&v.uuid==uuid){ui.label(format!("{} — {}",vm.name,vm.power_state));}}
+                        ui.checkbox(&mut dialog.return_vms,"Bring evacuated virtual machines back to this server");
+                    }}
+            }
             if dialog.action.destructive() {
                 ui.add_space(8.0);
                 ui.label(
                     RichText::new(match dialog.action {
                         xen_core::operations::HostAction::Reboot => {
-                            "All VMs on this host will be rebooted or shut down."
+                            "The server will reboot after the virtual machines are evacuated, suspended or shut down."
                         }
                         xen_core::operations::HostAction::Shutdown => {
-                            "The host and all VMs on it will be shut down."
+                            "The server will shut down after the virtual machines are evacuated, suspended or shut down."
                         }
                         _ => "This action changes host availability.",
                     })

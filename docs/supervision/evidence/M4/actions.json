@@ -1,0 +1,465 @@
+[
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ],
+      "snap": "/tmp/m4-menu-xvfb"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        197,
+        348
+      ],
+      "snap": "01-evacuate",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        476,
+        590
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        206,
+        372
+      ],
+      "snap": "02-control-domain-memory",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        446,
+        558
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        610,
+        164
+      ],
+      "snap": "/tmp/m4-networking"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        430,
+        315
+      ],
+      "snap": "03-network-type",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1065,
+        765
+      ],
+      "snap": "/tmp/m4-net-name"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        741,
+        314
+      ],
+      "text": "zz-parity-M4-net"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1065,
+        775
+      ],
+      "snap": "/tmp/m4-net-details"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        740,
+        314
+      ],
+      "text": "zz-parity-M4-net",
+      "snap": "/tmp/m4-name-filled"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1069,
+        775
+      ],
+      "snap": "/tmp/m4-net-details2",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1067,
+        764
+      ],
+      "snap": "/tmp/m4-net-finish"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        975,
+        765
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        975,
+        765
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        740,
+        313
+      ],
+      "key": "Control_L+a"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+v",
+      "snap": "/tmp/m4-correct-name",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1067,
+        764
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1067,
+        764
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1067,
+        764
+      ],
+      "snap": "/tmp/m4-network-created",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        426,
+        315
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        547,
+        353
+      ],
+      "snap": "/tmp/m4-network-properties",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        786,
+        269
+      ],
+      "key": "Control_L+a"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "key": "Control_L+v",
+      "snap": "/tmp/m4-rename-review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1104,
+        733
+      ],
+      "snap": "/tmp/m4-renamed",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        643,
+        353
+      ],
+      "snap": "/tmp/m4-remove-network"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        464,
+        509
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        927,
+        562
+      ],
+      "snap": "/tmp/m4-network-removed",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        168,
+        268
+      ],
+      "snap": "/tmp/m4-backup-dialog",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        561,
+        513
+      ],
+      "key": "Control_L+v",
+      "snap": "/tmp/m4-backup-review"
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        510,
+        605
+      ],
+      "snap": "/tmp/m4-backup-running",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ]
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        169,
+        268
+      ],
+      "snap": "/tmp/m4-backup-stable",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ],
+      "snap": "/tmp/m4-current-menu",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        140,
+        14
+      ],
+      "snap": "/tmp/m4-menu-again",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        166,
+        268
+      ],
+      "snap": "/tmp/m4-backup-open",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        748,
+        442
+      ],
+      "snap": "/tmp/m4-backup-settled",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        565,
+        476
+      ],
+      "key": "Control_L+v",
+      "snap": "/tmp/m4-backup-path",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        510,
+        568
+      ],
+      "snap": "/tmp/m4-backup-submitted",
+      "wait": 2
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "/tmp/m4-backup-finished",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "/tmp/m4-backup-status",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "snap": "/tmp/m4-backup-current",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1100,
+        110
+      ],
+      "snap": "/tmp/m4-backup-complete",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "click": [
+        1100,
+        110
+      ],
+      "snap": "/tmp/m4-backup-end",
+      "wait": 1
+    }
+  },
+  {
+    "ok": true,
+    "action": {
+      "quit": true
+    }
+  }
+]

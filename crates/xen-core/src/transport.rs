@@ -65,6 +65,35 @@ impl HostTransport {
         self.client.post(endpoint).json(request).send().await
     }
 
+    pub(crate) async fn host_backup(&self, session: &str) -> Result<Response, reqwest::Error> {
+        let mut endpoint = self.origin.clone();
+        endpoint.set_path("/host_backup");
+        self.client
+            .get(endpoint)
+            .query(&[("session_id", session)])
+            .timeout(Duration::from_secs(600))
+            .send()
+            .await
+    }
+    pub(crate) async fn host_restore(
+        &self,
+        session: &str,
+        file: tokio::fs::File,
+        length: u64,
+    ) -> Result<Response, reqwest::Error> {
+        let mut endpoint = self.origin.clone();
+        endpoint.set_path("/host_restore");
+        self.client
+            .put(endpoint)
+            .query(&[("session_id", session)])
+            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+            .header(reqwest::header::CONTENT_LENGTH, length)
+            .body(reqwest::Body::from(file))
+            .timeout(Duration::from_secs(600))
+            .send()
+            .await
+    }
+
     pub(crate) async fn export_xva(
         &self,
         session: &str,

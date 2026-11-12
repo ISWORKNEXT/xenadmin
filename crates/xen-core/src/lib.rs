@@ -20,3 +20,5 @@ pub mod vmss;
 pub mod workspace;
 pub mod xapi;
 pub mod xva;
+
+pub mod server_admin;

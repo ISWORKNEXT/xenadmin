@@ -1,0 +1,32 @@
+{
+  "networks": [
+    {
+      "uuid": "000524e9-740b-d12f-5d7d-f977b1bb805e",
+      "name_label": "zz-parity-M4-net-renamed",
+      "name_description": "",
+      "MTU": 1500,
+      "PIFs": [],
+      "VIFs": []
+    }
+  ],
+  "hosts": [
+    {
+      "uuid": "f2347fdf-e320-4d3b-994b-7eb12f860c58",
+      "enabled": true,
+      "maintenance": null,
+      "agent_start_time": "1794381334."
+    }
+  ],
+  "running_vms": [
+    {
+      "uuid": "c6438f32-f841-39ef-7b0b-72333ad68cc1",
+      "name": "Windows 10 (64-bit) (1)",
+      "power_state": "Running"
+    },
+    {
+      "uuid": "a0740b7f-0120-051f-557c-9a1a5accfdb2",
+      "name": "XOA",
+      "power_state": "Running"
+    }
+  ]
+}

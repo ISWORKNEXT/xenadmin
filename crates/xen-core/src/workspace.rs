@@ -69,7 +69,7 @@ struct ActiveConnection {
     error: RwLock<Option<String>>,
     lifecycle: Arc<RwLock<()>>,
     busy_vms: Arc<Mutex<BTreeSet<String>>>,
-    password: String,
+    password: RwLock<String>,
     heartbeat_failed: AtomicBool,
 }
 
@@ -266,7 +266,7 @@ impl Workspace {
             error: RwLock::new(None),
             lifecycle: Arc::new(RwLock::new(())),
             busy_vms: Arc::new(Mutex::new(BTreeSet::new())),
-            password,
+            password: RwLock::new(password),
             heartbeat_failed: AtomicBool::new(false),
         });
         entries.insert(
@@ -1014,12 +1014,13 @@ impl Workspace {
         name: String,
         description: String,
         mtu: u64,
+        autoplug: bool,
     ) -> Result<(), String> {
         let active = self.active(connection_id).await?;
         let _lease = active.lifecycle.read().await;
         active
             .connection
-            .create_network(&name, &description, mtu)
+            .create_private_network(&name, &description, mtu, autoplug)
             .await
             .map_err(|error| error.to_string())?;
         refresh_inventory_cache(&active).await
@@ -1245,8 +1246,137 @@ impl Workspace {
         refresh_inventory_cache(&active).await
     }
 
-    pub async fn host_action(
+    pub async fn configure_pool(
         &self,
+        id: &str,
+        name: Option<String>,
+        members: Vec<String>,
+    ) -> Result<(), String> {
+        let coordinator = self.active(id).await?;
+        let mut sources = Vec::new();
+        for member in members {
+            if member == id || sources.iter().any(|(existing, _)| existing == &member) {
+                return Err("Each pool member must be a different standalone server.".into());
+            }
+            let active = self.active(&member).await?;
+            let inventory = active.snapshot.read().await;
+            if inventory.hosts.len() != 1
+                || !inventory.pool_name.is_empty()
+                || active.connection.settings.read_only
+            {
+                return Err("Select writable standalone servers as members.".into());
+            }
+            drop(inventory);
+            sources.push((member, active));
+        }
+        let pools = coordinator
+            .connection
+            .records("pool")
+            .await
+            .map_err(|e| e.to_string())?;
+        let master_ref = pools
+            .values()
+            .next()
+            .and_then(|p| p["master"].as_str())
+            .ok_or("No coordinator is available.")?;
+        let info = coordinator.snapshot.read().await;
+        let master = info
+            .hosts
+            .iter()
+            .find(|host| host.reference == master_ref)
+            .or_else(|| info.hosts.first())
+            .ok_or("No coordinator is available.")?;
+        let uuid = master.uuid.clone();
+        let address = master.address.clone();
+        drop(info);
+        if let Some(name) = name {
+            coordinator
+                .connection
+                .server_change(&uuid, crate::server_admin::ServerChange::NewPool(name))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        let password = coordinator.password.read().await.clone();
+        for (member, active) in sources {
+            let uuid = active.snapshot.read().await.hosts[0].uuid.clone();
+            active
+                .connection
+                .server_change(
+                    &uuid,
+                    crate::server_admin::ServerChange::JoinPool {
+                        address: address.clone(),
+                        username: coordinator.connection.settings.username.clone(),
+                        password: password.clone(),
+                    },
+                )
+                .await
+                .map_err(|e| format!("Pool member could not join: {e}"))?;
+            self.disconnect(&member).await?;
+        }
+        refresh_inventory_cache(&coordinator).await
+    }
+
+    pub async fn server_info(
+        &self,
+        id: &str,
+        uuid: &str,
+    ) -> Result<crate::server_admin::ServerInfo, String> {
+        let active = self.active(id).await?;
+        let _lease = active.lifecycle.read().await;
+        active
+            .connection
+            .server_info(uuid)
+            .await
+            .map_err(|e| e.to_string())
+    }
+    pub async fn server_change(
+        self: &Arc<Self>,
+        id: &str,
+        uuid: &str,
+        change: crate::server_admin::ServerChange,
+    ) -> Result<(), String> {
+        let active = self.active(id).await?;
+        let _lease = active.lifecycle.read().await;
+        let destination = if let crate::server_admin::ServerChange::JoinPool {
+            address,
+            username,
+            password,
+        } = &change
+        {
+            let mut settings = active.connection.settings.clone();
+            settings.host = address.clone();
+            settings.username = username.clone();
+            Some((settings, password.clone()))
+        } else {
+            None
+        };
+        let new_password = if let crate::server_admin::ServerChange::Password { new, .. } = &change
+        {
+            Some(new.clone())
+        } else {
+            None
+        };
+        active
+            .connection
+            .server_change(uuid, change)
+            .await
+            .map_err(|e| e.to_string())?;
+        if let Some(password) = new_password {
+            *active.password.write().await = password;
+            drop(_lease);
+            return self.reconnect(id, &active).await;
+        }
+        if let Some((settings, password)) = destination {
+            drop(_lease);
+            self.disconnect(id).await?;
+            self.connect(settings, &password, None).await?;
+            return Ok(());
+        }
+        refresh_inventory_cache(&active).await
+    }
+
+    pub async fn host_action(
+        self: &Arc<Self>,
         connection_id: &str,
         host_uuid: &str,
         action: crate::operations::HostAction,
@@ -1263,11 +1393,58 @@ impl Workspace {
         if !present {
             return Err("This host is not part of the selected connection.".into());
         }
+        let reboot = matches!(
+            action,
+            crate::operations::HostAction::Reboot
+                | crate::operations::HostAction::RebootPrepared { .. }
+        );
+        let old_boot = if reboot {
+            Some(
+                active
+                    .connection
+                    .host_boot_time(host_uuid)
+                    .await
+                    .map_err(|e| e.to_string())?,
+            )
+        } else {
+            None
+        };
         active
             .connection
             .host_action(host_uuid, action)
             .await
             .map_err(|error| error.to_string())?;
+        if matches!(
+            action,
+            crate::operations::HostAction::Shutdown
+                | crate::operations::HostAction::ShutdownPrepared { .. }
+        ) {
+            return Ok(());
+        }
+        if reboot || matches!(action, crate::operations::HostAction::RestartToolstack) {
+            drop(_lease);
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            for _ in 0..40 {
+                let current = self.active(connection_id).await?;
+                if self.reconnect(connection_id, &current).await.is_ok() {
+                    if let Some(before) = &old_boot {
+                        let connected = self.active(connection_id).await?;
+                        if connected
+                            .connection
+                            .host_boot_time(host_uuid)
+                            .await
+                            .is_ok_and(|after| !after.is_empty() && after != *before)
+                        {
+                            return Ok(());
+                        }
+                    } else {
+                        return Ok(());
+                    }
+                }
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
+            return Err("Server restart requested; reconnect has not succeeded. Reconnect manually when XenAPI is available.".into());
+        }
         refresh_inventory_cache(&active).await
     }
 
@@ -1890,7 +2067,8 @@ impl Workspace {
         if !self.is_current(id, old).await {
             return Err("The connection changed before it could be re-established.".into());
         }
-        let connection = Connection::login(old.connection.settings.clone(), &old.password)
+        let password = old.password.read().await.clone();
+        let connection = Connection::login(old.connection.settings.clone(), &password)
             .await
             .map_err(|error| error.to_string())?;
         let events_registered = connection.event_register(EVENT_CLASSES).await.is_ok();
@@ -1908,7 +2086,7 @@ impl Workspace {
             error: RwLock::new(None),
             lifecycle: Arc::new(RwLock::new(())),
             busy_vms: old.busy_vms.clone(),
-            password: old.password.clone(),
+            password: RwLock::new(password),
             heartbeat_failed: AtomicBool::new(false),
         });
         let mut entries = self.entries.write().await;
